@@ -98,7 +98,7 @@ function fetchRunEvents(runId: string): Promise<TaskEvent[]> {
       try {
         const event = JSON.parse(messageEvent.data) as TaskEvent;
         events.push(event);
-        if (terminalRunStates.includes(event.type.replace("run.", ""))) finish();
+        if (["run.completed", "run.failed", "run.cancelled"].includes(event.type)) finish();
       } catch { /* ignore malformed frames */ }
     };
     source.onerror = () => finish();
@@ -258,7 +258,7 @@ export function AgentWorkbench() {
       applyRunStatus(runId, "running");
       if (canvasFollow) setCanvasTab("task");
     }
-    if (terminalRunStates.includes(event.type.replace("run.", ""))) {
+    if (["run.completed", "run.failed", "run.cancelled"].includes(event.type)) {
       const status = event.type === "run.completed" ? "succeeded" : event.type === "run.cancelled" ? "cancelled" : "failed";
       applyRunStatus(runId, status);
       void loadWorkspaceContext(workspaceId).catch(() => undefined);
@@ -580,8 +580,8 @@ export function AgentWorkbench() {
                 {turnRun.status === "succeeded" && <div className="run-note completed-note">任务已完成。可以在下方继续追问，或点击「新会话」开始全新任务。</div>}
               </div>
             ))}
+            {!followScroll && <button type="button" className="jump-to-latest" onClick={() => { const element = scrollRef.current; if (element) { element.scrollTop = element.scrollHeight; setFollowScroll(true); } }}>跳至最新 ↓</button>}
           </div>
-          {!followScroll && <button type="button" className="jump-to-latest" onClick={() => { const element = scrollRef.current; if (element) { element.scrollTop = element.scrollHeight; setFollowScroll(true); } }}>跳至最新 ↓</button>}
           <form className="prompt-composer" onSubmit={(event) => { event.preventDefault(); void submitPrompt(); }}>
             <div className="composer-controls"><div className="mode-switch" role="group" aria-label="任务模式"><button type="button" className={mode === "plan" ? "active" : ""} onClick={() => setMode("plan")} disabled={activeRun}>PLAN</button><button type="button" className={mode === "build" ? "active" : ""} onClick={() => setMode("build")} disabled={activeRun}>BUILD</button></div><select value={model} onChange={(event) => setModel(event.target.value)} disabled={!models.length || !workspace}>{models.length ? models.map((item) => <option key={item.model} value={item.model}>{item.model}</option>) : <option>模型目录不可用</option>}</select></div>
             <textarea ref={textareaRef} value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={handleComposerKeyDown} placeholder={workspace ? activeRun ? "Agent 正在执行，完成后可继续…" : thread.length ? "继续这条对话…（Enter 发送，Shift+Enter 换行）" : mode === "build" ? "描述要创建或修改的应用..." : "描述要分析、梳理或规划的任务..." : "先选择或创建 Workspace"} disabled={!workspace} rows={3} />
