@@ -1,6 +1,7 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
 
+import { getShadowFile, getShadowFiles } from "@/lib/proposals";
 import { WorkspaceFileModel } from "@/models/workspace-file";
 
 type ToolDetails = { activity: string; count?: number; path?: string };
@@ -15,7 +16,7 @@ function failure(message: string, details: ToolDetails): never {
   throw new Error(`${details.activity}: ${message}`);
 }
 
-export function createReadOnlyTools(input: { userId: string; workspaceId: string }): AgentTool[] {
+export function createReadOnlyTools(input: { userId: string; workspaceId: string; runId?: string }): AgentTool[] {
   const list: AgentTool = {
     name: "list",
     label: "列出文件",
@@ -23,6 +24,10 @@ export function createReadOnlyTools(input: { userId: string; workspaceId: string
     parameters: Type.Object({}),
     executionMode: "sequential",
     async execute() {
+      if (input.runId) {
+        const files = await getShadowFiles({ workspaceId: input.workspaceId, runId: input.runId });
+        return result(files.map((file) => ({ path: file.path, bytes: Buffer.byteLength(file.content, "utf8"), revisionId: file.revisionId })), { activity: "已列出文件", count: files.length });
+      }
       const files = await WorkspaceFileModel.find({ workspaceId: input.workspaceId }).select({ path: 1, updatedAt: 1, content: 1 }).sort({ path: 1 }).lean();
       return result(files.map((file) => ({ path: file.path, bytes: Buffer.byteLength(file.content, "utf8"), updatedAt: file.updatedAt.toISOString() })), { activity: "已列出文件", count: files.length });
     },
@@ -36,6 +41,11 @@ export function createReadOnlyTools(input: { userId: string; workspaceId: string
     executionMode: "sequential",
     async execute(_, params: unknown) {
       const path = (params as { path: string }).path;
+      if (input.runId) {
+        const file = await getShadowFile({ workspaceId: input.workspaceId, runId: input.runId, path });
+        if (!file) return failure("文件不存在或不可读取", { activity: "读取文件", path });
+        return result({ path: file.path, content: file.content, revisionId: file.revisionId }, { activity: "已读取文件", path: file.path });
+      }
       const file = await WorkspaceFileModel.findOne({ workspaceId: input.workspaceId, path }).lean();
       if (!file) return failure("文件不存在或不可读取", { activity: "读取文件", path });
       return result({ path: file.path, content: file.content, revisionId: file.revisionId }, { activity: "已读取文件", path: file.path });
@@ -51,7 +61,9 @@ export function createReadOnlyTools(input: { userId: string; workspaceId: string
     async execute(_, params: unknown) {
       const query = (params as { query: string }).query;
       const expression = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-      const files = await WorkspaceFileModel.find({ workspaceId: input.workspaceId }).select({ path: 1, content: 1 }).sort({ path: 1 }).lean();
+      const files = input.runId
+        ? await getShadowFiles({ workspaceId: input.workspaceId, runId: input.runId })
+        : await WorkspaceFileModel.find({ workspaceId: input.workspaceId }).select({ path: 1, content: 1 }).sort({ path: 1 }).lean();
       const matches: Array<{ path: string; line: number; text: string }> = [];
       for (const file of files) {
         for (const [offset, line] of file.content.split("\n").entries()) {

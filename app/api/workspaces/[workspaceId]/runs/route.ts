@@ -6,7 +6,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/session";
 import { apiError, unauthenticated } from "@/lib/api-error";
 import { IdempotencyError, claimIdempotency } from "@/lib/idempotency";
-import { runReadOnlyAgentTask } from "@/lib/agent-runtime";
+import { runAgentTask } from "@/lib/agent-runtime";
 import { createTaskRun, getTaskRun } from "@/lib/task-runs";
 import { getWorkspace } from "@/lib/workspaces";
 
@@ -24,7 +24,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
   if (!user) return unauthenticated();
   const parsed = createRunSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return apiError("INVALID_BODY", 400, "Task Run 请求格式不正确");
-  if (parsed.data.mode === "build") return apiError("BUILD_MODE_NOT_AVAILABLE", 409, "Build 模式将在具备受审批写入能力后开放");
   const { workspaceId } = await context.params;
   if (!(await getWorkspace(user.id, workspaceId))) return apiError("WORKSPACE_NOT_FOUND", 404, "Workspace 不存在");
 
@@ -48,7 +47,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       if (existing) return NextResponse.json({ run: existing, replayed: true }, { headers: { "cache-control": "no-store" } });
       return apiError("WORKSPACE_RUN_ACTIVE", 409, "该 Workspace 已有运行中的任务");
     }
-    void runReadOnlyAgentTask({ userId: user.id, runId: run.id }).catch((error: unknown) => {
+    void runAgentTask({ userId: user.id, runId: run.id }).catch((error: unknown) => {
       console.error("Agent runtime start failed", { runId: run.id, error: error instanceof Error ? error.message : "unknown" });
     });
     return NextResponse.json({ run }, { status: 201, headers: { "cache-control": "no-store" } });
