@@ -86,7 +86,7 @@
 | A-05 | 建立 Auth 与租户隔离中间件 | 当前用户解析、`requireUser`、资源归属校验 | A-03 | 访问另一个用户的任一资源统一得到不泄露存在性的响应。 |
 | A-06 | 建立 Mongo 数据模型与索引 | Workspace、File、Revision、Session、Run、Event、Proposal、ToolCall、Idempotency、Lease collection | A-03 | 创建、读取、按用户过滤、版本 compare-and-set、唯一活跃 Run 均有集成测试。 |
 | A-07 | 建立 Workspace/Revision API | Workspace CRUD、受限文件读取、Revision 列表、回滚 | A-05、A-06 | 文件路径、大小、总配额、敏感路径和版本回滚均有确定测试。 |
-| A-08 | 建立 Task Run/Event Store | Run 状态机、单调序号、幂等键、SSE replay、租约 | A-06 | 使用 `Last-Event-ID` 重连不漏事件、不重复副作用；同 Workspace 并发创建被拒绝。 |
+| A-08 | 建立 Task Run/Event Store | Run 状态机、单调序号、幂等键、SSE replay、租约、前端事件 Schema | A-06 | 使用 `Last-Event-ID` 重连不漏事件、不重复副作用；同 Workspace 并发创建被拒绝；事件 Schema 覆盖消息、工具、提案、审批和 Sandbox 生命周期。 |
 
 ### P2：只读 Agent
 
@@ -95,7 +95,7 @@
 | A-09 | 接入精确版本的 PI Core | `@earendil-works/pi-agent-core@0.84.1` 封装层；禁止本地 PI 工具的回归测试 | A-01、A-08 | 运行时只暴露 ZMZAI 注册的工具，PI 内置文件/Shell/网络工具无法被调用。 |
 | A-10 | 实现 Relay Model Adapter | 内部 Relay 客户端、流式文本转事件、错误和用量映射、取消 | A-01、A-08 | 所有模型请求含 Run 身份；`402` 变为 `INSUFFICIENT_CREDITS`；取消不继续消费文本。 |
 | A-11 | 实现只读 Tool Broker | `list/read/search` Schema、路径与配额校验、结构化结果 | A-06、A-09 | Plan 模式中请求写入或执行被 Broker 拒绝，不依赖模型是否遵守指令。 |
-| A-12 | 完成 Plan 用户界面 | Workspace 列表、文件浏览、聊天、模型选择、任务状态、可重连事件视图、取消 | A-07 至 A-11 | 用户可完成只读 Plan；刷新页面后从 Run 状态和事件继续看到相同历史。 |
+| A-12 | 完成 Plan Agent 工作台 | Workspace 左栏、流式对话中栏、任务/文件画布、模型选择、工具活动摘要、可重连事件视图、取消和画布固定 | A-07 至 A-11 | 用户可完成只读 Plan；刷新页面后从 Run 状态和事件继续看到相同历史；画布完全由持久化数据重建；不展示原始思维链。 |
 
 ### P3：Build 提案与版本控制
 
@@ -103,7 +103,7 @@
 | --- | --- | --- | --- | --- |
 | A-13 | 实现 Proposal 与 Shadow View | 暂存变更、`write/edit` Schema、基于同 Run 的可读 Shadow State | A-08、A-11 | 未批准的写入只对同一 Run 可见；其他 Run 和 Workspace 当前版本不变。 |
 | A-14 | 实现审批与 Revision 原子提交 | 批准/拒绝 API、compare-and-set、冲突与 supersede | A-06、A-13 | 重复批准只生效一次；基础版本冲突不写入；拒绝没有状态副作用。 |
-| A-15 | 完成 Build/Diff 界面 | Plan/Build 明确选择、diff、批准/拒绝、冲突、回滚 | A-12 至 A-14 | 用户能审查每个文件变化，批准后生成不可变 Revision，拒绝后 Agent 收到结构化结果。 |
+| A-15 | 完成 Build/Diff 画布 | Plan/Build 明确选择、Diff 画布、批准/拒绝、冲突、回滚、用户固定画布后的非抢占提示 | A-12 至 A-14 | 用户能审查每个文件变化，批准后生成不可变 Revision，拒绝后 Agent 收到结构化结果；新的提案不会抢占用户已固定的画布。 |
 
 ### P4：Sandbox 执行
 
@@ -111,7 +111,7 @@
 | --- | --- | --- | --- | --- |
 | A-16 | 实现 Sandbox Client | 经服务端凭据调用 Sandbox 的 create/status/cancel/artifact adapter | A-02、A-08 | Agent 进程、浏览器和模型上下文都看不到 Sandbox 服务凭据或 `sandbox_key`。 |
 | A-17 | 实现经过审批的 `exec` 工具 | 临时 Revision 快照、单次执行审批、事件转发、产物引用 | A-13、A-14、A-16 | Sandbox 无法访问 Mongo 或权威 Workspace；结果不能直接修改文件。 |
-| A-18 | 完成执行结果界面 | 执行审批、实时状态、stdout/stderr、产物链接、取消/失败提示 | A-12、A-17 | 用户只会看到自己 Run 的结果，取消操作可重复点击且最终状态正确。 |
+| A-18 | 完成执行结果画布 | 执行审批、实时状态、stdout/stderr、产物链接、取消/失败提示和小屏幕页签适配 | A-12、A-17 | 用户只会看到自己 Run 的结果，取消操作可重复点击且最终状态正确；小屏幕上审批与对应执行范围始终可访问。 |
 
 ### P5：恢复、安全与发布
 
@@ -133,14 +133,14 @@ A-02 Sandbox 契约┘                 │
                                                    └─> A-08 Run/Event Store
                                                             │
                                                             v
-                 A-09 PI ─> A-10 Relay Adapter ─> A-11 Read Broker ─> A-12 Plan UI
+                 A-09 PI ─> A-10 Relay Adapter ─> A-11 Read Broker ─> A-12 Plan 工作台
                                                                          │
                                                                          v
-                                      A-13 Shadow Proposal ─> A-14 Approval ─> A-15 Build UI
+                                      A-13 Shadow Proposal ─> A-14 Approval ─> A-15 Build/Diff 画布
                                                                          │
                               A-16 Sandbox Client ──────────────────────┤
                                                                          v
-                                                              A-17 Exec ─> A-18 Result UI
+                                                              A-17 Exec ─> A-18 执行结果画布
                                                                          │
                                                                          v
                                                A-19 Recovery -> A-20 Security -> A-21 Load -> A-22 Release
@@ -156,15 +156,15 @@ A-02 Sandbox 契约┘                 │
 
 ### 阶段 1：先做控制面，不做聊天“假演示”
 
-先完成用户隔离、Mongo Schema、Revision 原子提交、Event Store 与 SSE replay。此阶段页面可以极简，但数据库状态机和幂等规则必须可测试。任何聊天展示都只能消费持久化事件，不能以浏览器内存作为真相。
+先完成用户隔离、Mongo Schema、Revision 原子提交、Event Store 与 SSE replay。此阶段页面可以极简，但数据库状态机和幂等规则必须可测试。事件 Schema 必须覆盖消息、工具、提案、审批和 Sandbox 生命周期。任何聊天展示或画布都只能消费持久化事件，不能以浏览器内存作为真相。
 
 ### 阶段 2：只读闭环
 
-加入 PI 与 Relay Adapter，只注册 `list/read/search`。完成一个可生产使用的 Plan 闭环：开始任务、显示流式事件、取消、刷新恢复、余额不足提示。此阶段不允许 `write/edit/exec`，以便隔离模型接入、事件与授权问题。
+加入 PI 与 Relay Adapter，只注册 `list/read/search`。完成一个可生产使用的 Plan 闭环：开始任务、显示流式事件、取消、刷新恢复、余额不足提示；实现 Workspace 左栏、对话中栏和任务/文件画布。此阶段不允许 `write/edit/exec`，以便隔离模型接入、事件与授权问题。
 
 ### 阶段 3：把“修改”变成可审核提案
 
-只允许 PI 产生候选变更。Broker 生成 diff 和 Shadow View，Task Run 进入 `waiting_approval`。批准前绝不能改变 `currentRevisionId`；批准后必须用 compare-and-set 创建新的不可变 Revision。此阶段交付后，Agent 已能安全地“创建和修改应用”。
+只允许 PI 产生候选变更。Broker 生成 diff 和 Shadow View，Task Run 进入 `waiting_approval`。Diff 画布在未固定时自动打开；用户固定其他画布后只接收非抢占提示。批准前绝不能改变 `currentRevisionId`；批准后必须用 compare-and-set 创建新的不可变 Revision。此阶段交付后，Agent 已能安全地“创建和修改应用”。
 
 ### 阶段 4：把“执行”变成可撤销的外部作业
 

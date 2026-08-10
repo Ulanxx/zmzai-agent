@@ -92,6 +92,24 @@ v1 中一个 Workspace 同一时刻只允许一个活跃 Task Run。每个 Run �
 
 UI 必须在任务启动前显示模式。Plan 任务可以输出人类可读的方案，但不能自行提升为 Build。
 
+### 6.1 前端交互工作台
+
+v1 使用“对话负责意图，画布负责对象与审批”的单页工作台，而不是无限白板。桌面端由三个稳定区域组成：
+
+- **左侧 Workspace 区：** Workspace、文件树、版本和 Task Run 历史。
+- **中间对话区：** 用户消息、Agent 流式文本、简短工具活动和等待审批状态。
+- **右侧画布区：** 当前任务关联对象的结构化投影，支持 `任务详情`、`文件`、`Diff`、`执行结果` 和 `产物` 五类视图。
+
+画布不是第二套存储或协作状态。它只能由 Workspace Revision、ChangeProposal、Task Run、Task Event 和 Sandbox Artifact Reference 投影得到。浏览器刷新、切换设备或 SSE 重连后，画布状态必须能由这些持久化数据重建。
+
+Agent 文本通过 `message.delta` 流式显示；工具调用只显示用户可理解的活动摘要，例如“正在读取 `src/app.ts`”或“已生成 3 个文件变更”。UI 不得请求、展示或持久化模型的原始思维链。
+
+当 `proposal.created` 到达时，若用户没有固定当前画布，画布自动打开 Diff；当 `approval.required` 到达时，中间对话区和画布都显示同一个审批对象。用户选择文件、Diff、运行结果或点击“固定画布”后，后续工具事件不得抢占当前画布；仅以非阻塞提示提示有新对象可查看。
+
+浏览器到服务端的状态变更使用 HTTP，并且携带 Idempotency Key；服务端到浏览器使用 SSE。前端按 `(runId, sequence)` 消费事件，并把持久化事件投影为界面状态，不能以组件内存作为任务真相。v1 不需要 WebSocket。
+
+小屏幕下，左侧 Workspace 区改为抽屉，右侧画布改为与对话区互斥的全屏页签；审批操作必须始终可访问，并展示其对应的文件 Diff 或执行范围。
+
 ## 7. Tool Broker
 
 Tool Broker 是唯一的工具实现边界。每一个工具必须声明：`name`、`version`、JSON 输入/输出 Schema、所需 capability、副作用等级、审批规则、超时和事件脱敏策略。
@@ -127,7 +145,7 @@ PI 请求 write/edit/exec
 
 ## 9. 事件、恢复与取消
 
-每个事件必须先持久化，再通过 SSE 发出。事件字段为 `id`、`runId`、`sequence`、`type`、`at`、`data`。`Last-Event-ID` 必须重放序号更大的事件，然后持续推送新事件。浏览器始终可以通过 `GET /api/runs/:runId` 恢复完整状态。
+每个事件必须先持久化，再通过 SSE 发出。事件字段为 `id`、`runId`、`sequence`、`type`、`at`、`data`。v1 至少定义 `run.started`、`message.delta`、`message.completed`、`tool.requested`、`tool.progress`、`proposal.created`、`approval.required`、`approval.resolved`、`sandbox.started`、`sandbox.output`、`sandbox.completed`、`sandbox.failed`、`run.completed`、`run.failed`、`run.cancelled`。`Last-Event-ID` 必须重放序号更大的事件，然后持续推送新事件。浏览器始终可以通过 `GET /api/runs/:runId` 恢复完整状态。
 
 服务进程重启时，Runtime 将过期的活跃租约标记为可恢复，从持久化 Run 状态重建 PI 上下文，并且只在持久化工具边界恢复。它不得重复已确认的有副作用工具调用。待批准提案保持待批准；待处理的 Sandbox 调用必须先查询 Sandbox Run 状态，再恢复 PI。
 
