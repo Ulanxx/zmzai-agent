@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { projectTaskEvents, type CanvasArtifact, type TaskEvent, type ToolNode } from "@/lib/task-event-projection";
@@ -311,6 +312,7 @@ export function AgentWorkbench() {
     <main className="workbench">
       <header className="workbench-header">
         <div className="flex items-center gap-3"><span className="agent-mark">使</span><span className="font-mono text-sm font-bold tracking-[0.08em]">ZMZAI AGENT</span></div>
+        <nav className="workbench-nav" aria-label="主导航"><Link href="/audit">运行审计</Link></nav>
         <div className="workbench-status"><span className="status-dot" />AGENT WORKBENCH <span className="header-domain">a.zmzai.cloud</span></div>
       </header>
       {error && <div className="workbench-alert">{error}{run?.failureCode === "INSUFFICIENT_CREDITS" && <a href="https://m.zmzai.cloud" target="_blank" rel="noreferrer">前往提额</a>}</div>}

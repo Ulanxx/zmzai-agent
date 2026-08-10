@@ -14,6 +14,11 @@ const taskRunSchema = new Schema(
     prompt: { type: String, required: true, maxlength: 32 * 1024, immutable: true },
     baseRevisionId: { type: String, default: null, immutable: true },
     status: { type: String, enum: taskRunStates, required: true, default: "queued" },
+    // Written when the run acquires its execution lease; terminal states write
+    // finishedAt. waiting_approval intentionally keeps finishedAt unset so the
+    // audit page can show a running elapsed duration.
+    startedAt: { type: Date, default: null },
+    finishedAt: { type: Date, default: null },
     // The field exists only while this Workspace has an active run. Omitting it
     // lets the partial unique index release the lock on terminal states.
     activeWorkspaceKey: { type: String },
@@ -34,6 +39,8 @@ const taskRunSchema = new Schema(
 );
 
 taskRunSchema.index({ workspaceId: 1, createdAt: -1 });
+// Cross-Workspace audit list is anchored on userId and sorted by createdAt desc.
+taskRunSchema.index({ userId: 1, createdAt: -1 });
 taskRunSchema.index(
   { activeWorkspaceKey: 1 },
   { unique: true, partialFilterExpression: { activeWorkspaceKey: { $type: "string" } } },

@@ -350,17 +350,82 @@
   .proposal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.85rem; }
   .proposal-note { margin: 0.85rem 0 0; color: var(--color-muted); font-size: 0.8125rem; }
   .approval-note { border-color: var(--color-accent); }
+
+  /* 运行审计 /audit */
+  .audit-page { min-height: 100dvh; background: var(--color-paper); }
+  .audit-header { height: 3.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0 1.25rem; border-bottom: 2px solid var(--color-rule); background: var(--color-surface); }
+  .audit-header-nav { display: flex; align-items: center; gap: 1.25rem; min-width: 0; }
+  .audit-brand { display: inline-flex; align-items: center; gap: 0.75rem; margin-right: 0.5rem; }
+  .audit-nav-link { font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-muted); white-space: nowrap; }
+  .audit-nav-link:hover, .audit-nav-link.active { color: var(--color-accent); }
+  .audit-nav-link.active { border-bottom: 1px solid var(--color-accent); padding-bottom: 0.15rem; }
+  .workbench-nav { font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-muted); }
+  .workbench-nav a:hover { color: var(--color-accent); }
+
+  .audit-grid { display: grid; grid-template-columns: minmax(22rem, 1fr) minmax(26rem, 1.15fr); min-height: calc(100dvh - 3.5rem); }
+  .audit-list-pane { min-width: 0; border-right: 1px solid var(--color-line); padding: 1rem 0.75rem; background: color-mix(in oklab, var(--color-surface) 92%, var(--color-paper)); }
+  .audit-detail-pane { min-width: 0; padding: 1rem 1.25rem; overflow-y: auto; max-height: calc(100dvh - 3.5rem); }
+
+  .audit-filters { display: grid; grid-template-columns: 1fr; gap: 0.4rem; margin: 0.65rem 0.25rem 1rem; }
+  .audit-filters select { width: 100%; border: 1px solid var(--color-line); border-radius: 0; background: var(--color-surface); color: var(--color-ink); padding: 0.35rem 0.5rem; font-family: var(--font-mono); font-size: 0.6875rem; }
+
+  .audit-run-list { display: grid; gap: 0.3rem; }
+  .audit-run-row { display: grid; gap: 0.22rem; width: 100%; padding: 0.55rem 0.5rem; border: 1px solid transparent; background: transparent; color: var(--color-ink); text-align: left; cursor: pointer; }
+  .audit-run-row:hover, .audit-run-row.active { border-color: var(--color-line); background: var(--color-paper); }
+  .audit-run-row.active { box-shadow: inset 3px 0 var(--color-accent); }
+  .audit-run-row strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; line-height: 1.35; }
+  .audit-run-row-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.4rem; align-items: baseline; }
+  .audit-run-row-top small { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.5625rem; white-space: nowrap; }
+  .audit-run-workspace { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-accent-strong); font-family: var(--font-mono); font-size: 0.625rem; }
+  .audit-run-row > small { grid-column: 1 / -1; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.5625rem; }
+  .audit-load-more { width: 100%; margin-top: 0.7rem; border: 1px solid var(--color-line); background: transparent; color: var(--color-accent-strong); padding: 0.45rem; font-family: var(--font-mono); font-size: 0.6875rem; cursor: pointer; }
+  .audit-load-more:hover { border-color: var(--color-accent); }
+  .audit-load-more:disabled { cursor: not-allowed; opacity: 0.5; }
+
+  .audit-detail-empty { padding-top: 3rem; max-width: 26rem; }
+  .audit-detail-empty h2 { margin: 0.65rem 0 1rem; font-size: 1.5rem; line-height: 1.3; }
+  .audit-detail-empty p { color: var(--color-muted); font-size: 0.875rem; }
+  .audit-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding-bottom: 0.8rem; border-bottom: 1px solid var(--color-line); }
+  .audit-detail-head h1 { max-width: 40rem; margin: 0.25rem 0 0; font-size: 1rem; line-height: 1.45; overflow-wrap: anywhere; }
+  .audit-failure { margin: 0.85rem 0; padding: 0.6rem 0.75rem; border: 1px solid #b03a28; color: #b03a28; font-size: 0.8125rem; }
+  .audit-detail-section { margin-top: 1.5rem; }
+
+  .audit-tool-timeline { display: grid; gap: 0.45rem; margin: 0.6rem 0 0; padding: 0; list-style: none; }
+  .audit-tool-node { border: 1px solid var(--color-line); background: color-mix(in oklab, var(--color-surface) 93%, var(--color-paper)); }
+  .audit-tool-node.running { border-left: 3px solid var(--color-accent); }
+  .audit-tool-node.completed { border-left: 3px solid var(--color-success); }
+  .audit-tool-node.failed { border-left: 3px solid #b03a28; }
+  .audit-tool-node-head { display: flex; align-items: baseline; gap: 0.6rem; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--color-line); }
+  .audit-tool-name { color: var(--color-accent-strong); font-family: var(--font-mono); font-size: 0.625rem; font-weight: 700; letter-spacing: 0.045em; text-transform: uppercase; white-space: nowrap; }
+  .audit-tool-args { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6875rem; }
+  .audit-tool-state, .audit-tool-duration { flex: 0 0 auto; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.625rem; white-space: nowrap; }
+  .audit-tool-node.completed .audit-tool-state { color: var(--color-success); }
+  .audit-tool-node.failed .audit-tool-state { color: #b03a28; }
+  .audit-tool-body { margin: 0; padding: 0.55rem 0.65rem; color: var(--color-muted); font-size: 0.75rem; overflow-wrap: anywhere; }
+  .audit-tool-truncated { margin: 0; padding: 0 0.65rem 0.5rem; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.625rem; }
+
+  .audit-artifact-list { display: grid; gap: 0.25rem; margin: 0.6rem 0 0.85rem; }
+  .audit-artifact { display: flex; align-items: baseline; gap: 0.55rem; width: 100%; border: 0; border-bottom: 1px solid var(--color-line); background: transparent; color: var(--color-ink); padding: 0.4rem 0.15rem; text-align: left; cursor: pointer; }
+  .audit-artifact:hover, .audit-artifact.active { color: var(--color-accent-strong); background: var(--color-paper); }
+  .audit-artifact span { color: var(--color-accent); font-family: var(--font-mono); font-size: 0.5625rem; text-transform: uppercase; white-space: nowrap; }
+  .audit-artifact strong { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; }
+  .audit-artifact small { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.5625rem; white-space: nowrap; }
+  .audit-artifact-preview { padding-top: 0.25rem; }
+  .audit-artifact-head h3 { margin: 0.4rem 0 0.85rem; font-size: 1rem; line-height: 1.4; overflow-wrap: anywhere; }
+  .audit-artifact-preview pre { max-height: calc(100dvh - 20rem); margin: 0; overflow: auto; padding: 0.75rem; background: var(--color-ink); color: var(--color-paper); font-family: var(--font-mono); font-size: 0.6875rem; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
 }
 
 @media (max-width: 960px) {
   .workbench-grid { grid-template-columns: minmax(12rem, 15rem) minmax(0, 1fr); }
   .canvas-pane { display: block; grid-column: 1 / -1; border-top: 1px solid var(--color-line); border-left: 0; }
   .diff-preview { max-height: 24rem; }
+  .audit-grid { grid-template-columns: minmax(18rem, 1fr) minmax(0, 1fr); }
 }
 
 @media (max-width: 680px) {
   .workbench-header { padding: 0 0.8rem; }
   .header-domain, .workbench-status { font-size: 0.56rem; }
+  .workbench-nav { display: none; }
   .workbench-grid { display: block; }
   .workspace-pane { border-right: 0; border-bottom: 1px solid var(--color-line); padding: 0.75rem; }
   .workspace-list { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 0.75rem; }
@@ -371,4 +436,9 @@
   .agent-intro { margin-top: 3rem; }
   .composer-actions span { display: none; }
   .prompt-composer select { max-width: 11rem; }
+  .audit-header { padding: 0 0.8rem; }
+  .audit-header-nav { gap: 0.8rem; }
+  .audit-grid { display: block; }
+  .audit-list-pane { border-right: 0; border-bottom: 1px solid var(--color-line); }
+  .audit-detail-pane { max-height: none; overflow-y: visible; }
 }

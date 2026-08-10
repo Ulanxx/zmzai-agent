@@ -21,4 +21,9 @@ describe("task run active lock", () => {
       { unique: true, partialFilterExpression: { activeWorkspaceKey: { $type: "string" } } },
     ]);
   });
+
+  it("indexes the cross-workspace audit query by userId and createdAt desc", () => {
+    const indexes = TaskRunModel.schema.indexes();
+    expect(indexes).toContainEqual([{ userId: 1, createdAt: -1 }, {}]);
+  });
 });
