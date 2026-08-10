@@ -12,6 +12,7 @@ jobs:
       PNPM_FETCH_TIMEOUT: "300000"
       PNPM_FETCH_RETRIES: "5"
       PNPM_NETWORK_CONCURRENCY: "1"
+      PNPM_STORE_DIR: "/home/runner/.pnpm-store"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
