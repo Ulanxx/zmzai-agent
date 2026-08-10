@@ -9,6 +9,7 @@ jobs:
   quality:
     runs-on: [self-hosted, hk]
     env:
+      NPM_CONFIG_REGISTRY: "https://registry.npmmirror.com"
       PNPM_FETCH_TIMEOUT: "300000"
       PNPM_FETCH_RETRIES: "5"
     steps:
