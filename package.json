@@ -32,5 +32,8 @@
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3",
     "vitest": "^4.1.10"
+  },
+  "optionalDependencies": {
+    "@next/swc-linux-x64-gnu": "15.5.21"
   }
 }
