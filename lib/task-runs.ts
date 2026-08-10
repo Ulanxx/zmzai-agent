@@ -81,7 +81,7 @@ export async function getTaskRun(userId: string, runId: string): Promise<TaskRun
 export async function cancelTaskRun(userId: string, runId: string): Promise<TaskRunView | null> {
   const run = await TaskRunModel.findOneAndUpdate(
     { userId, runId, status: { $in: activeRunStates } },
-    { $set: { status: "cancelled", activeWorkspaceKey: null, cancelRequestedAt: new Date(), leaseOwner: null, leaseExpiresAt: null } },
+    { $set: { status: "cancelled", cancelRequestedAt: new Date(), leaseOwner: null, leaseExpiresAt: null }, $unset: { activeWorkspaceKey: 1 } },
     { new: true },
   ).lean();
   if (run) {

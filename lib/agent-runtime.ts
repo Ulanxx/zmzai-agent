@@ -32,7 +32,7 @@ export async function runAgentTask(input: { userId: string; runId: string }): Pr
   if (!workspace) {
     await TaskRunModel.updateOne(
       { userId: input.userId, runId: input.runId, status: "running" },
-      { $set: { status: "failed", activeWorkspaceKey: null, leaseOwner: null, leaseExpiresAt: null, failureCode: "WORKSPACE_NOT_FOUND" } },
+      { $set: { status: "failed", leaseOwner: null, leaseExpiresAt: null, failureCode: "WORKSPACE_NOT_FOUND" }, $unset: { activeWorkspaceKey: 1 } },
     );
     await appendTaskEvent({ runId: input.runId, userId: input.userId, type: "run.failed", data: { code: "WORKSPACE_NOT_FOUND", error: "Workspace 不存在或不可访问" } });
     return;
@@ -64,9 +64,12 @@ export async function runAgentTask(input: { userId: string; runId: string }): Pr
     await agent.prompt(run.prompt);
     const failed = agent.state.errorMessage;
     const waitingApproval = !failed && buildMode && await hasPendingProposals(input.runId);
+    const terminalUpdate = failed || !waitingApproval
+      ? { $set: { status: failed ? "failed" : "succeeded", leaseOwner: null, leaseExpiresAt: null, failureCode: failed ? "RELAY_OR_AGENT_FAILED" : null }, $unset: { activeWorkspaceKey: 1 } }
+      : { $set: { status: "waiting_approval", activeWorkspaceKey: run.workspaceId, leaseOwner: null, leaseExpiresAt: null, failureCode: null } };
     const finalized = await TaskRunModel.findOneAndUpdate(
       { userId: input.userId, runId: input.runId, status: "running" },
-      { $set: { status: failed ? "failed" : waitingApproval ? "waiting_approval" : "succeeded", activeWorkspaceKey: waitingApproval ? run.workspaceId : null, leaseOwner: null, leaseExpiresAt: null, failureCode: failed ? "RELAY_OR_AGENT_FAILED" : null } },
+      terminalUpdate,
       { new: true },
     ).lean();
     if (finalized && waitingApproval) await appendTaskEvent({ runId: input.runId, userId: input.userId, type: "run.waiting_approval", data: {} });
@@ -75,7 +78,7 @@ export async function runAgentTask(input: { userId: string; runId: string }): Pr
     const message = error instanceof Error ? error.message : "Agent Runtime 失败";
     const failedRun = await TaskRunModel.findOneAndUpdate(
       { userId: input.userId, runId: input.runId, status: "running" },
-      { $set: { status: "failed", activeWorkspaceKey: null, leaseOwner: null, leaseExpiresAt: null, failureCode: "AGENT_RUNTIME_FAILED" } },
+      { $set: { status: "failed", leaseOwner: null, leaseExpiresAt: null, failureCode: "AGENT_RUNTIME_FAILED" }, $unset: { activeWorkspaceKey: 1 } },
       { new: true },
     ).lean();
     if (failedRun) await appendTaskEvent({ runId: input.runId, userId: input.userId, type: "run.failed", data: { code: "AGENT_RUNTIME_FAILED", error: message } });

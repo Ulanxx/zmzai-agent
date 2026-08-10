@@ -14,7 +14,9 @@ const taskRunSchema = new Schema(
     prompt: { type: String, required: true, maxlength: 32 * 1024, immutable: true },
     baseRevisionId: { type: String, default: null, immutable: true },
     status: { type: String, enum: taskRunStates, required: true, default: "queued" },
-    activeWorkspaceKey: { type: String, default: null },
+    // The field exists only while this Workspace has an active run. Omitting it
+    // lets the partial unique index release the lock on terminal states.
+    activeWorkspaceKey: { type: String },
     nextEventSequence: { type: Number, required: true, default: 0 },
     persistedEventBytes: { type: Number, required: true, default: 0 },
     cancelRequestedAt: { type: Date, default: null },
@@ -32,7 +34,10 @@ const taskRunSchema = new Schema(
 );
 
 taskRunSchema.index({ workspaceId: 1, createdAt: -1 });
-taskRunSchema.index({ activeWorkspaceKey: 1 }, { unique: true, sparse: true });
+taskRunSchema.index(
+  { activeWorkspaceKey: 1 },
+  { unique: true, partialFilterExpression: { activeWorkspaceKey: { $type: "string" } } },
+);
 taskRunSchema.index({ leaseExpiresAt: 1 });
 
 export type TaskRunRecord = InferSchemaType<typeof taskRunSchema>;

@@ -42,3 +42,7 @@ jobs:
     steps:
       - name: Deploy
         run: bash /opt/zmzai/scripts/deploy-app.sh ${APP_NAME}
+      - name: Migrate task-run active lock index
+        run: |
+          cd /opt/zmzai/zmzai-agent
+          /opt/zmzai/actions-agent/externals/node24/bin/node --env-file=.env.production scripts/migrate-task-run-active-index.mjs

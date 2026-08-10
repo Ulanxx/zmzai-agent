@@ -255,7 +255,7 @@ async function applyChanges(input: { workspaceId: string; revisionId: string; ch
 async function settleRun(input: { userId: string; runId: string; outcome: "approved" | "rejected" | "conflict"; proposalId: string; revisionId: string | null; session: ClientSession }): Promise<void> {
   const run = await TaskRunModel.findOneAndUpdate(
     { userId: input.userId, runId: input.runId, status: "waiting_approval" },
-    { $set: { status: "succeeded", activeWorkspaceKey: null, leaseOwner: null, leaseExpiresAt: null } },
+    { $set: { status: "succeeded", leaseOwner: null, leaseExpiresAt: null }, $unset: { activeWorkspaceKey: 1 } },
     { new: true, session: input.session },
   ).lean();
   if (!run) return;
