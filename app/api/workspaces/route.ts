@@ -40,7 +40,8 @@ export async function POST(request: NextRequest) {
     if (claim.replayed) {
       const workspace = await getWorkspace(user.id, claim.resourceId);
       if (workspace) return NextResponse.json({ workspace, replayed: true }, { headers: { "cache-control": "no-store" } });
-      return apiError("IDEMPOTENCY_RECOVERY_PENDING", 409, "请求正在恢复，请稍后重试");
+      const recoveredWorkspace = await createWorkspace({ userId: user.id, ...parsed.data, workspaceId: claim.resourceId });
+      return NextResponse.json({ workspace: recoveredWorkspace, replayed: true }, { status: 201, headers: { "cache-control": "no-store" } });
     }
 
     const workspace = await createWorkspace({ userId: user.id, ...parsed.data, workspaceId: claim.resourceId });
