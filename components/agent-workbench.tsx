@@ -156,7 +156,9 @@ export function AgentWorkbench() {
     const source = new EventSource(`/api/runs/${runId}/events`);
     eventSource.current = source;
     setStreamState("reconnecting");
-    source.onopen = () => setStreamState("live");
+    source.onopen = () => {
+      if (eventSource.current === source) setStreamState("live");
+    };
     const handleEvent = (messageEvent: MessageEvent<string>) => {
       try {
         const event = JSON.parse(messageEvent.data) as TaskEvent;
@@ -181,7 +183,7 @@ export function AgentWorkbench() {
     source.onmessage = handleEvent;
     source.onerror = () => {
       // EventSource 会自动携带 Last-Event-ID 重连；断线期间保留已投影事件。
-      if (source.readyState === EventSource.CONNECTING) setStreamState("reconnecting");
+      if (eventSource.current === source) setStreamState("reconnecting");
     };
   }, [canvasFollow, closeEvents, loadProposals, loadWorkspaceContext]);
 
