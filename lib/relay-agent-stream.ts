@@ -89,6 +89,12 @@ function toOpenAiTools(tools: Tool[] | undefined) {
   }));
 }
 
+export function mergeToolCallName(current: string, incoming: string): string {
+  if (!current || incoming.startsWith(current)) return incoming;
+  if (current.endsWith(incoming)) return current;
+  return `${current}${incoming}`;
+}
+
 type OpenAiChunk = {
   choices?: Array<{
     delta?: {
@@ -171,7 +177,7 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
           const index = call.index ?? 0;
           const current = toolCalls.get(index) ?? { id: call.id ?? `call_${index}`, name: call.function?.name ?? "", arguments: "" };
           if (call.id) current.id = call.id;
-          if (call.function?.name) current.name += call.function.name;
+          if (call.function?.name) current.name = mergeToolCallName(current.name, call.function.name);
           if (call.function?.arguments) current.arguments += call.function.arguments;
           toolCalls.set(index, current);
         }
