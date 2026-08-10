@@ -225,8 +225,8 @@
   .workspace-create input,
   .prompt-composer textarea,
   .prompt-composer select { border: 1px solid var(--color-line); border-radius: 0; background: var(--color-surface); color: var(--color-ink); font: inherit; }
-  .workspace-create input { min-width: 0; width: 100%; padding: 0.45rem; font-size: 0.8125rem; }
-  .workspace-create button { padding: 0.35rem 0.55rem; background: var(--color-ink); border: 1px solid var(--color-ink); color: var(--color-paper); font-family: var(--font-mono); font-size: 0.6875rem; cursor: pointer; }
+  .workspace-create input { min-width: 0; flex: 1 1 auto; width: auto; padding: 0.45rem; font-size: 0.8125rem; }
+  .workspace-create button { flex: 0 0 auto; min-width: 3.75rem; padding: 0.35rem 0.55rem; background: var(--color-ink); border: 1px solid var(--color-ink); color: var(--color-paper); font-family: var(--font-mono); font-size: 0.6875rem; white-space: nowrap; cursor: pointer; }
 
   .workspace-list { display: grid; gap: 0.25rem; margin: 0.5rem 0 1.5rem; }
   .workspace-item { display: grid; gap: 0.2rem; width: 100%; padding: 0.6rem 0.5rem; border: 1px solid transparent; text-align: left; background: transparent; color: var(--color-ink); cursor: pointer; }

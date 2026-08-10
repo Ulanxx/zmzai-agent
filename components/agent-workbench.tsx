@@ -125,6 +125,8 @@ export function AgentWorkbench() {
           setSelectedId(first.id);
           setModel(modelResult.status === "fulfilled" && modelResult.value.models.some((item) => item.model === first.defaultModel) ? first.defaultModel : modelResult.status === "fulfilled" ? modelResult.value.models[0]?.model ?? "" : first.defaultModel);
           await loadWorkspaceContext(first.id);
+        } else if (modelResult.status === "fulfilled") {
+          setModel(modelResult.value.models[0]?.model ?? "");
         }
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "无法加载工作台");
@@ -161,7 +163,14 @@ export function AgentWorkbench() {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const name = String(form.get("name") ?? "").trim();
-    if (!name || !model) return;
+    if (!name) {
+      setError("请输入 Workspace 名称");
+      return;
+    }
+    if (!model) {
+      setError("没有可用模型，请先到 m.zmzai.cloud 配置 Relay 模型");
+      return;
+    }
     setCreating(true);
     setError(null);
     try {
