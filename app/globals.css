@@ -256,6 +256,11 @@
   .composer-controls { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.45rem; color: var(--color-muted); }
   .mode-pill { padding: 0.25rem 0.4rem; color: var(--color-accent-ink); background: var(--color-accent); }
   .mode-planned { color: var(--color-muted); }
+  .mode-switch { display: inline-flex; border: 1px solid var(--color-line); }
+  .mode-switch button { min-width: 3.65rem; border: 0; border-right: 1px solid var(--color-line); background: transparent; color: var(--color-muted); padding: 0.25rem 0.4rem; font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.07em; cursor: pointer; }
+  .mode-switch button:last-child { border-right: 0; }
+  .mode-switch button.active { background: var(--color-accent); color: var(--color-accent-ink); }
+  .mode-switch button:disabled { cursor: not-allowed; opacity: 0.7; }
   .prompt-composer select { min-width: 0; max-width: 17rem; padding: 0.2rem 0.35rem; font-family: var(--font-mono); font-size: 0.6875rem; }
   .prompt-composer textarea { width: 100%; resize: vertical; padding: 0.75rem; line-height: 1.55; }
   .composer-actions { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding-top: 0.55rem; color: var(--color-muted); }
@@ -277,11 +282,27 @@
   .task-canvas p { margin-top: 2rem; color: var(--color-muted); font-size: 0.8125rem; }
   .file-preview-title { padding: 0.75rem 0; font-family: var(--font-mono); font-size: 0.75rem; color: var(--color-accent); overflow-wrap: anywhere; }
   .file-preview pre { max-height: calc(100dvh - 12rem); margin: 0; overflow: auto; padding: 0.75rem; background: var(--color-ink); color: var(--color-paper); font-family: var(--font-mono); font-size: 0.6875rem; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .proposal-canvas { padding-top: 1.25rem; }
+  .proposal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+  .proposal-head h2 { margin: 0.4rem 0 1rem; font-size: 1.15rem; line-height: 1.45; overflow-wrap: anywhere; }
+  .proposal-status { flex: 0 0 auto; border: 1px solid var(--color-line); padding: 0.2rem 0.35rem; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.625rem; letter-spacing: 0.07em; }
+  .proposal-status.pending { border-color: var(--color-accent); color: var(--color-accent-strong); }
+  .proposal-status.approved { border-color: var(--color-success); color: var(--color-success); }
+  .proposal-status.rejected, .proposal-status.superseded { border-color: var(--color-muted); color: var(--color-muted); }
+  .proposal-files { display: grid; gap: 0.2rem; margin-bottom: 0.85rem; }
+  .proposal-file { display: flex; gap: 0.55rem; width: 100%; border: 0; background: transparent; color: var(--color-muted); padding: 0.3rem 0.15rem; font-family: var(--font-mono); font-size: 0.6875rem; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .proposal-file:hover { color: var(--color-accent); background: var(--color-paper); }
+  .proposal-file span { color: var(--color-accent); }
+  .diff-preview { max-height: min(48dvh, 34rem); margin: 0; overflow: auto; padding: 0.75rem; border: 1px solid var(--color-line); background: var(--color-ink); color: var(--color-paper); font-family: var(--font-mono); font-size: 0.65625rem; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .proposal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.85rem; }
+  .proposal-note { margin: 0.85rem 0 0; color: var(--color-muted); font-size: 0.8125rem; }
+  .approval-note { border-color: var(--color-accent); }
 }
 
 @media (max-width: 960px) {
   .workbench-grid { grid-template-columns: minmax(12rem, 15rem) minmax(0, 1fr); }
-  .canvas-pane { display: none; }
+  .canvas-pane { display: block; grid-column: 1 / -1; border-top: 1px solid var(--color-line); border-left: 0; }
+  .diff-preview { max-height: 24rem; }
 }
 
 @media (max-width: 680px) {
@@ -292,6 +313,7 @@
   .workspace-list { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 0.75rem; }
   .file-tree, .revision-list { display: none; }
   .conversation-pane { min-height: calc(100dvh - 13rem); padding: 0.85rem; }
+  .canvas-pane { min-height: 0; padding: 0.85rem; }
   .conversation-scroll { padding: 1rem 0.25rem; }
   .agent-intro { margin-top: 3rem; }
   .composer-actions span { display: none; }

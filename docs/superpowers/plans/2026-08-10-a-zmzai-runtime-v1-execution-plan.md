@@ -219,3 +219,10 @@ A-02 Sandbox 契约┘                 │
 | A-06 Mongo 控制面 | 已实现，待 Mongo 集成测试 | Workspace、File、Revision、Run、Event、Idempotency 模型与索引已加入。 |
 | A-07 Workspace/Revision API | 已实现，待生产联调 | Workspace 创建/读取、文件列表和 Revision 列表 Route Handler 已加入。 |
 | A-08 Task Run/Event Store | 已实现，待 Mongo/SSE 集成测试 | Run 单活跃约束、事件序号、预算、SSE replay、取消和租约字段已加入。 |
+| A-09 PI Agent Loop | 已实现，待真实登录联调 | PI 只持有瞬态 Loop；模型、工具与状态均经 Agent Runtime 控制。 |
+| A-10 Relay Adapter | 已实现，待 Relay 契约联调 | Agent 模型流经 `m.zmzai.cloud` 内部 Relay，不接受用户 Provider API Key。 |
+| A-11 只读 Tool Broker | 已实现 | `list/read/search` 受 Workspace 路径与用户边界约束。 |
+| A-12 Plan 工作台 | 已实现 | 三栏工作台消费持久化 SSE 事件，支持模型选择、取消和 Workspace 上下文。 |
+| A-13 Proposal 与 Shadow View | 已实现 | Build 的 `write/edit` 只产生同 Run 可见的待审批 Diff，不直接修改 WorkspaceFile。 |
+| A-14 审批与 Revision 原子提交 | 已实现，待真实登录 E2E | `approve/reject` 需要 Idempotency-Key；Mongo transaction 内完成 CAS、Revision、文件、Run 和事件。 |
+| A-15 Build/Diff 画布 | 进行中 | 已接入 Plan/Build 切换、Diff 审查、批准/拒绝与冲突提示；回滚与 Agent continuation 依赖后续 Revision/Run 契约。 |

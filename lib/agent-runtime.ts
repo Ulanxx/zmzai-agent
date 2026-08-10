@@ -69,6 +69,7 @@ export async function runAgentTask(input: { userId: string; runId: string }): Pr
       { $set: { status: failed ? "failed" : waitingApproval ? "waiting_approval" : "succeeded", activeWorkspaceKey: waitingApproval ? run.workspaceId : null, leaseOwner: null, leaseExpiresAt: null, failureCode: failed ? "RELAY_OR_AGENT_FAILED" : null } },
       { new: true },
     ).lean();
+    if (finalized && waitingApproval) await appendTaskEvent({ runId: input.runId, userId: input.userId, type: "run.waiting_approval", data: {} });
     if (finalized && !waitingApproval) await appendTaskEvent({ runId: input.runId, userId: input.userId, type: failed ? "run.failed" : "run.completed", data: failed ? { code: "RELAY_OR_AGENT_FAILED", error: failed } : {} });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Agent Runtime 失败";

@@ -30,6 +30,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ pr
 
     const resolved = await resolveProposal({ userId: user.id, proposalId, action: "approve" });
     if (!resolved) return apiError("PROPOSAL_NOT_FOUND", 404, "提案不存在");
+    if (resolved.outcome === "not_ready") return apiError("PROPOSAL_NOT_READY", 409, "Agent 尚未完成提案，请等待任务进入审批状态");
     if (resolved.outcome === "conflict") return apiError("REVISION_CONFLICT", 409, "Workspace 已有更新版本，请重新生成提案");
     if (resolved.outcome === "rejected") return apiError("PROPOSAL_NOT_PENDING", 409, "提案已被拒绝，不能批准");
     return NextResponse.json({ proposal: resolved.proposal, revisionId: resolved.revisionId, replayed: false }, { headers: { "cache-control": "no-store" } });

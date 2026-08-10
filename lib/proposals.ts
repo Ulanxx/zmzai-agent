@@ -32,7 +32,7 @@ export type ChangeProposalView = {
 };
 
 export type ProposalResolution = {
-  outcome: "approved" | "rejected" | "conflict";
+  outcome: "approved" | "rejected" | "conflict" | "not_ready";
   proposal: ChangeProposalView;
   revisionId: string | null;
 };
@@ -280,6 +280,12 @@ export async function resolveProposal(input: { userId: string; proposalId: strin
           proposal: toProposalView(proposal),
           revisionId: proposal.approvedRevisionId ?? null,
         };
+        return;
+      }
+
+      const waitingRun = await TaskRunModel.exists({ userId: input.userId, runId: proposal.runId, status: "waiting_approval" }).session(session);
+      if (!waitingRun) {
+        result = { outcome: "not_ready", proposal: toProposalView(proposal), revisionId: null };
         return;
       }
 
