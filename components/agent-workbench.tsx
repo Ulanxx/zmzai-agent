@@ -139,7 +139,7 @@ export function AgentWorkbench() {
     closeEvents();
     const source = new EventSource(`/api/runs/${runId}/events`);
     eventSource.current = source;
-    source.onmessage = (messageEvent) => {
+    const handleEvent = (messageEvent: MessageEvent<string>) => {
       try {
         const event = JSON.parse(messageEvent.data) as TaskEvent;
         setEvents((current) => current.some((item) => item.sequence === event.sequence) ? current : [...current, event]);
@@ -156,6 +156,8 @@ export function AgentWorkbench() {
         }
       } catch { setError("任务事件格式无效"); }
     };
+    for (const type of ["run.queued", "run.started", "run.waiting_approval", "run.completed", "run.failed", "run.cancelled", "message.delta", "tool.requested", "tool.progress", "tool.completed", "proposal.created", "proposal.updated", "approval.required", "approval.resolved", "revision.created"]) source.addEventListener(type, handleEvent);
+    source.onmessage = handleEvent;
     source.onerror = () => { source.close(); };
   }, [closeEvents, loadProposals, loadWorkspaceContext]);
 
