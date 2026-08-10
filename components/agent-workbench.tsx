@@ -2,15 +2,16 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { projectTaskEvents, type CanvasArtifact, type TaskEvent, type ToolNode } from "@/lib/task-event-projection";
+
 type Workspace = { id: string; name: string; description: string; defaultModel: string; currentRevisionId: string | null; updatedAt: string };
 type WorkspaceFile = { path: string; content: string; revisionId: string | null; updatedAt: string };
 type Revision = { id: string; summary: string; createdAt: string; changes: Array<{ path: string }> };
 type Model = { model: string; maxOutputTokens: number };
 type Run = { id: string; workspaceId: string; mode: "plan" | "build"; model: string; prompt: string; status: string; failureCode: string | null };
-type TaskEvent = { id: string; sequence: number; type: string; at: string; data: Record<string, unknown> };
 type ProposalChange = { path: string; operation: "create" | "update" | "delete"; before: string | null; after: string | null };
 type Proposal = { id: string; runId: string; baseRevisionId: string | null; status: "pending" | "approved" | "rejected" | "superseded"; approvedRevisionId: string | null; summary: string; diff: string; changes: ProposalChange[]; createdAt: string; updatedAt: string };
-type CanvasTab = "task" | "file" | "proposal";
+type CanvasTab = "task" | "file" | "proposal" | "artifact";
 
 function requestId(): string {
   return crypto.randomUUID();
@@ -23,20 +24,6 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-function activity(event: TaskEvent): string | null {
-  const name = typeof event.data.name === "string" ? event.data.name : "";
-  const args = event.data.args && typeof event.data.args === "object" ? event.data.args as { path?: unknown; query?: unknown } : {};
-  if (event.type === "tool.requested") {
-    if (name === "read") return `正在读取 ${typeof args.path === "string" ? args.path : "文件"}`;
-    if (name === "search") return `正在搜索 ${typeof args.query === "string" ? `“${args.query}”` : "文件"}`;
-    if (name === "list") return "正在列出 Workspace 文件";
-    if (name === "write") return `正在生成 ${typeof args.path === "string" ? args.path : "文件"} 的变更`;
-    if (name === "edit") return `正在编辑 ${typeof args.path === "string" ? args.path : "文件"}`;
-  }
-  if (event.type === "tool.completed") return name === "search" ? "已完成文件搜索" : name === "read" ? "已读取文件" : name === "list" ? "已列出文件" : name === "write" || name === "edit" ? "已更新待审批提案" : null;
-  return null;
-}
-
 function runPhase(status: string | undefined): string {
   if (status === "running" || status === "queued") return "进行中";
   if (status === "waiting_approval") return "等待审批";
@@ -44,6 +31,27 @@ function runPhase(status: string | undefined): string {
   if (status === "cancelled") return "已取消";
   if (status === "failed") return "失败";
   return "待开始";
+}
+
+function durationLabel(value: number | null): string {
+  if (value === null) return "";
+  if (value < 1_000) return `${value}ms`;
+  return `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}s`;
+}
+
+function ToolCard({ tool, onOpenArtifact }: { tool: ToolNode; onOpenArtifact: (toolCallId: string) => void }) {
+  return <article className={`tool-card ${tool.status}`}>
+    <div className="tool-card-head"><div><span className="tool-card-name">{tool.name}</span><span className="tool-card-args">{tool.argsSummary}</span></div><span className="tool-card-state">{tool.status === "requested" ? "准备中" : tool.status === "running" ? "执行中" : tool.status === "failed" ? "失败" : "完成"}</span></div>
+    <div className="tool-card-body"><span>{tool.resultSummary?.text ?? tool.label}</span><span className="tool-card-meta">{durationLabel(tool.durationMs)}</span>{tool.status !== "requested" && <button type="button" className="tool-card-open" onClick={() => onOpenArtifact(tool.id)}>查看上下文</button>}</div>
+    {tool.resultSummary?.truncated && <p className="tool-card-truncated">结果已截断，省略 {tool.resultSummary.omittedBytes} B</p>}
+  </article>;
+}
+
+function ArtifactView({ artifact }: { artifact: CanvasArtifact }) {
+  const payload = artifact.payload;
+  if (artifact.kind === "file_preview") return <section className="artifact-canvas"><div className="artifact-head"><span className="canvas-index">文件</span><h2>{artifact.title}</h2></div><pre>{typeof payload.content === "string" ? payload.content : "文件内容不可用"}</pre>{payload.truncated === true && <p className="artifact-note">预览已截断，完整内容仍保留在 Workspace。</p>}</section>;
+  if (artifact.kind === "search_results") return <section className="artifact-canvas"><div className="artifact-head"><span className="canvas-index">检索</span><h2>{artifact.title}</h2></div><ol className="search-results">{Array.isArray(payload.matches) ? payload.matches.map((match, index) => { const item = match && typeof match === "object" ? match as Record<string, unknown> : {}; return <li key={`${String(item.path)}-${index}`}><span>{String(item.path ?? "文件")}:{String(item.line ?? "")}</span><p>{String(item.text ?? "")}</p></li>; }) : <li>没有可显示的命中。</li>}</ol>{payload.truncated === true && <p className="artifact-note">仅显示前 20 条命中。</p>}</section>;
+  return <section className="artifact-canvas"><div className="artifact-head"><span className="canvas-index">输出</span><h2>{artifact.title}</h2></div><pre>{typeof payload.content === "string" ? payload.content : "等待输出"}</pre></section>;
 }
 
 export function AgentWorkbench() {
@@ -61,6 +69,8 @@ export function AgentWorkbench() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   const [canvasTab, setCanvasTab] = useState<CanvasTab>("task");
+  const [canvasFollow, setCanvasFollow] = useState(true);
+  const [pinnedArtifactId, setPinnedArtifactId] = useState<string | null>(null);
   const [resolvingProposal, setResolvingProposal] = useState<"approve" | "reject" | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -68,8 +78,8 @@ export function AgentWorkbench() {
   const eventSource = useRef<EventSource | null>(null);
 
   const workspace = useMemo(() => workspaces.find((item) => item.id === selectedId) ?? null, [workspaces, selectedId]);
-  const message = useMemo(() => events.filter((event) => event.type === "message.delta").map((event) => typeof event.data.delta === "string" ? event.data.delta : "").join(""), [events]);
-  const activities = useMemo(() => events.map(activity).filter((item): item is string => Boolean(item)), [events]);
+  const projection = useMemo(() => projectTaskEvents(events), [events]);
+  const activeArtifact = useMemo(() => canvasFollow ? projection.artifacts.at(-1) ?? null : projection.artifacts.find((artifact) => artifact.id === pinnedArtifactId) ?? null, [canvasFollow, pinnedArtifactId, projection.artifacts]);
   const currentFile = files.find((file) => file.path === selectedFile) ?? null;
   const selectedProposal = proposals.find((proposal) => proposal.id === selectedProposalId) ?? proposals[0] ?? null;
 
@@ -105,6 +115,8 @@ export function AgentWorkbench() {
     setProposals([]);
     setSelectedProposalId(null);
     setCanvasTab("task");
+    setCanvasFollow(true);
+    setPinnedArtifactId(null);
     setError(null);
     try { await loadWorkspaceContext(workspaceId); } catch (cause) { setError(cause instanceof Error ? cause.message : "无法读取 Workspace"); }
   }, [closeEvents, loadWorkspaceContext, workspaces]);
@@ -145,9 +157,10 @@ export function AgentWorkbench() {
         setEvents((current) => current.some((item) => item.sequence === event.sequence) ? current : [...current, event]);
         if (["proposal.created", "proposal.updated", "approval.required"].includes(event.type)) {
           void loadProposals(runId).then((nextProposals) => {
-            if (nextProposals.length) setCanvasTab("proposal");
+            if (nextProposals.length && canvasFollow) setCanvasTab("proposal");
           }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "无法读取提案"));
         }
+        if (event.type === "artifact.upsert" && canvasFollow) setCanvasTab("artifact");
         if (event.type === "run.waiting_approval") setRun((current) => current ? { ...current, status: "waiting_approval" } : current);
         if (["run.completed", "run.failed", "run.cancelled"].includes(event.type)) {
           setRun((current) => current ? { ...current, status: event.type === "run.completed" ? "succeeded" : event.type === "run.cancelled" ? "cancelled" : "failed" } : current);
@@ -159,7 +172,7 @@ export function AgentWorkbench() {
     for (const type of ["run.queued", "run.started", "run.waiting_approval", "run.completed", "run.failed", "run.cancelled", "message.delta", "tool.requested", "tool.progress", "tool.completed", "proposal.created", "proposal.updated", "approval.required", "approval.resolved", "revision.created"]) source.addEventListener(type, handleEvent);
     source.onmessage = handleEvent;
     source.onerror = () => { source.close(); };
-  }, [closeEvents, loadProposals, loadWorkspaceContext]);
+  }, [canvasFollow, closeEvents, loadProposals, loadWorkspaceContext]);
 
   async function createWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -195,6 +208,8 @@ export function AgentWorkbench() {
     setProposals([]);
     setSelectedProposalId(null);
     setCanvasTab("task");
+    setCanvasFollow(true);
+    setPinnedArtifactId(null);
     try {
       const result = await requestJson<{ run: Run }>(`/api/workspaces/${workspace.id}/runs`, {
         method: "POST",
@@ -235,6 +250,14 @@ export function AgentWorkbench() {
     } finally { setResolvingProposal(null); }
   }
 
+  function openToolArtifact(toolCallId: string) {
+    const artifact = projection.artifacts.find((item) => item.toolCallId === toolCallId);
+    if (!artifact) return;
+    setCanvasFollow(false);
+    setPinnedArtifactId(artifact.id);
+    setCanvasTab("artifact");
+  }
+
   if (loading) return <main className="workbench-loading">正在建立工作台...</main>;
 
   return (
@@ -258,14 +281,21 @@ export function AgentWorkbench() {
         </aside>
 
         <section className="conversation-pane">
-          <div className="pane-heading"><span>任务对话</span>{run && <span className="run-phase">{runPhase(run.status)}</span>}</div>
+          <div className="run-toolbar"><div><span className="eyebrow">任务转录</span><h1>{run ? run.prompt : "从 Workspace 开始"}</h1></div>{run && <div className="run-toolbar-meta"><span className={`run-phase ${run.status}`}>{runPhase(run.status)}</span><span>{run.mode.toUpperCase()} · {run.model}</span>{["running", "queued"].includes(run.status) && <button type="button" className="icon-command" title="停止任务" onClick={() => void cancelRun()}>■</button>}</div>}</div>
           <div className="conversation-scroll">
             {!run && <div className="agent-intro"><span className="eyebrow">{mode === "build" ? "BUILD MODE" : "PLAN MODE"}</span><h1>{mode === "build" ? "先生成，再确认提交" : "从 Workspace 开始"}</h1><p>{mode === "build" ? "Agent 会把文件修改暂存为可审查的提案。批准前，Workspace 当前版本不会变化。" : "我可以列出、读取和搜索当前 Workspace 的文本文件，并给出可核实的中文方案。"}</p></div>}
             {run && <article className="user-message"><span>你的任务</span><p>{run.prompt}</p></article>}
-            {activities.map((item, index) => <div className="tool-activity" key={`${item}-${index}`}>{item}</div>)}
-            {message && <article className="agent-message"><span>Agent</span><p>{message}</p></article>}
+            {projection.transcript.map((entry) => {
+              if (entry.kind === "tool") {
+                const tool = projection.tools.find((item) => item.id === entry.id);
+                return tool ? <ToolCard key={`tool-${tool.id}`} tool={tool} onOpenArtifact={openToolArtifact} /> : null;
+              }
+              const message = projection.messages.find((item) => item.id === entry.id);
+              return message ? <article className={`agent-message ${message.completed ? "completed" : "streaming"}`} key={`message-${message.id}`}><span>Agent {message.completed ? "" : "正在生成"}</span><p>{message.text}{!message.completed && <i className="stream-cursor" aria-label="正在生成" />}</p></article> : null;
+            })}
             {run?.status === "waiting_approval" && <div className="run-note approval-note">Agent 已完成变更提案。请在右侧差异画布审查并决定是否提交。</div>}
             {run?.status === "failed" && <div className="run-note">任务未完成。{run.failureCode === "INSUFFICIENT_CREDITS" ? "余额不足，请前往 m.zmzai.cloud 提额。" : "请检查模型、Relay 或 Workspace 后重试。"}</div>}
+            {run?.status === "succeeded" && <div className="run-note completed-note">任务已完成。执行过程与上下文已保留。</div>}
           </div>
           <form className="prompt-composer" onSubmit={startRun}>
             <div className="composer-controls"><div className="mode-switch" role="group" aria-label="任务模式"><button type="button" className={mode === "plan" ? "active" : ""} onClick={() => setMode("plan")} disabled={Boolean(run && ["queued", "running", "waiting_approval"].includes(run.status))}>PLAN</button><button type="button" className={mode === "build" ? "active" : ""} onClick={() => setMode("build")} disabled={Boolean(run && ["queued", "running", "waiting_approval"].includes(run.status))}>BUILD</button></div><select value={model} onChange={(event) => setModel(event.target.value)} disabled={!models.length || !workspace}>{models.length ? models.map((item) => <option key={item.model} value={item.model}>{item.model}</option>) : <option>模型目录不可用</option>}</select></div>
@@ -275,9 +305,10 @@ export function AgentWorkbench() {
         </section>
 
         <aside className="canvas-pane">
-          <div className="pane-heading"><span>上下文画布</span><span className="canvas-live">LIVE</span></div>
-          <div className="canvas-tabs"><button type="button" className={canvasTab === "task" ? "active" : ""} onClick={() => setCanvasTab("task")}>任务</button><button type="button" className={canvasTab === "file" ? "active" : ""} onClick={() => { setSelectedFile(selectedFile ?? files[0]?.path ?? null); setCanvasTab("file"); }}>文件</button>{proposals.length > 0 && <button type="button" className={canvasTab === "proposal" ? "active" : ""} onClick={() => setCanvasTab("proposal")}>差异 <span>{proposals.length}</span></button>}</div>
-          {canvasTab === "proposal" && selectedProposal ? <section className="proposal-canvas"><div className="proposal-head"><div><span className="canvas-index">提案</span><h2>{selectedProposal.summary}</h2></div><span className={`proposal-status ${selectedProposal.status}`}>{selectedProposal.status === "pending" ? "待审批" : selectedProposal.status === "approved" ? "已提交" : selectedProposal.status === "rejected" ? "已拒绝" : "已过期"}</span></div><div className="proposal-files">{selectedProposal.changes.map((change) => <button type="button" key={change.path} className="proposal-file" onClick={() => { setSelectedFile(change.path); }}><span>{change.operation === "create" ? "+" : change.operation === "delete" ? "-" : "~"}</span>{change.path}</button>)}</div><pre className="diff-preview">{selectedProposal.diff}</pre>{selectedProposal.status === "pending" && <div className="proposal-actions"><button type="button" className="command-button quiet" disabled={run?.status !== "waiting_approval" || resolvingProposal !== null} onClick={() => void resolveSelectedProposal("reject")}>{resolvingProposal === "reject" ? "拒绝中" : "拒绝"}</button><button type="button" className="command-button" disabled={run?.status !== "waiting_approval" || resolvingProposal !== null} onClick={() => void resolveSelectedProposal("approve")}>{resolvingProposal === "approve" ? "提交中" : "批准并提交"}</button></div>}<p className="proposal-note">{selectedProposal.status === "pending" ? run?.status === "waiting_approval" ? "批准会创建一个不可变 Revision，并推进 Workspace 当前版本。" : "Agent 仍在生成提案，完成后才可审批。" : selectedProposal.status === "superseded" ? "Workspace 已推进到新版本。请重新运行 Build 生成新的提案。" : selectedProposal.status === "approved" ? `已提交为 ${selectedProposal.approvedRevisionId ?? "新版本"}。` : "提案被拒绝，Workspace 文件未改变。"}</p></section> : canvasTab === "file" && currentFile ? <section className="file-preview"><div className="file-preview-title">{currentFile.path}</div><pre>{currentFile.content || "此文件为空。"}</pre></section> : <section className="task-canvas"><span className="canvas-index">01</span><h2>{workspace?.name ?? "未选择 Workspace"}</h2><dl><div><dt>模式</dt><dd>{run?.mode === "build" ? "提案式 Build" : "只读 Plan"}</dd></div><div><dt>模型</dt><dd>{model || "未选择"}</dd></div><div><dt>文件</dt><dd>{files.length} 项</dd></div><div><dt>版本</dt><dd>{workspace?.currentRevisionId ? "当前版本" : "尚未创建"}</dd></div></dl><p>画布仅投影 Workspace、任务与事件的持久化状态。</p></section>}
+          <div className="pane-heading"><span>上下文画布</span><span className={canvasFollow ? "canvas-live" : "canvas-pinned"}>{canvasFollow ? "跟随执行" : "已固定"}</span></div>
+          <div className="canvas-tabs"><button type="button" className={canvasTab === "task" ? "active" : ""} onClick={() => { setCanvasFollow(false); setCanvasTab("task"); }}>任务</button><button type="button" className={canvasTab === "file" ? "active" : ""} onClick={() => { setCanvasFollow(false); setSelectedFile(selectedFile ?? files[0]?.path ?? null); setCanvasTab("file"); }}>文件</button>{proposals.length > 0 && <button type="button" className={canvasTab === "proposal" ? "active" : ""} onClick={() => { setCanvasFollow(false); setCanvasTab("proposal"); }}>差异 <span>{proposals.length}</span></button>}{activeArtifact && <button type="button" className={canvasTab === "artifact" ? "active" : ""} onClick={() => setCanvasTab("artifact")}>执行</button>}</div>
+          {!canvasFollow && <button type="button" className="follow-canvas" onClick={() => { setCanvasFollow(true); setPinnedArtifactId(null); setCanvasTab(activeArtifact ? "artifact" : "task"); }}>跟随最新执行</button>}
+          {canvasTab === "proposal" && selectedProposal ? <section className="proposal-canvas"><div className="proposal-head"><div><span className="canvas-index">提案</span><h2>{selectedProposal.summary}</h2></div><span className={`proposal-status ${selectedProposal.status}`}>{selectedProposal.status === "pending" ? "待审批" : selectedProposal.status === "approved" ? "已提交" : selectedProposal.status === "rejected" ? "已拒绝" : "已过期"}</span></div><div className="proposal-files">{selectedProposal.changes.map((change) => <button type="button" key={change.path} className="proposal-file" onClick={() => { setSelectedFile(change.path); }}><span>{change.operation === "create" ? "+" : change.operation === "delete" ? "-" : "~"}</span>{change.path}</button>)}</div><pre className="diff-preview">{selectedProposal.diff}</pre>{selectedProposal.status === "pending" && <div className="proposal-actions"><button type="button" className="command-button quiet" disabled={run?.status !== "waiting_approval" || resolvingProposal !== null} onClick={() => void resolveSelectedProposal("reject")}>{resolvingProposal === "reject" ? "拒绝中" : "拒绝"}</button><button type="button" className="command-button" disabled={run?.status !== "waiting_approval" || resolvingProposal !== null} onClick={() => void resolveSelectedProposal("approve")}>{resolvingProposal === "approve" ? "提交中" : "批准并提交"}</button></div>}<p className="proposal-note">{selectedProposal.status === "pending" ? run?.status === "waiting_approval" ? "批准会创建一个不可变 Revision，并推进 Workspace 当前版本。" : "Agent 仍在生成提案，完成后才可审批。" : selectedProposal.status === "superseded" ? "Workspace 已推进到新版本。请重新运行 Build 生成新的提案。" : selectedProposal.status === "approved" ? `已提交为 ${selectedProposal.approvedRevisionId ?? "新版本"}。` : "提案被拒绝，Workspace 文件未改变。"}</p></section> : canvasTab === "file" && currentFile ? <section className="file-preview"><div className="file-preview-title">{currentFile.path}</div><pre>{currentFile.content || "此文件为空。"}</pre></section> : canvasTab === "artifact" && activeArtifact ? <ArtifactView artifact={activeArtifact} /> : <section className="task-canvas"><span className="canvas-index">01</span><h2>{workspace?.name ?? "未选择 Workspace"}</h2><dl><div><dt>模式</dt><dd>{run?.mode === "build" ? "提案式 Build" : "只读 Plan"}</dd></div><div><dt>模型</dt><dd>{model || "未选择"}</dd></div><div><dt>文件</dt><dd>{files.length} 项</dd></div><div><dt>版本</dt><dd>{workspace?.currentRevisionId ? "当前版本" : "尚未创建"}</dd></div></dl><p>画布仅投影 Workspace、任务与事件的持久化状态。</p></section>}
         </aside>
       </div>
     </main>

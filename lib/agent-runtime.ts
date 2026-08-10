@@ -1,24 +1,17 @@
-import { Agent, type AgentEvent } from "@earendil-works/pi-agent-core";
+import { Agent } from "@earendil-works/pi-agent-core";
 
 import { appendTaskEvent } from "@/lib/task-events";
 import { createBuildTools } from "@/lib/build-tool-broker";
 import { hasPendingProposals } from "@/lib/proposals";
 import { createRelayModel, createRelayStreamFunction } from "@/lib/relay-agent-stream";
 import { createReadOnlyTools } from "@/lib/read-only-tool-broker";
+import { presentAgentEvent } from "@/lib/task-event-presentation";
 import { TaskRunModel } from "@/models/task-run";
 import { WorkspaceModel } from "@/models/workspace";
 
 const runningAgents = globalThis as typeof globalThis & { __zmzaiAgentRuntime?: Map<string, Agent> };
 const agents = runningAgents.__zmzaiAgentRuntime ?? new Map<string, Agent>();
 runningAgents.__zmzaiAgentRuntime = agents;
-
-function eventForUi(event: AgentEvent): { type: string; data: unknown } | null {
-  if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") return { type: "message.delta", data: { delta: event.assistantMessageEvent.delta } };
-  if (event.type === "tool_execution_start") return { type: "tool.requested", data: { toolCallId: event.toolCallId, name: event.toolName, args: event.args } };
-  if (event.type === "tool_execution_update") return { type: "tool.progress", data: { toolCallId: event.toolCallId, name: event.toolName } };
-  if (event.type === "tool_execution_end") return { type: "tool.completed", data: { toolCallId: event.toolCallId, name: event.toolName, isError: event.isError } };
-  return null;
-}
 
 export async function runAgentTask(input: { userId: string; runId: string }): Promise<void> {
   const run = await TaskRunModel.findOneAndUpdate(
@@ -55,9 +48,11 @@ export async function runAgentTask(input: { userId: string; runId: string }): Pr
     shouldStopAfterTurn: ({ newMessages }) => newMessages.filter((message) => message.role === "assistant").length >= (run.budget?.maxModelTurns ?? 12),
   });
   agents.set(input.runId, agent);
+  const toolStartedAt = new Map<string, number>();
   agent.subscribe(async (event) => {
-    const visible = eventForUi(event);
-    if (visible) await appendTaskEvent({ runId: input.runId, userId: input.userId, ...visible });
+    for (const visible of presentAgentEvent(event, toolStartedAt)) {
+      await appendTaskEvent({ runId: input.runId, userId: input.userId, ...visible });
+    }
   });
 
   try {

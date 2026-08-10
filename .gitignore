@@ -6,4 +6,5 @@ out
 .env*
 !.env.example
 .vercel
+.superpowers/
 *.tsbuildinfo
