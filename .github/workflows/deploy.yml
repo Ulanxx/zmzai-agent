@@ -8,6 +8,9 @@ name: deploy
 jobs:
   quality:
     runs-on: [self-hosted, hk]
+    env:
+      PNPM_FETCH_TIMEOUT: "300000"
+      PNPM_FETCH_RETRIES: "5"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
