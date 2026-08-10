@@ -111,6 +111,10 @@ function relayError(status: number, payload: unknown): RelayAgentError {
   return new RelayAgentError(typeof body.code === "string" ? body.code : `RELAY_HTTP_${status}`, typeof body.error === "string" ? body.error : `Relay 返回 HTTP ${status}`);
 }
 
+export function isRetryableRelayStatus(status: number): boolean {
+  return [408, 500, 502, 503, 504].includes(status);
+}
+
 export function createRelayStreamFunction(identity: { userId: string; taskRunId: string }): StreamFunction {
   return (model, context, options) => streamFromRelay(model, context, options, identity);
 }
@@ -130,24 +134,43 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
     const partial = assistant(model, [], "pending");
     stream.push({ type: "start", partial });
     try {
-      const response = await fetch(`${environment.RELAY_AGENT_URL.replace(/\/$/, "")}/api/internal/agent/chat`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          userId: identity.userId,
-          taskRunId: identity.taskRunId,
-          requestId: `${identity.taskRunId}_${Date.now()}`,
-          model: model.id,
-          messages: toOpenAiMessages(context),
-          tools: toOpenAiTools(context.tools),
-          tool_choice: context.tools?.length ? "auto" : "none",
-          stream: true,
-          ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
-        }),
-        cache: "no-store",
-        signal: options?.signal,
+      const requestBody = JSON.stringify({
+        userId: identity.userId,
+        taskRunId: identity.taskRunId,
+        requestId: `${identity.taskRunId}_${Date.now()}`,
+        model: model.id,
+        messages: toOpenAiMessages(context),
+        tools: toOpenAiTools(context.tools),
+        tool_choice: context.tools?.length ? "auto" : "none",
+        stream: true,
+        ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
       });
-      if (!response.ok || !response.body) throw relayError(response.status, await response.json().catch(() => null));
+      let response: Response | null = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          response = await fetch(`${environment.RELAY_AGENT_URL.replace(/\/$/, "")}/api/internal/agent/chat`, {
+            method: "POST",
+            headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+            body: requestBody,
+            cache: "no-store",
+            signal: options?.signal,
+          });
+        } catch (cause) {
+          if (attempt === 0 && !options?.signal?.aborted) {
+            await new Promise((resolve) => setTimeout(resolve, 250));
+            continue;
+          }
+          throw cause;
+        }
+        if (response.ok && response.body) break;
+        const error = relayError(response.status, await response.json().catch(() => null));
+        if (attempt === 0 && isRetryableRelayStatus(response.status) && !options?.signal?.aborted) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          continue;
+        }
+        throw error;
+      }
+      if (!response?.ok || !response.body) throw relayError(response?.status ?? 500, null);
 
       let buffer = "";
       let textStarted = false;

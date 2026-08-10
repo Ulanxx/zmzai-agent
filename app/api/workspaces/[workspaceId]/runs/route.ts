@@ -7,7 +7,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { apiError, unauthenticated } from "@/lib/api-error";
 import { IdempotencyError, claimIdempotency } from "@/lib/idempotency";
 import { runAgentTask } from "@/lib/agent-runtime";
-import { createTaskRun, getTaskRun } from "@/lib/task-runs";
+import { createTaskRun, getTaskRun, listWorkspaceTaskRuns } from "@/lib/task-runs";
 import { getWorkspace } from "@/lib/workspaces";
 
 export const runtime = "nodejs";
@@ -18,6 +18,15 @@ const createRunSchema = z.object({
   model: z.string().trim().min(1).max(160),
   prompt: z.string().trim().min(1).max(32 * 1024),
 }).strict();
+
+export async function GET(request: NextRequest, context: { params: Promise<{ workspaceId: string }> }) {
+  const user = await getCurrentUser();
+  if (!user) return unauthenticated();
+  const { workspaceId } = await context.params;
+  if (!(await getWorkspace(user.id, workspaceId))) return apiError("WORKSPACE_NOT_FOUND", 404, "Workspace 不存在");
+  const limit = Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "30", 10);
+  return NextResponse.json({ runs: await listWorkspaceTaskRuns(user.id, workspaceId, Number.isSafeInteger(limit) ? limit : 30) }, { headers: { "cache-control": "no-store" } });
+}
 
 export async function POST(request: NextRequest, context: { params: Promise<{ workspaceId: string }> }) {
   const user = await getCurrentUser();

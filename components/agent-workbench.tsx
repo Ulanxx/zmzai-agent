@@ -8,7 +8,7 @@ type Workspace = { id: string; name: string; description: string; defaultModel: 
 type WorkspaceFile = { path: string; content: string; revisionId: string | null; updatedAt: string };
 type Revision = { id: string; summary: string; createdAt: string; changes: Array<{ path: string }> };
 type Model = { model: string; maxOutputTokens: number };
-type Run = { id: string; workspaceId: string; mode: "plan" | "build"; model: string; prompt: string; status: string; failureCode: string | null };
+type Run = { id: string; workspaceId: string; mode: "plan" | "build"; model: string; prompt: string; status: string; failureCode: string | null; createdAt: string; updatedAt: string };
 type ProposalChange = { path: string; operation: "create" | "update" | "delete"; before: string | null; after: string | null };
 type Proposal = { id: string; runId: string; baseRevisionId: string | null; status: "pending" | "approved" | "rejected" | "superseded"; approvedRevisionId: string | null; summary: string; diff: string; changes: ProposalChange[]; createdAt: string; updatedAt: string };
 type CanvasTab = "task" | "file" | "proposal" | "artifact";
@@ -40,6 +40,11 @@ function durationLabel(value: number | null): string {
   return `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}s`;
 }
 
+function runTimeLabel(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 function ToolCard({ tool, onOpenArtifact }: { tool: ToolNode; onOpenArtifact: (toolCallId: string) => void }) {
   return <article className={`tool-card ${tool.status}`}>
     <div className="tool-card-head"><div><span className="tool-card-name">{tool.name}</span><span className="tool-card-args">{tool.argsSummary}</span></div><span className="tool-card-state">{tool.status === "requested" ? "准备中" : tool.status === "running" ? "执行中" : tool.status === "failed" ? "失败" : "完成"}</span></div>
@@ -65,6 +70,7 @@ export function AgentWorkbench() {
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState("");
   const [run, setRun] = useState<Run | null>(null);
+  const [runHistory, setRunHistory] = useState<Run[]>([]);
   const [events, setEvents] = useState<TaskEvent[]>([]);
   const [mode, setMode] = useState<"plan" | "build">("plan");
   const [proposals, setProposals] = useState<Proposal[]>([]);
@@ -92,12 +98,14 @@ export function AgentWorkbench() {
   }, []);
 
   const loadWorkspaceContext = useCallback(async (workspaceId: string) => {
-    const [fileResult, revisionResult] = await Promise.all([
+    const [fileResult, revisionResult, runResult] = await Promise.all([
       requestJson<{ files: WorkspaceFile[] }>(`/api/workspaces/${workspaceId}/files`),
       requestJson<{ revisions: Revision[] }>(`/api/workspaces/${workspaceId}/revisions`),
+      requestJson<{ runs: Run[] }>(`/api/workspaces/${workspaceId}/runs?limit=30`),
     ]);
     setFiles(fileResult.files);
     setRevisions(revisionResult.revisions);
+    setRunHistory(runResult.runs);
     setSelectedFile((current) => current && fileResult.files.some((file) => file.path === current) ? current : fileResult.files[0]?.path ?? null);
   }, []);
 
@@ -114,6 +122,7 @@ export function AgentWorkbench() {
     const nextWorkspace = workspaces.find((item) => item.id === workspaceId);
     if (nextWorkspace) setModel(nextWorkspace.defaultModel);
     setRun(null);
+    setRunHistory([]);
     setEvents([]);
     setProposals([]);
     setSelectedProposalId(null);
@@ -151,7 +160,7 @@ export function AgentWorkbench() {
     return closeEvents;
   }, [closeEvents, loadWorkspaceContext]);
 
-  const subscribe = useCallback((runId: string, workspaceId: string) => {
+  const subscribe = useCallback((runId: string, workspaceId: string, historicalTerminal = false) => {
     closeEvents();
     const source = new EventSource(`/api/runs/${runId}/events`);
     eventSource.current = source;
@@ -171,7 +180,9 @@ export function AgentWorkbench() {
         if (event.type === "artifact.upsert" && canvasFollow) setCanvasTab("artifact");
         if (event.type === "run.waiting_approval") setRun((current) => current ? { ...current, status: "waiting_approval" } : current);
         if (["run.completed", "run.failed", "run.cancelled"].includes(event.type)) {
-          setRun((current) => current ? { ...current, status: event.type === "run.completed" ? "succeeded" : event.type === "run.cancelled" ? "cancelled" : "failed" } : current);
+          const status = event.type === "run.completed" ? "succeeded" : event.type === "run.cancelled" ? "cancelled" : "failed";
+          setRun((current) => current ? { ...current, status } : current);
+          setRunHistory((current) => current.map((item) => item.id === runId ? { ...item, status } : item));
           void loadWorkspaceContext(workspaceId).catch(() => undefined);
           source.close();
           if (eventSource.current === source) eventSource.current = null;
@@ -183,7 +194,14 @@ export function AgentWorkbench() {
     source.onmessage = handleEvent;
     source.onerror = () => {
       // EventSource 会自动携带 Last-Event-ID 重连；断线期间保留已投影事件。
-      if (eventSource.current === source) setStreamState("reconnecting");
+      if (eventSource.current !== source) return;
+      if (historicalTerminal) {
+        source.close();
+        eventSource.current = null;
+        setStreamState("closed");
+        return;
+      }
+      setStreamState("reconnecting");
     };
   }, [canvasFollow, closeEvents, loadProposals, loadWorkspaceContext]);
 
@@ -230,6 +248,7 @@ export function AgentWorkbench() {
         body: JSON.stringify({ mode, model, prompt: prompt.trim() }),
       });
       setRun(result.run);
+      setRunHistory((current) => [result.run, ...current.filter((item) => item.id !== result.run.id)]);
       subscribe(result.run.id, workspace.id);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "无法启动任务"); }
   }
@@ -239,6 +258,7 @@ export function AgentWorkbench() {
     try {
       const result = await requestJson<{ run: Run }>(`/api/runs/${run.id}/cancel`, { method: "POST", headers: { "idempotency-key": requestId() } });
       setRun(result.run);
+      setRunHistory((current) => current.map((item) => item.id === result.run.id ? result.run : item));
       closeEvents();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "取消失败"); }
   }
@@ -271,6 +291,20 @@ export function AgentWorkbench() {
     setCanvasTab("artifact");
   }
 
+  function openRunHistory(item: Run) {
+    closeEvents();
+    setRun(item);
+    setEvents([]);
+    setProposals([]);
+    setSelectedProposalId(null);
+    setCanvasTab("task");
+    setCanvasFollow(true);
+    setPinnedArtifactId(null);
+    setError(null);
+    void loadProposals(item.id).catch(() => undefined);
+    subscribe(item.id, item.workspaceId, ["succeeded", "failed", "cancelled"].includes(item.status));
+  }
+
   if (loading) return <main className="workbench-loading">正在建立工作台...</main>;
 
   return (
@@ -289,6 +323,7 @@ export function AgentWorkbench() {
             {workspaces.map((item) => <button type="button" key={item.id} className={item.id === selectedId ? "workspace-item active" : "workspace-item"} onClick={() => void selectWorkspace(item.id)}><span>{item.name}</span><small>{item.currentRevisionId ? "已版本化" : "草稿"}</small></button>)}
           </nav>
           {!workspaces.length && <p className="empty-state">先创建一个 Workspace，再让 Agent 阅读其中的文件。</p>}
+          <section className="run-history"><div className="pane-heading"><span>RUN HISTORY</span><small>{runHistory.length}</small></div>{runHistory.length ? <nav className="run-history-list" aria-label="任务历史">{runHistory.map((item) => <button type="button" key={item.id} className={item.id === run?.id ? "run-history-item active" : "run-history-item"} onClick={() => openRunHistory(item)}><span className={`run-history-status ${item.status}`}>{runPhase(item.status)}</span><strong>{item.prompt}</strong><small>{runTimeLabel(item.createdAt)} · {item.mode.toUpperCase()}</small></button>)}</nav> : <p className="empty-state">此 Workspace 还没有任务记录。</p>}</section>
           <section className="file-tree"><div className="pane-heading"><span>FILES</span><small>{files.length}</small></div>{files.map((file) => <button type="button" key={file.path} onClick={() => { setSelectedFile(file.path); setCanvasTab("file"); }} className={file.path === selectedFile ? "file-item active" : "file-item"}>{file.path}</button>)}</section>
           <section className="revision-list"><div className="pane-heading"><span>REVISIONS</span><small>{revisions.length}</small></div>{revisions.slice(0, 4).map((revision) => <div className="revision-item" key={revision.id}>{revision.summary || "Workspace revision"}</div>)}</section>
         </aside>

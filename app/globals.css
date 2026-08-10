@@ -245,7 +245,17 @@
   .workspace-item span { font-size: 0.9375rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .workspace-item small, .empty-state { font-family: var(--font-mono); font-size: 0.625rem; color: var(--color-muted); }
   .empty-state { padding: 0.75rem 0.5rem; line-height: 1.7; }
-  .file-tree, .revision-list { margin-top: 1.35rem; }
+  .run-history, .file-tree, .revision-list { margin-top: 1.35rem; }
+  .run-history-list { display: grid; gap: 0.2rem; margin-top: 0.45rem; }
+  .run-history-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.18rem 0.45rem; width: 100%; padding: 0.45rem 0.5rem; border: 1px solid transparent; background: transparent; color: var(--color-ink); text-align: left; cursor: pointer; }
+  .run-history-item:hover, .run-history-item.active { border-color: var(--color-line); background: var(--color-paper); }
+  .run-history-item.active { box-shadow: inset 3px 0 var(--color-accent); }
+  .run-history-item strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; line-height: 1.35; }
+  .run-history-item small { grid-column: 2; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.5625rem; }
+  .run-history-status { padding-top: 0.05rem; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.5625rem; white-space: nowrap; }
+  .run-history-status.succeeded { color: var(--color-success); }
+  .run-history-status.failed, .run-history-status.cancelled { color: #b03a28; }
+  .run-history-status.running, .run-history-status.queued, .run-history-status.waiting_approval { color: var(--color-accent-strong); }
   .file-item { display: block; width: 100%; padding: 0.4rem 0.5rem; border: 0; background: transparent; text-align: left; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.71875rem; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .file-item:hover, .file-item.active { color: var(--color-accent); background: var(--color-paper); }
   .revision-item { padding: 0.45rem 0.5rem; color: var(--color-muted); font-size: 0.75rem; border-bottom: 1px dotted var(--color-line); }
