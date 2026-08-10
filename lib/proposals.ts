@@ -13,6 +13,17 @@ export type ProposedFileChange = {
 };
 
 export type ShadowFile = { path: string; content: string; revisionId: string | null };
+export type ChangeProposalView = {
+  id: string;
+  runId: string;
+  baseRevisionId: string | null;
+  status: "pending" | "approved" | "rejected" | "superseded";
+  summary: string;
+  diff: string;
+  changes: ProposedFileChange[];
+  createdAt: string;
+  updatedAt: string;
+};
 
 const maxFileBytes = 512 * 1024;
 const maxWorkspaceBytes = 10 * 1024 * 1024;
@@ -160,4 +171,19 @@ export async function stageEditProposal(input: { userId: string; workspaceId: st
 
 export async function hasPendingProposals(runId: string): Promise<boolean> {
   return Boolean(await ChangeProposalModel.exists({ runId, status: "pending" }));
+}
+
+export async function listRunProposals(input: { userId: string; runId: string }): Promise<ChangeProposalView[]> {
+  const proposals = await ChangeProposalModel.find({ userId: input.userId, runId: input.runId }).sort({ createdAt: 1 }).lean();
+  return proposals.map((proposal) => ({
+    id: proposal.proposalId,
+    runId: proposal.runId,
+    baseRevisionId: proposal.baseRevisionId ?? null,
+    status: proposal.status,
+    summary: proposal.summary,
+    diff: proposal.diff,
+    changes: proposal.changes.map((change) => ({ path: change.path, operation: change.operation, before: change.before ?? null, after: change.after ?? null })),
+    createdAt: proposal.createdAt.toISOString(),
+    updatedAt: proposal.updatedAt.toISOString(),
+  }));
 }
