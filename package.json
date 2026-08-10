@@ -13,6 +13,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@earendil-works/pi-agent-core": "0.84.1",
+    "@earendil-works/pi-ai": "0.84.1",
     "@zmzai/db": "github:Ulanxx/zmzai-db#main",
     "mongoose": "^9.9.1",
     "next": "15.5.21",

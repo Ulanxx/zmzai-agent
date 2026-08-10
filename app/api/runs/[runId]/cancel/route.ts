@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { apiError, unauthenticated } from "@/lib/api-error";
 import { IdempotencyError, claimIdempotency } from "@/lib/idempotency";
+import { cancelActiveAgentRun } from "@/lib/agent-runtime";
 import { cancelTaskRun } from "@/lib/task-runs";
 
 export const runtime = "nodejs";
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ru
       body: {},
       resourceId: runId,
     });
+    cancelActiveAgentRun(runId);
     const run = await cancelTaskRun(user.id, runId);
     if (!run) return apiError("RUN_NOT_FOUND", 404, "Task Run 不存在");
     return NextResponse.json({ run }, { status: 202, headers: { "cache-control": "no-store" } });
