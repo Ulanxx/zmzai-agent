@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { apiError, unauthenticated } from "@/lib/api-error";
+import { ContinuationError, buildContinuationMessages, prepareContinuation } from "@/lib/continuation-context";
 import { IdempotencyError, claimIdempotency } from "@/lib/idempotency";
 import { runAgentTask } from "@/lib/agent-runtime";
 import { createTaskRun, getTaskRun, listWorkspaceTaskRuns } from "@/lib/task-runs";
@@ -17,6 +18,8 @@ const createRunSchema = z.object({
   mode: z.enum(["plan", "build"]),
   model: z.string().trim().min(1).max(160),
   prompt: z.string().trim().min(1).max(32 * 1024),
+  // Continuation: resume the conversation of a terminal run in the same session.
+  continueFromRunId: z.string().trim().min(1).max(64).optional(),
 }).strict();
 
 export async function GET(request: NextRequest, context: { params: Promise<{ workspaceId: string }> }) {
@@ -36,6 +39,21 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
   const { workspaceId } = await context.params;
   if (!(await getWorkspace(user.id, workspaceId))) return apiError("WORKSPACE_NOT_FOUND", 404, "Workspace 不存在");
 
+  let sessionId: string | undefined;
+  let parentRunId: string | undefined;
+  let continuationMessages: Array<{ role: "user"; content: string; timestamp: number }> | undefined;
+  if (parsed.data.continueFromRunId) {
+    try {
+      const continuation = await prepareContinuation({ userId: user.id, workspaceId, continueFromRunId: parsed.data.continueFromRunId });
+      sessionId = continuation.sessionId;
+      parentRunId = continuation.parentRunId;
+      continuationMessages = await buildContinuationMessages({ userId: user.id, runId: parsed.data.continueFromRunId });
+    } catch (cause) {
+      if (cause instanceof ContinuationError) return apiError(cause.code, 409, cause.message);
+      throw cause;
+    }
+  }
+
   try {
     const claim = await claimIdempotency({
       userId: user.id,
@@ -50,13 +68,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       return apiError("IDEMPOTENCY_RECOVERY_PENDING", 409, "请求正在恢复，请稍后重试");
     }
 
-    const run = await createTaskRun({ runId: claim.resourceId, userId: user.id, workspaceId, ...parsed.data });
+    const run = await createTaskRun({ runId: claim.resourceId, userId: user.id, workspaceId, sessionId, parentRunId, ...parsed.data });
     if (!run) {
       const existing = await getTaskRun(user.id, claim.resourceId);
       if (existing) return NextResponse.json({ run: existing, replayed: true }, { headers: { "cache-control": "no-store" } });
       return apiError("WORKSPACE_RUN_ACTIVE", 409, "该 Workspace 已有运行中的任务");
     }
-    void runAgentTask({ userId: user.id, runId: run.id }).catch((error: unknown) => {
+    void runAgentTask({ userId: user.id, runId: run.id, continuationMessages }).catch((error: unknown) => {
       console.error("Agent runtime start failed", { runId: run.id, error: error instanceof Error ? error.message : "unknown" });
     });
     return NextResponse.json({ run }, { status: 201, headers: { "cache-control": "no-store" } });

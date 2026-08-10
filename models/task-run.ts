@@ -13,6 +13,9 @@ const taskRunSchema = new Schema(
     model: { type: String, required: true, maxlength: 160, immutable: true },
     prompt: { type: String, required: true, maxlength: 32 * 1024, immutable: true },
     baseRevisionId: { type: String, default: null, immutable: true },
+    // Continuation chain: this run continues the conversation of parentRunId.
+    // Runs in the same conversation share the same AgentSession sessionId.
+    parentRunId: { type: String, default: null, immutable: true },
     status: { type: String, enum: taskRunStates, required: true, default: "queued" },
     // Written when the run acquires its execution lease; terminal states write
     // finishedAt. waiting_approval intentionally keeps finishedAt unset so the

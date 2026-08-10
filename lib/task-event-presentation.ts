@@ -84,6 +84,12 @@ export function presentAgentEvent(event: AgentEvent, startedAt: Map<string, numb
   if (event.type === "tool_execution_end") {
     const durationMs = Math.max(0, now - (startedAt.get(event.toolCallId) ?? now));
     startedAt.delete(event.toolCallId);
+    // exec tools stage an execution proposal instead of completing: keep the
+    // node in a "waiting approval" state until the approved sandbox run ends.
+    const details = record(record(event.result).details);
+    if (details.pendingApproval === true) {
+      return [{ type: "tool.progress", data: { toolCallId: event.toolCallId, name: event.toolName, label: "等待审批" } }];
+    }
     const summary = resultSummary(event.toolName, event.result, event.isError);
     const completed: PublicTaskEvent = { type: event.isError ? "tool.failed" : "tool.completed", data: { toolCallId: event.toolCallId, name: event.toolName, durationMs, resultSummary: summary } };
     const artifact = event.isError ? null : artifactFor(event.toolName, event.toolCallId, event.result);

@@ -8,12 +8,16 @@ import { WorkspaceModel } from "@/models/workspace";
 export type TaskRunView = {
   id: string;
   workspaceId: string;
+  sessionId: string;
   mode: "plan" | "build";
   model: string;
   prompt: string;
   baseRevisionId?: string | null;
+  parentRunId?: string | null;
   status: string;
   failureCode: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
   cancelRequestedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -22,12 +26,16 @@ export type TaskRunView = {
 function toTaskRunView(run: {
   runId: string;
   workspaceId: string;
+  sessionId: string;
   mode: "plan" | "build";
   model: string;
   prompt: string;
   baseRevisionId?: string | null;
+  parentRunId?: string | null;
   status: string;
   failureCode?: string | null;
+  startedAt?: Date | null;
+  finishedAt?: Date | null;
   cancelRequestedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -35,12 +43,16 @@ function toTaskRunView(run: {
   return {
     id: run.runId,
     workspaceId: run.workspaceId,
+    sessionId: run.sessionId,
     mode: run.mode,
     model: run.model,
     prompt: run.prompt,
     baseRevisionId: run.baseRevisionId ?? null,
+    parentRunId: run.parentRunId ?? null,
     status: run.status,
     failureCode: run.failureCode ?? null,
+    startedAt: run.startedAt?.toISOString() ?? null,
+    finishedAt: run.finishedAt?.toISOString() ?? null,
     cancelRequestedAt: run.cancelRequestedAt?.toISOString() ?? null,
     createdAt: run.createdAt.toISOString(),
     updatedAt: run.updatedAt.toISOString(),
@@ -52,11 +64,11 @@ export async function listWorkspaceTaskRuns(userId: string, workspaceId: string,
   return runs.map(toTaskRunView);
 }
 
-export async function createTaskRun(input: { runId: string; userId: string; workspaceId: string; mode: "plan" | "build"; model: string; prompt: string }): Promise<TaskRunView | null> {
+export async function createTaskRun(input: { runId: string; userId: string; workspaceId: string; mode: "plan" | "build"; model: string; prompt: string; sessionId?: string; parentRunId?: string | null }): Promise<TaskRunView | null> {
   const workspace = await WorkspaceModel.findOne({ userId: input.userId, workspaceId: input.workspaceId }).lean();
   if (!workspace) return null;
 
-  const sessionId = `session_${randomUUID()}`;
+  const sessionId = input.sessionId ?? `session_${randomUUID()}`;
   let run;
   try {
     run = await TaskRunModel.create({
@@ -68,6 +80,7 @@ export async function createTaskRun(input: { runId: string; userId: string; work
       model: input.model,
       prompt: input.prompt,
       baseRevisionId: workspace.currentRevisionId ?? null,
+      parentRunId: input.parentRunId ?? null,
       status: "queued",
       activeWorkspaceKey: input.workspaceId,
     });
@@ -79,6 +92,8 @@ export async function createTaskRun(input: { runId: string; userId: string; work
   await AgentSessionModel.updateOne(
     { sessionId },
     {
+      // Continuation runs reuse the parent session: keep the original title,
+      // only advance currentRunId/lastRunId and keep the session active.
       $setOnInsert: {
         sessionId,
         userId: input.userId,

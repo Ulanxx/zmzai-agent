@@ -212,7 +212,7 @@ A-02 Sandbox 契约┘                 │
 | 任务 | 状态 | 证据 / 剩余条件 |
 | --- | --- | --- |
 | A-01 Relay 内部 Agent 契约 | 待 Relay 实现 | 契约已写入 `docs/reference/relay-agent-internal-api.md`；`m.zmzai.cloud` 尚需实现 `POST /api/internal/agent/chat`。 |
-| A-02 Sandbox 内部 Agent 契约 | 待 Sandbox 实现 | 契约已写入 `docs/reference/sandbox-agent-internal-api.md`；`z.zmzai.cloud` 尚需实现临时快照执行接口。 |
+| A-02 Sandbox 内部 Agent 契约 | 已实现 | `z.zmzai.cloud` 已实现 `POST/GET /api/internal/agent/runs`、`GET .../events`、`POST .../cancel`（Bearer 服务密钥、快照写入、幂等、事件持久化、7 天 TTL）。 |
 | A-03 配置基线 | 已实现 | `.env.example`、Zod 服务端环境校验和 Mongo 连接已加入。 |
 | A-04 质量基线 | 已实现 | `test`、`typecheck`、`lint`、`build` 脚本与 deploy 前 quality job 已加入。 |
 | A-05 Auth 隔离 | 已实现，待生产联调 | 复用 `@zmzai/db` 的共享 Session/User 模型；全部控制面查询以 `userId` 过滤。 |
@@ -224,5 +224,33 @@ A-02 Sandbox 契约┘                 │
 | A-11 只读 Tool Broker | 已实现 | `list/read/search` 受 Workspace 路径与用户边界约束。 |
 | A-12 Plan 工作台 | 已实现 | 三栏工作台消费持久化 SSE 事件，支持模型选择、取消和 Workspace 上下文。 |
 | A-13 Proposal 与 Shadow View | 已实现 | Build 的 `write/edit` 只产生同 Run 可见的待审批 Diff，不直接修改 WorkspaceFile。 |
-| A-14 审批与 Revision 原子提交 | 已实现，待真实登录 E2E | `approve/reject` 需要 Idempotency-Key；Mongo transaction 内完成 CAS、Revision、文件、Run 和事件。 |
-| A-15 Build/Diff 画布 | 进行中 | 已接入 Plan/Build 切换、Diff 审查、批准/拒绝与冲突提示；回滚与 Agent continuation 依赖后续 Revision/Run 契约。 |
+| A-14 审批与 Revision 原子提交 | 已实现，待真实登录 E2E | `approve/reject` 需要 Idempotency-Key；Mongo transaction 内完成 CAS、Revision、文件、Run 和事件。审批后 Agent 自动继续（`run.resumed` + `resumeAgentRun`）。 |
+| A-15 Build/Diff 画布 | 已实现 | Plan/Build 切换、Codex 风格彩色 Diff 画布、批准/拒绝与冲突提示；批准后自动继续。 |
+| A-16 Sandbox Client | 已实现 | `lib/sandbox-client.ts` 走服务密钥内部 API；`requestId`=执行提案 id 幂等；取消级联。 |
+| A-17 经审批的 `exec` 工具 | 已实现 | `exec` 生成执行提案 → `waiting_approval` → 批准后在 Sandbox 运行影子快照 → 输出实时回传 → 真实结果注入模型上下文并自动继续；拒绝不运行。 |
+| A-18 执行结果画布 | 已实现 | 执行提案视图（命令/参数/快照清单/限额）、实时 stdout/stderr（`execution_output` artifact）、exit code/耗时/结果摘要。 |
+| A-19 Lease Recovery | 已实现 | `lib/lease-recovery.ts` + `instrumentation.ts` 每 60s 扫描：租约过期的 queued/running 与超时等待审批的 orphan 运行安全置为失败、释放 Workspace 锁、级联取消在途 Sandbox；`resumeAgentRun` 重启降级路径保留；Sandbox 状态接口支持对账。 |
+| A-20 安全与审计加固 | 已实现，待安全测试 | exec 程序白名单、路径/大小/环境变量校验、服务密钥不出现在事件与日志；事件预算沿用。 |
+| A-21 性能与容量验证 | 部分 | 本地全链路已验证单任务完整旅程（真实 Mongo + Relay + DeepSeek + 两端应用）；目标服务器并发压测待部署后执行。 |
+| A-22 生产发布与回退演练 | 部分 | 本地全链路 Smoke Test 已跑通（见下）；生产环境发布回退演练待执行。 |
+
+## 11. 多轮会话与 Sandbox 执行（本批次新增）
+
+- **会话延续**：`TaskRun.parentRunId` + `AgentSession.sessionId` 复用；`continueFromRunId` 创建延续 Run，`buildContinuationMessages` 从事件表重建紧凑上下文（上限 12 轮 / 64 KiB），任务完成/失败/取消后均可继续对话。
+- **审批自动继续**：`waiting_approval` 保留 Agent；批准/拒绝后 `resumeAgentRun` 注入结果并 `agent.continue()`；服务重启时安全降级为终态。
+- **Sandbox 执行**：`exec` 工具（build 模式）→ 影子快照（当前修订 + 未批准提案叠加）→ 执行提案 → 批准后 `z.zmzai.cloud` 内部 API 执行 → `execution_output` 实时流入画布 → 结果替换占位工具结果后继续。
+
+### 12. 已跑通的本地全链路（2026-08-10，真实环境）
+
+在本地真实基础设施（单节点副本集 MongoDB + `zmzai-relay` 本地实例 + DeepSeek 渠道 + 两端 Next 应用）用 `curl` 验证了完整旅程：
+
+1. `POST /api/workspaces` 创建 Workspace，直插一个 `src/app.ts` 文件；
+2. Plan 运行（`deepseek-v4-flash`）→ 真实读取文件并输出中文分析与建议 → `succeeded`；
+3. Build 延续运行（`continueFromRunId` 复用同一 session）→ `write/edit` 生成变更提案 → `waiting_approval`；
+4. 批准提案 → `revision.created` + `approval.resolved`，run 保持 `waiting_approval`，`resumeAgentRun` 恢复 Agent（`run.resumed`）自动继续；
+5. Agent 调用 `exec` → 执行提案（影子快照 = 已提交修订）→ `waiting_approval`；批准后经 `z.zmzai.cloud` 内部 Agent API 创建 Sandbox 运行，`execution_output` artifact 实时回传输出，`tool.completed` 落真实结果，Agent 基于输出继续；
+6. 拒绝第三次执行请求 → Agent 自动继续并给出静态验证结论 → `succeeded`。
+
+途中修复的两个真实问题：`resolveProposal` 原来在事务内把 run 直接置为 `succeeded` 导致自动继续永远不触发（改为 `recordApproval` 保留 `waiting_approval`）；Sandbox SSE 在运行已终态时仍 `enqueue` 导致 `ERR_INVALID_STATE`（改为先 flush 后按需连接）。
+
+注：本地无 OpenSandbox Server，`exec` 走 Sandbox 应用的 `demo` provider（模拟执行）；配置 `OPEN_SANDBOX_URL` 后同一链路即为真实容器执行。

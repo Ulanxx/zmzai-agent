@@ -120,3 +120,9 @@ Sandbox `exec` 尚未接入 v1，但事件与画布对象的扩展点必须预�
 2. 扩展 Tool Broker 事件为安全摘要和 artifact 引用，追加后端契约与测试。
 3. 重构 Workbench 为转录节点、运行头、可固定画布与响应式布局。
 4. 接入断线恢复、重放测试和端到端 SSE 验证。
+
+## 契约扩展（2026-08-10 已实现）
+
+- `run.resumed`：审批/拒绝后 Agent 恢复执行时发出，`data: { kind: "change" | "exec", note }`。`waiting_approval` 不是终态，SSE 保持连接，恢复事件与后续消息/工具事件经同一条流到达。
+- `execution_output` artifact：`exec` 工具批准后在 Sandbox 运行，stdout/stderr 经 `artifact.upsert`（空内容）+ 逐行 `artifact.append` 流入画布；`payload.truncated` 表示达到 64 KiB 展示上限。exec 工具节点在批准前保持 `running`（label「等待审批」），批准后转「沙箱执行中」，完成后以真实 `resultSummary` 落 `tool.completed`/`tool.failed`。
+- 执行提案（`kind: "exec"`）与变更提案（`kind: "change"`）共用 `waiting_approval` 状态与提案画布；`GET /api/runs/:runId/proposals` 返回两种提案，`kind` 区分。

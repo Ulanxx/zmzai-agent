@@ -21,6 +21,7 @@ export type ShadowFile = { path: string; content: string; revisionId: string | n
 export type ChangeProposalView = {
   id: string;
   runId: string;
+  kind: "change";
   baseRevisionId: string | null;
   status: "pending" | "approved" | "rejected" | "superseded";
   approvedRevisionId: string | null;
@@ -190,6 +191,7 @@ export async function listRunProposals(input: { userId: string; runId: string })
   return proposals.map((proposal) => ({
     id: proposal.proposalId,
     runId: proposal.runId,
+    kind: "change" as const,
     baseRevisionId: proposal.baseRevisionId ?? null,
     status: proposal.status,
     approvedRevisionId: proposal.approvedRevisionId ?? null,
@@ -216,6 +218,7 @@ function toProposalView(proposal: {
   return {
     id: proposal.proposalId,
     runId: proposal.runId,
+    kind: "change" as const,
     baseRevisionId: proposal.baseRevisionId ?? null,
     status: proposal.status,
     approvedRevisionId: proposal.approvedRevisionId ?? null,
@@ -252,16 +255,11 @@ async function applyChanges(input: { workspaceId: string; revisionId: string; ch
   }
 }
 
-async function settleRun(input: { userId: string; runId: string; outcome: "approved" | "rejected" | "conflict"; proposalId: string; revisionId: string | null; session: ClientSession }): Promise<void> {
-  const run = await TaskRunModel.findOneAndUpdate(
-    { userId: input.userId, runId: input.runId, status: "waiting_approval" },
-    { $set: { status: "succeeded", leaseOwner: null, leaseExpiresAt: null }, $unset: { activeWorkspaceKey: 1 } },
-    { new: true, session: input.session },
-  ).lean();
-  if (!run) return;
+async function recordApproval(input: { userId: string; runId: string; outcome: "approved" | "rejected" | "conflict"; proposalId: string; revisionId: string | null; session: ClientSession }): Promise<void> {
+  // The run intentionally stays `waiting_approval` so resumeAgentRun can resume
+  // the Agent loop in place (auto-continue) and own the terminal transition.
   await appendTaskEvent({ runId: input.runId, userId: input.userId, type: "approval.resolved", data: { proposalId: input.proposalId, outcome: input.outcome, revisionId: input.revisionId }, session: input.session });
   if (input.revisionId) await appendTaskEvent({ runId: input.runId, userId: input.userId, type: "revision.created", data: { proposalId: input.proposalId, revisionId: input.revisionId }, session: input.session });
-  await appendTaskEvent({ runId: input.runId, userId: input.userId, type: "run.completed", data: { outcome: input.outcome }, session: input.session });
 }
 
 export async function resolveProposal(input: { userId: string; proposalId: string; action: "approve" | "reject" }): Promise<ProposalResolution | null> {
@@ -292,7 +290,7 @@ export async function resolveProposal(input: { userId: string; proposalId: strin
       if (input.action === "reject") {
         proposal.status = "rejected";
         await proposal.save({ session });
-        await settleRun({ userId: input.userId, runId: proposal.runId, outcome: "rejected", proposalId: proposal.proposalId, revisionId: null, session });
+        await recordApproval({ userId: input.userId, runId: proposal.runId, outcome: "rejected", proposalId: proposal.proposalId, revisionId: null, session });
         result = { outcome: "rejected", proposal: toProposalView(proposal), revisionId: null };
         return;
       }
@@ -306,7 +304,15 @@ export async function resolveProposal(input: { userId: string; proposalId: strin
       if (!workspace) {
         proposal.status = "superseded";
         await proposal.save({ session });
-        await settleRun({ userId: input.userId, runId: proposal.runId, outcome: "conflict", proposalId: proposal.proposalId, revisionId: null, session });
+        await recordApproval({ userId: input.userId, runId: proposal.runId, outcome: "conflict", proposalId: proposal.proposalId, revisionId: null, session });
+        // Conflict has nothing left to auto-continue: finalize the run so the
+        // workspace lock is released and the user can continue manually.
+        const conflictRun = await TaskRunModel.findOneAndUpdate(
+          { userId: input.userId, runId: proposal.runId, status: "waiting_approval" },
+          { $set: { status: "succeeded", finishedAt: new Date(), leaseOwner: null, leaseExpiresAt: null, failureCode: null }, $unset: { activeWorkspaceKey: 1 } },
+          { new: true, session },
+        ).lean();
+        if (conflictRun) await appendTaskEvent({ runId: proposal.runId, userId: input.userId, type: "run.completed", data: { outcome: "conflict" }, session });
         result = { outcome: "conflict", proposal: toProposalView(proposal), revisionId: null };
         return;
       }
@@ -325,7 +331,7 @@ export async function resolveProposal(input: { userId: string; proposalId: strin
       proposal.status = "approved";
       proposal.approvedRevisionId = revisionId;
       await proposal.save({ session });
-      await settleRun({ userId: input.userId, runId: proposal.runId, outcome: "approved", proposalId: proposal.proposalId, revisionId, session });
+      await recordApproval({ userId: input.userId, runId: proposal.runId, outcome: "approved", proposalId: proposal.proposalId, revisionId, session });
       result = { outcome: "approved", proposal: toProposalView(proposal), revisionId };
     });
     return result;

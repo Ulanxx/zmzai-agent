@@ -4,7 +4,7 @@ import { apiError, unauthenticated } from "@/lib/api-error";
 import { resumeAgentRun } from "@/lib/agent-runtime";
 import { getCurrentUser } from "@/lib/auth/session";
 import { IdempotencyError, claimIdempotency } from "@/lib/idempotency";
-import { getProposal, resolveProposal } from "@/lib/proposals";
+import { getExecutionProposal, resolveExecutionProposal } from "@/lib/execution-proposals";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,32 +16,31 @@ export async function POST(request: NextRequest, context: { params: Promise<{ pr
   try {
     const claim = await claimIdempotency({
       userId: user.id,
-      scope: `proposal.${proposalId}.reject`,
+      scope: `execution.${proposalId}.reject`,
       key: request.headers.get("idempotency-key"),
       body: {},
       resourceId: proposalId,
     });
     if (claim.replayed) {
-      const proposal = await getProposal({ userId: user.id, proposalId });
-      if (!proposal) return apiError("PROPOSAL_NOT_FOUND", 404, "提案不存在");
+      const proposal = await getExecutionProposal({ userId: user.id, proposalId });
+      if (!proposal) return apiError("PROPOSAL_NOT_FOUND", 404, "执行提案不存在");
       if (proposal.status === "pending") return apiError("IDEMPOTENCY_RECOVERY_PENDING", 409, "请求正在恢复，请稍后重试");
-      if (proposal.status === "superseded") return apiError("PROPOSAL_NOT_PENDING", 409, "提案已过期，不能拒绝");
       return NextResponse.json({ proposal, replayed: true }, { headers: { "cache-control": "no-store" } });
     }
 
-    const resolved = await resolveProposal({ userId: user.id, proposalId, action: "reject" });
-    if (!resolved) return apiError("PROPOSAL_NOT_FOUND", 404, "提案不存在");
-    if (resolved.outcome === "not_ready") return apiError("PROPOSAL_NOT_READY", 409, "Agent 尚未完成提案，请等待任务进入审批状态");
-    if (resolved.outcome === "conflict") return apiError("PROPOSAL_NOT_PENDING", 409, "提案已过期，不能拒绝");
-    if (resolved.outcome === "approved") return apiError("PROPOSAL_NOT_PENDING", 409, "提案已批准，不能拒绝");
+    const resolved = await resolveExecutionProposal({ userId: user.id, proposalId, action: "reject" });
+    if (!resolved) return apiError("PROPOSAL_NOT_FOUND", 404, "执行提案不存在");
+    if (resolved.outcome === "conflict") return apiError("EXECUTION_CONFLICT", 409, "执行提案状态已变化，不能拒绝");
+    if (resolved.outcome === "approved") return apiError("EXECUTION_NOT_PENDING", 409, "执行提案已批准，不能拒绝");
     if (resolved.outcome === "rejected") {
       void resumeAgentRun({
         userId: user.id,
         runId: resolved.proposal.runId,
-        kind: "change",
-        note: "文件变更提案被拒绝，Workspace 文件未改变。请根据反馈调整方案，或完成任务并总结。",
+        kind: "exec",
+        proposalId: resolved.proposal.id,
+        note: "执行请求被拒绝，命令未在沙箱中运行。请根据反馈调整方案，或完成任务并总结。",
       }).catch((error: unknown) => {
-        console.error("Agent resume failed", { runId: resolved.proposal.runId, error: error instanceof Error ? error.message : "unknown" });
+        console.error("Agent execution resume failed", { runId: resolved.proposal.runId, error: error instanceof Error ? error.message : "unknown" });
       });
     }
     return NextResponse.json({ proposal: resolved.proposal, replayed: false }, { headers: { "cache-control": "no-store" } });
