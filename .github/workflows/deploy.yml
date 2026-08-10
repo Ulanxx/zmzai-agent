@@ -6,7 +6,25 @@ name: deploy
   workflow_dispatch: {}
 
 jobs:
+  quality:
+    runs-on: [self-hosted, hk]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm run typecheck
+      - run: pnpm run lint
+      - run: pnpm run build
+
   deploy:
+    needs: quality
     runs-on: [self-hosted, hk]
     env:
       APP_NAME: agent

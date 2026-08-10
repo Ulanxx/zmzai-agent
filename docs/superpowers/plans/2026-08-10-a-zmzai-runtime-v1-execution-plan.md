@@ -206,3 +206,16 @@ A-02 Sandbox 契约┘                 │
 - 当前目录结构是否仍能保持 Tool Broker、PI Adapter 与存储层独立。
 
 复核通过才进入 `A-09` 到 `A-12` 的只读 Agent 闭环。
+
+## 10. 实施状态
+
+| 任务 | 状态 | 证据 / 剩余条件 |
+| --- | --- | --- |
+| A-01 Relay 内部 Agent 契约 | 待 Relay 实现 | 契约已写入 `docs/reference/relay-agent-internal-api.md`；`m.zmzai.cloud` 尚需实现 `POST /api/internal/agent/chat`。 |
+| A-02 Sandbox 内部 Agent 契约 | 待 Sandbox 实现 | 契约已写入 `docs/reference/sandbox-agent-internal-api.md`；`z.zmzai.cloud` 尚需实现临时快照执行接口。 |
+| A-03 配置基线 | 已实现 | `.env.example`、Zod 服务端环境校验和 Mongo 连接已加入。 |
+| A-04 质量基线 | 已实现 | `test`、`typecheck`、`lint`、`build` 脚本与 deploy 前 quality job 已加入。 |
+| A-05 Auth 隔离 | 已实现，待生产联调 | 复用 `@zmzai/db` 的共享 Session/User 模型；全部控制面查询以 `userId` 过滤。 |
+| A-06 Mongo 控制面 | 已实现，待 Mongo 集成测试 | Workspace、File、Revision、Run、Event、Idempotency 模型与索引已加入。 |
+| A-07 Workspace/Revision API | 已实现，待生产联调 | Workspace 创建/读取、文件列表和 Revision 列表 Route Handler 已加入。 |
+| A-08 Task Run/Event Store | 已实现，待 Mongo/SSE 集成测试 | Run 单活跃约束、事件序号、预算、SSE replay、取消和租约字段已加入。 |
