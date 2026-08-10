@@ -12,6 +12,7 @@ type Run = { id: string; workspaceId: string; mode: "plan" | "build"; model: str
 type ProposalChange = { path: string; operation: "create" | "update" | "delete"; before: string | null; after: string | null };
 type Proposal = { id: string; runId: string; baseRevisionId: string | null; status: "pending" | "approved" | "rejected" | "superseded"; approvedRevisionId: string | null; summary: string; diff: string; changes: ProposalChange[]; createdAt: string; updatedAt: string };
 type CanvasTab = "task" | "file" | "proposal" | "artifact";
+type StreamState = "idle" | "live" | "reconnecting" | "closed";
 
 function requestId(): string {
   return crypto.randomUUID();
@@ -75,6 +76,7 @@ export function AgentWorkbench() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [streamState, setStreamState] = useState<StreamState>("idle");
   const eventSource = useRef<EventSource | null>(null);
 
   const workspace = useMemo(() => workspaces.find((item) => item.id === selectedId) ?? null, [workspaces, selectedId]);
@@ -86,6 +88,7 @@ export function AgentWorkbench() {
   const closeEvents = useCallback(() => {
     eventSource.current?.close();
     eventSource.current = null;
+    setStreamState("closed");
   }, []);
 
   const loadWorkspaceContext = useCallback(async (workspaceId: string) => {
@@ -117,6 +120,7 @@ export function AgentWorkbench() {
     setCanvasTab("task");
     setCanvasFollow(true);
     setPinnedArtifactId(null);
+    setStreamState("idle");
     setError(null);
     try { await loadWorkspaceContext(workspaceId); } catch (cause) { setError(cause instanceof Error ? cause.message : "无法读取 Workspace"); }
   }, [closeEvents, loadWorkspaceContext, workspaces]);
@@ -151,6 +155,8 @@ export function AgentWorkbench() {
     closeEvents();
     const source = new EventSource(`/api/runs/${runId}/events`);
     eventSource.current = source;
+    setStreamState("reconnecting");
+    source.onopen = () => setStreamState("live");
     const handleEvent = (messageEvent: MessageEvent<string>) => {
       try {
         const event = JSON.parse(messageEvent.data) as TaskEvent;
@@ -166,12 +172,17 @@ export function AgentWorkbench() {
           setRun((current) => current ? { ...current, status: event.type === "run.completed" ? "succeeded" : event.type === "run.cancelled" ? "cancelled" : "failed" } : current);
           void loadWorkspaceContext(workspaceId).catch(() => undefined);
           source.close();
+          if (eventSource.current === source) eventSource.current = null;
+          setStreamState("closed");
         }
       } catch { setError("任务事件格式无效"); }
     };
-    for (const type of ["run.queued", "run.started", "run.waiting_approval", "run.completed", "run.failed", "run.cancelled", "message.delta", "tool.requested", "tool.progress", "tool.completed", "proposal.created", "proposal.updated", "approval.required", "approval.resolved", "revision.created"]) source.addEventListener(type, handleEvent);
+    for (const type of ["run.queued", "run.started", "run.waiting_approval", "run.completed", "run.failed", "run.cancelled", "message.started", "message.delta", "message.completed", "tool.requested", "tool.progress", "tool.completed", "tool.failed", "artifact.upsert", "artifact.append", "proposal.created", "proposal.updated", "approval.required", "approval.resolved", "revision.created"]) source.addEventListener(type, handleEvent);
     source.onmessage = handleEvent;
-    source.onerror = () => { source.close(); };
+    source.onerror = () => {
+      // EventSource 会自动携带 Last-Event-ID 重连；断线期间保留已投影事件。
+      if (source.readyState === EventSource.CONNECTING) setStreamState("reconnecting");
+    };
   }, [canvasFollow, closeEvents, loadProposals, loadWorkspaceContext]);
 
   async function createWorkspace(event: FormEvent<HTMLFormElement>) {
@@ -281,7 +292,7 @@ export function AgentWorkbench() {
         </aside>
 
         <section className="conversation-pane">
-          <div className="run-toolbar"><div><span className="eyebrow">任务转录</span><h1>{run ? run.prompt : "从 Workspace 开始"}</h1></div>{run && <div className="run-toolbar-meta"><span className={`run-phase ${run.status}`}>{runPhase(run.status)}</span><span>{run.mode.toUpperCase()} · {run.model}</span>{["running", "queued"].includes(run.status) && <button type="button" className="icon-command" title="停止任务" onClick={() => void cancelRun()}>■</button>}</div>}</div>
+          <div className="run-toolbar"><div><span className="eyebrow">任务转录</span><h1>{run ? run.prompt : "从 Workspace 开始"}</h1></div>{run && <div className="run-toolbar-meta"><span className={`run-phase ${run.status}`}>{runPhase(run.status)}</span>{streamState === "reconnecting" && <span className="stream-state reconnecting">连接恢复中</span>}{streamState === "live" && ["queued", "running", "waiting_approval"].includes(run.status) && <span className="stream-state live">实时</span>}<span>{run.mode.toUpperCase()} · {run.model}</span>{["running", "queued"].includes(run.status) && <button type="button" className="icon-command" title="停止任务" onClick={() => void cancelRun()}>■</button>}</div>}</div>
           <div className="conversation-scroll">
             {!run && <div className="agent-intro"><span className="eyebrow">{mode === "build" ? "BUILD MODE" : "PLAN MODE"}</span><h1>{mode === "build" ? "先生成，再确认提交" : "从 Workspace 开始"}</h1><p>{mode === "build" ? "Agent 会把文件修改暂存为可审查的提案。批准前，Workspace 当前版本不会变化。" : "我可以列出、读取和搜索当前 Workspace 的文本文件，并给出可核实的中文方案。"}</p></div>}
             {run && <article className="user-message"><span>你的任务</span><p>{run.prompt}</p></article>}
