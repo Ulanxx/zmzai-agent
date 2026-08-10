@@ -22,7 +22,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --offline --store-dir=/home/runner/.pnpm-store
       - run: pnpm test
       - run: pnpm run typecheck
       - run: pnpm run lint
