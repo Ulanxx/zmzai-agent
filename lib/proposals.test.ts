@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { applySingleEdit, createUnifiedDiff, mergeProposedChange } from "@/lib/proposals";
+import { applySingleEdit, createUnifiedDiff, mergeProposedChange, planProposalResolution } from "@/lib/proposals";
 
 describe("proposal helpers", () => {
   it("creates an inspectable diff for a new file", () => {
@@ -18,5 +18,16 @@ describe("proposal helpers", () => {
     const merged = mergeProposedChange([initial], { path: "src/app.ts", operation: "update", before: "two", after: "three" });
 
     expect(merged).toEqual([{ path: "src/app.ts", operation: "update", before: "one", after: "three" }]);
+  });
+
+  it("only approves a pending proposal against its original revision", () => {
+    expect(planProposalResolution({ action: "approve", status: "pending", baseRevisionId: "rev_1", currentRevisionId: "rev_1" })).toBe("approved");
+    expect(planProposalResolution({ action: "approve", status: "pending", baseRevisionId: "rev_1", currentRevisionId: "rev_2" })).toBe("conflict");
+    expect(planProposalResolution({ action: "approve", status: "approved", baseRevisionId: "rev_1", currentRevisionId: "rev_1" })).toBe("already_resolved");
+  });
+
+  it("rejects only pending proposals without making a revision plan", () => {
+    expect(planProposalResolution({ action: "reject", status: "pending", baseRevisionId: null, currentRevisionId: "rev_1" })).toBe("rejected");
+    expect(planProposalResolution({ action: "reject", status: "rejected", baseRevisionId: null, currentRevisionId: null })).toBe("already_resolved");
   });
 });

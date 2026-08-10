@@ -18,6 +18,7 @@ const changeProposalSchema = new Schema(
     userId: { type: String, required: true, immutable: true },
     baseRevisionId: { type: String, default: null, immutable: true },
     status: { type: String, enum: ["pending", "approved", "rejected", "superseded"], required: true, default: "pending" },
+    approvedRevisionId: { type: String, default: null },
     changes: { type: [proposalChangeSchema], required: true },
     diff: { type: String, required: true, maxlength: 1024 * 1024 },
     summary: { type: String, required: true, maxlength: 2_000 },

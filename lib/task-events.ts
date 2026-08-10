@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { ClientSession } from "mongoose";
 
 import { TaskEventModel } from "@/models/task-event";
 import { TaskRunModel } from "@/models/task-run";
@@ -19,7 +20,7 @@ export class EventBudgetError extends Error {
   }
 }
 
-export async function appendTaskEvent(input: { runId: string; userId: string; type: string; data: unknown }): Promise<PersistedTaskEvent> {
+export async function appendTaskEvent(input: { runId: string; userId: string; type: string; data: unknown; session?: ClientSession }): Promise<PersistedTaskEvent> {
   const dataBytes = Buffer.byteLength(JSON.stringify(input.data), "utf8");
   const run = await TaskRunModel.findOneAndUpdate(
     {
@@ -29,18 +30,18 @@ export async function appendTaskEvent(input: { runId: string; userId: string; ty
     },
     { $inc: { nextEventSequence: 1, persistedEventBytes: dataBytes } },
     { new: true },
-  ).lean();
+  ).session(input.session ?? null).lean();
   if (!run) throw new EventBudgetError();
 
   const at = new Date();
-  const event = await TaskEventModel.create({
+  const [event] = await TaskEventModel.create([{
     eventId: `evt_${randomUUID()}`,
     runId: input.runId,
     sequence: run.nextEventSequence,
     type: input.type,
     data: input.data,
     at,
-  });
+  }], { session: input.session });
   return { id: event.eventId, runId: event.runId, sequence: event.sequence, type: event.type, at: event.at.toISOString(), data: event.data };
 }
 

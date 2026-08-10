@@ -1,9 +1,14 @@
 import { randomUUID } from "node:crypto";
+import type { ClientSession } from "mongoose";
 
+import { connectMongo } from "@/lib/database/mongodb";
 import { appendTaskEvent } from "@/lib/task-events";
 import { canonicalWorkspacePath } from "@/lib/workspace-path";
 import { ChangeProposalModel } from "@/models/change-proposal";
+import { TaskRunModel } from "@/models/task-run";
 import { WorkspaceFileModel } from "@/models/workspace-file";
+import { WorkspaceRevisionModel } from "@/models/workspace-revision";
+import { WorkspaceModel } from "@/models/workspace";
 
 export type ProposedFileChange = {
   path: string;
@@ -18,11 +23,18 @@ export type ChangeProposalView = {
   runId: string;
   baseRevisionId: string | null;
   status: "pending" | "approved" | "rejected" | "superseded";
+  approvedRevisionId: string | null;
   summary: string;
   diff: string;
   changes: ProposedFileChange[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type ProposalResolution = {
+  outcome: "approved" | "rejected" | "conflict";
+  proposal: ChangeProposalView;
+  revisionId: string | null;
 };
 
 const maxFileBytes = 512 * 1024;
@@ -180,10 +192,138 @@ export async function listRunProposals(input: { userId: string; runId: string })
     runId: proposal.runId,
     baseRevisionId: proposal.baseRevisionId ?? null,
     status: proposal.status,
+    approvedRevisionId: proposal.approvedRevisionId ?? null,
     summary: proposal.summary,
     diff: proposal.diff,
     changes: proposal.changes.map((change) => ({ path: change.path, operation: change.operation, before: change.before ?? null, after: change.after ?? null })),
     createdAt: proposal.createdAt.toISOString(),
     updatedAt: proposal.updatedAt.toISOString(),
   }));
+}
+
+function toProposalView(proposal: {
+  proposalId: string;
+  runId: string;
+  baseRevisionId?: string | null;
+  status: "pending" | "approved" | "rejected" | "superseded";
+  approvedRevisionId?: string | null;
+  summary: string;
+  diff: string;
+  changes: Array<{ path: string; operation: "create" | "update" | "delete"; before?: string | null; after?: string | null }>;
+  createdAt: Date;
+  updatedAt: Date;
+}): ChangeProposalView {
+  return {
+    id: proposal.proposalId,
+    runId: proposal.runId,
+    baseRevisionId: proposal.baseRevisionId ?? null,
+    status: proposal.status,
+    approvedRevisionId: proposal.approvedRevisionId ?? null,
+    summary: proposal.summary,
+    diff: proposal.diff,
+    changes: proposal.changes.map((change) => ({ path: change.path, operation: change.operation, before: change.before ?? null, after: change.after ?? null })),
+    createdAt: proposal.createdAt.toISOString(),
+    updatedAt: proposal.updatedAt.toISOString(),
+  };
+}
+
+export async function getProposal(input: { userId: string; proposalId: string }): Promise<ChangeProposalView | null> {
+  const proposal = await ChangeProposalModel.findOne({ userId: input.userId, proposalId: input.proposalId }).lean();
+  return proposal ? toProposalView(proposal) : null;
+}
+
+export function planProposalResolution(input: { action: "approve" | "reject"; status: ChangeProposalView["status"]; baseRevisionId: string | null; currentRevisionId: string | null }): "approved" | "rejected" | "conflict" | "already_resolved" {
+  if (input.status !== "pending") return "already_resolved";
+  if (input.action === "reject") return "rejected";
+  return input.baseRevisionId === input.currentRevisionId ? "approved" : "conflict";
+}
+
+async function applyChanges(input: { workspaceId: string; revisionId: string; changes: ProposedFileChange[]; session: ClientSession }): Promise<void> {
+  for (const change of input.changes) {
+    if (change.after === null) {
+      await WorkspaceFileModel.deleteOne({ workspaceId: input.workspaceId, path: change.path }, { session: input.session });
+      continue;
+    }
+    await WorkspaceFileModel.updateOne(
+      { workspaceId: input.workspaceId, path: change.path },
+      { $set: { content: change.after, revisionId: input.revisionId } },
+      { upsert: true, session: input.session },
+    );
+  }
+}
+
+async function settleRun(input: { userId: string; runId: string; outcome: "approved" | "rejected" | "conflict"; proposalId: string; revisionId: string | null; session: ClientSession }): Promise<void> {
+  const run = await TaskRunModel.findOneAndUpdate(
+    { userId: input.userId, runId: input.runId, status: "waiting_approval" },
+    { $set: { status: "succeeded", activeWorkspaceKey: null, leaseOwner: null, leaseExpiresAt: null } },
+    { new: true, session: input.session },
+  ).lean();
+  if (!run) return;
+  await appendTaskEvent({ runId: input.runId, userId: input.userId, type: "approval.resolved", data: { proposalId: input.proposalId, outcome: input.outcome, revisionId: input.revisionId }, session: input.session });
+  if (input.revisionId) await appendTaskEvent({ runId: input.runId, userId: input.userId, type: "revision.created", data: { proposalId: input.proposalId, revisionId: input.revisionId }, session: input.session });
+  await appendTaskEvent({ runId: input.runId, userId: input.userId, type: "run.completed", data: { outcome: input.outcome }, session: input.session });
+}
+
+export async function resolveProposal(input: { userId: string; proposalId: string; action: "approve" | "reject" }): Promise<ProposalResolution | null> {
+  const mongo = await connectMongo();
+  const session = await mongo.startSession();
+  let result: ProposalResolution | null = null;
+  try {
+    await session.withTransaction(async () => {
+      const proposal = await ChangeProposalModel.findOne({ userId: input.userId, proposalId: input.proposalId }).session(session);
+      if (!proposal) return;
+
+      const currentStatus = proposal.status as ChangeProposalView["status"];
+      if (currentStatus !== "pending") {
+        result = {
+          outcome: currentStatus === "approved" ? "approved" : currentStatus === "rejected" ? "rejected" : "conflict",
+          proposal: toProposalView(proposal),
+          revisionId: proposal.approvedRevisionId ?? null,
+        };
+        return;
+      }
+
+      if (input.action === "reject") {
+        proposal.status = "rejected";
+        await proposal.save({ session });
+        await settleRun({ userId: input.userId, runId: proposal.runId, outcome: "rejected", proposalId: proposal.proposalId, revisionId: null, session });
+        result = { outcome: "rejected", proposal: toProposalView(proposal), revisionId: null };
+        return;
+      }
+
+      const revisionId = `rev_${randomUUID()}`;
+      const workspace = await WorkspaceModel.findOneAndUpdate(
+        { workspaceId: proposal.workspaceId, userId: input.userId, currentRevisionId: proposal.baseRevisionId ?? null },
+        { $set: { currentRevisionId: revisionId } },
+        { new: true, session },
+      );
+      if (!workspace) {
+        proposal.status = "superseded";
+        await proposal.save({ session });
+        await settleRun({ userId: input.userId, runId: proposal.runId, outcome: "conflict", proposalId: proposal.proposalId, revisionId: null, session });
+        result = { outcome: "conflict", proposal: toProposalView(proposal), revisionId: null };
+        return;
+      }
+
+      const changes = proposal.changes.map((change) => ({ path: change.path, operation: change.operation, before: change.before ?? null, after: change.after ?? null }));
+      await WorkspaceRevisionModel.create([{
+        revisionId,
+        workspaceId: proposal.workspaceId,
+        userId: input.userId,
+        parentRevisionId: proposal.baseRevisionId ?? null,
+        author: "agent",
+        changes,
+        summary: proposal.summary,
+      }], { session });
+      await applyChanges({ workspaceId: proposal.workspaceId, revisionId, changes, session });
+      proposal.status = "approved";
+      proposal.approvedRevisionId = revisionId;
+      await proposal.save({ session });
+      await settleRun({ userId: input.userId, runId: proposal.runId, outcome: "approved", proposalId: proposal.proposalId, revisionId, session });
+      result = { outcome: "approved", proposal: toProposalView(proposal), revisionId };
+    });
+    return result;
+  } finally {
+    await session.endSession();
+  }
 }
