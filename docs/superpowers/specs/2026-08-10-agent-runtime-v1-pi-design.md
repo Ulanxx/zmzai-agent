@@ -4,7 +4,7 @@
 
 ## 1. 目标
 
-`agent.zmzai.cloud` 是面向已登录 ZMZAI 用户的通用 Agent 工作台。用户在持久化 Workspace 中提出任务；Agent 读取已授权的上下文，只调用被声明的工具，生成文件修改提案，在需要时等待用户批准，并且仅能通过 `z.zmzai.cloud` 执行代码。
+`a.zmzai.cloud` 是面向已登录 ZMZAI 用户的通用 Agent 工作台。用户在持久化 Workspace 中提出任务；Agent 读取已授权的上下文，只调用被声明的工具，生成文件修改提案，在需要时等待用户批准，并且仅能通过 `z.zmzai.cloud` 执行代码。
 
 本产品不是托管版 OpenCode、Hermes 的克隆，也不是 Cloudflare OS 的 Fork。ZMZAI 自己拥有并负责关键可信边界：Relay、Workspace 版本、Tool Broker、审批和 Sandbox 策略。
 
@@ -21,7 +21,7 @@
 
 ```text
 浏览器
-  -> agent.zmzai.cloud Agent API + SSE
+  -> a.zmzai.cloud Agent API + SSE
       -> Task Runtime
           -> PI Agent Core（短暂的多轮 Agent Loop）
               -> Relay Model Adapter
