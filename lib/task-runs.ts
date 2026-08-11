@@ -127,3 +127,8 @@ export async function cancelTaskRun(userId: string, runId: string): Promise<Task
   }
   return getTaskRun(userId, runId);
 }
+
+export async function listSessionTaskRuns(userId: string, sessionId: string): Promise<TaskRunView[]> {
+  const runs = await TaskRunModel.find({ userId, sessionId }).sort({ createdAt: 1 }).lean();
+  return runs.map(toTaskRunView);
+}

@@ -175,7 +175,7 @@ const starterPrompts = [
   { mode: "build" as const, text: "为项目生成一份新的功能改动提案（例如新增健康检查或修复已知问题），先给我看差异再决定是否提交" },
 ];
 
-export function AgentWorkbench() {
+export function AgentWorkbench({ initialSessionId = null }: { initialSessionId?: string | null }) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [models, setModels] = useState<Model[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -217,6 +217,12 @@ export function AgentWorkbench() {
   const selectedProposal = proposals.find((proposal) => proposal.id === selectedProposalId) ?? proposals[0] ?? null;
   const currentResumed = useMemo(() => currentTurn?.events.some((event) => event.type === "run.resumed") ?? false, [currentTurn]);
   const sandboxRunning = useMemo(() => Boolean(run && run.status === "running" && currentTurn?.projection.tools.some((tool) => tool.name === "exec" && (tool.status === "running" || tool.status === "requested"))), [run, currentTurn]);
+
+  const syncSessionUrl = useCallback((sessionId: string | null) => {
+    if (typeof window === "undefined") return;
+    const target = sessionId ? `/s/${encodeURIComponent(sessionId)}` : "/";
+    if (window.location.pathname !== target) window.history.replaceState(null, "", target);
+  }, []);
 
   const closeEvents = useCallback(() => {
     eventSource.current?.close();
@@ -324,7 +330,7 @@ export function AgentWorkbench() {
     };
   }, [applyRunStatus, closeEvents, handleTaskEvent, refreshRunDetail]);
 
-  const restoreThread = useCallback(async (runs: Run[]) => {
+  const restoreThread = useCallback(async (runs: Run[], explicitSessionId?: string | null) => {
     if (!runs.length) {
       setThread([]);
       setEventsByRunId({});
@@ -334,10 +340,11 @@ export function AgentWorkbench() {
       setCanvasFollow(true);
       setPinnedArtifactId(null);
       setGrant(null);
+      syncSessionUrl(null);
       return;
     }
-    const latest = runs[0];
-    const sessionRuns = runs.filter((item) => item.sessionId === latest.sessionId).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+    const sessionId = explicitSessionId ?? runs[0].sessionId;
+    const sessionRuns = runs.filter((item) => item.sessionId === sessionId).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
     setThread(sessionRuns);
     setEventsByRunId({});
     setProposals([]);
@@ -360,7 +367,8 @@ export function AgentWorkbench() {
       void refreshRunDetail(current.id);
       void loadProposals(current.id).catch(() => undefined);
     }
-  }, [subscribe, refreshRunDetail, loadProposals]);
+    syncSessionUrl(sessionId);
+  }, [subscribe, refreshRunDetail, loadProposals, syncSessionUrl]);
 
   const selectWorkspace = useCallback(async (workspaceId: string) => {
     closeEvents();
@@ -385,6 +393,23 @@ export function AgentWorkbench() {
         setWorkspaces(workspaceResult.value.workspaces);
         if (modelResult.status === "fulfilled") setModels(modelResult.value.models);
         else setError(modelResult.reason instanceof Error ? modelResult.reason.message : "模型目录暂时不可用");
+        if (initialSessionId) {
+          const session = await requestJson<{ sessionId: string; workspaceId: string; runs: Run[] }>(`/api/sessions/${encodeURIComponent(initialSessionId)}`).catch(() => null);
+          if (!session) {
+            setError("会话不存在或无权访问");
+            return;
+          }
+          const sessionWorkspace = workspaceResult.value.workspaces.find((item) => item.id === session.workspaceId);
+          setSelectedId(session.workspaceId);
+          if (sessionWorkspace) setModel(sessionWorkspace.defaultModel);
+          await loadWorkspaceContext(session.workspaceId);
+          setRunHistory((current) => {
+            const merged = [...session.runs, ...current];
+            return [...new Map(merged.map((item) => [item.id, item])).values()];
+          });
+          await restoreThread(session.runs, session.sessionId);
+          return;
+        }
         const first = workspaceResult.value.workspaces[0];
         if (first) {
           setSelectedId(first.id);
@@ -399,7 +424,20 @@ export function AgentWorkbench() {
       } finally { setLoading(false); }
     })();
     return closeEvents;
-  }, [closeEvents, loadWorkspaceContext, restoreThread]);
+  }, [closeEvents, initialSessionId, loadWorkspaceContext, restoreThread]);
+
+  // Browser back/forward across session URLs: reload so the deep-link mount
+  // restores the target session (state lives in the URL).
+  useEffect(() => {
+    const onPopState = () => {
+      const match = /^\/s\/([^/]+)$/.exec(window.location.pathname);
+      const urlSession = match ? decodeURIComponent(match[1]) : null;
+      const activeSession = thread[0]?.sessionId ?? null;
+      if (urlSession !== activeSession) window.location.reload();
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [thread]);
 
   // Auto-scroll while following the latest execution.
   useEffect(() => {
@@ -472,6 +510,7 @@ export function AgentWorkbench() {
         setPinnedArtifactId(null);
       }
       setRunHistory((current) => [nextRun, ...current.filter((item) => item.id !== nextRun.id)]);
+      syncSessionUrl(nextRun.sessionId);
       setPrompt("");
       setMode(nextMode);
       subscribe(nextRun.id, workspace.id);
@@ -493,6 +532,7 @@ export function AgentWorkbench() {
     setPinnedArtifactId(null);
     setGrant(null);
     setError(null);
+    if (typeof window !== "undefined") window.history.pushState(null, "", "/");
     textareaRef.current?.focus();
   }
 
