@@ -1,6 +1,7 @@
 import { connectMongo } from "@/lib/database/mongodb";
 import { appendTaskEvent } from "@/lib/task-events";
 import { isAgentAlive } from "@/lib/agent-runtime";
+import { revokeExecutionGrant } from "@/lib/execution-grants";
 import { abortActiveExecution } from "@/lib/execution-resume";
 import { cancelAgentSandboxRun } from "@/lib/sandbox-client";
 import { ExecutionProposalModel } from "@/models/execution-proposal";
@@ -36,6 +37,7 @@ export async function recoverExpiredLeases(now = Date.now()): Promise<{ recovere
       { $set: { status: "failed", finishedAt: new Date(), leaseOwner: null, leaseExpiresAt: null, failureCode: "LEASE_EXPIRED" }, $unset: { activeWorkspaceKey: 1 } },
     );
     if (updated.modifiedCount === 0) continue;
+    await revokeExecutionGrant(run.runId);
     await appendTaskEvent({ runId: run.runId, userId: run.userId, type: "run.failed", data: { code: "LEASE_EXPIRED", error: "执行租约已过期（服务重启或崩溃），任务已安全终止；可在同一会话继续对话。" } });
     await cancelApprovedExecutions(run.runId, run.userId);
     recovered += 1;
@@ -53,6 +55,7 @@ export async function recoverExpiredLeases(now = Date.now()): Promise<{ recovere
       { $set: { status: "failed", finishedAt: new Date(), failureCode: "LEASE_EXPIRED" }, $unset: { activeWorkspaceKey: 1 } },
     );
     if (updated.modifiedCount === 0) continue;
+    await revokeExecutionGrant(run.runId);
     await appendTaskEvent({ runId: run.runId, userId: run.userId, type: "run.failed", data: { code: "LEASE_EXPIRED", error: "等待审批超时（运行上下文已丢失），任务已安全终止；可在同一会话继续对话。" } });
     await cancelApprovedExecutions(run.runId, run.userId);
     recovered += 1;

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { apiError, unauthenticated } from "@/lib/api-error";
 import { cancelActiveAgentRun } from "@/lib/agent-runtime";
+import { revokeExecutionGrant } from "@/lib/execution-grants";
 import { abortActiveExecution } from "@/lib/execution-resume";
 import { cancelAgentSandboxRun } from "@/lib/sandbox-client";
 import { IdempotencyError, claimIdempotency } from "@/lib/idempotency";
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ru
     });
     cancelActiveAgentRun(runId);
     abortActiveExecution(runId);
+    await revokeExecutionGrant(runId);
     // Cascade-cancel any in-flight Sandbox run for this task run (idempotent).
     const activeExecutions = await ExecutionProposalModel.find({ runId, userId: user.id, status: "approved", sandboxRunId: { $ne: null } }).select({ sandboxRunId: 1 }).lean();
     await Promise.all(activeExecutions.map((proposal) => cancelAgentSandboxRun(proposal.sandboxRunId as string).catch(() => undefined)));

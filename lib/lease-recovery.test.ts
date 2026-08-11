@@ -10,6 +10,10 @@ vi.mock("@/lib/database/mongodb", () => ({
   connectMongo: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/execution-grants", () => ({
+  revokeExecutionGrant: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@/lib/task-events", () => ({
   appendTaskEvent: vi.fn(),
 }));

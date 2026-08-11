@@ -85,6 +85,42 @@ export async function getAgentSandboxRun(runId: string): Promise<SandboxRunView 
   return body.run ?? null;
 }
 
+export type SandboxArtifactMeta = { path: string; bytes: number; contentType: string; sha256: string; tooLarge: boolean };
+
+export async function getAgentSandboxRunArtifacts(runId: string): Promise<SandboxArtifactMeta[]> {
+  const config = sandboxConfig();
+  let response: Response;
+  try {
+    response = await fetch(`${config.url}/api/internal/agent/runs/${encodeURIComponent(runId)}/artifacts`, {
+      headers: { authorization: `Bearer ${config.secret}` },
+      cache: "no-store",
+    });
+  } catch {
+    throw new AgentSandboxError("SANDBOX_UNAVAILABLE", "无法连接 Sandbox 服务");
+  }
+  if (response.status === 404) return [];
+  if (!response.ok) throw await parseError(response);
+  const body = (await response.json()) as { artifacts?: SandboxArtifactMeta[] };
+  return body.artifacts ?? [];
+}
+
+export async function getAgentSandboxRunArtifact(runId: string, path: string): Promise<{ content: Buffer; contentType: string } | null> {
+  const config = sandboxConfig();
+  let response: Response;
+  try {
+    response = await fetch(`${config.url}/api/internal/agent/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(path)}`, {
+      headers: { authorization: `Bearer ${config.secret}` },
+      cache: "no-store",
+    });
+  } catch {
+    throw new AgentSandboxError("SANDBOX_UNAVAILABLE", "无法连接 Sandbox 服务");
+  }
+  if (response.status === 404) return null;
+  if (!response.ok) throw await parseError(response);
+  const arrayBuffer = await response.arrayBuffer();
+  return { content: Buffer.from(arrayBuffer), contentType: response.headers.get("content-type") ?? "application/octet-stream" };
+}
+
 export async function cancelAgentSandboxRun(runId: string): Promise<void> {
   const config = sandboxConfig();
   let response: Response;

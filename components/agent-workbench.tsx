@@ -12,6 +12,7 @@ type WorkspaceFile = { path: string; content: string; revisionId: string | null;
 type Revision = { id: string; summary: string; createdAt: string; changes: Array<{ path: string }> };
 type Model = { model: string; maxOutputTokens: number };
 type Run = { id: string; workspaceId: string; sessionId: string; mode: "plan" | "build"; model: string; prompt: string; status: string; failureCode: string | null; parentRunId: string | null; startedAt: string | null; finishedAt: string | null; createdAt: string; updatedAt: string };
+type Grant = { id: string; remainingCommands: number; remainingWallTimeMs: number; expiresAt: string; revokedAt: string | null };
 type ProposalChange = { path: string; operation: "create" | "update" | "delete"; before: string | null; after: string | null };
 type Proposal = {
   id: string;
@@ -125,6 +126,10 @@ function ArtifactView({ artifact }: { artifact: CanvasArtifact }) {
   const payload = artifact.payload;
   if (artifact.kind === "file_preview") return <section className="artifact-canvas"><div className="artifact-head"><span className="canvas-index">文件</span><h2>{artifact.title}</h2></div><pre>{typeof payload.content === "string" ? payload.content : "文件内容不可用"}</pre>{payload.truncated === true && <p className="artifact-note">预览已截断，完整内容仍保留在 Workspace。</p>}</section>;
   if (artifact.kind === "search_results") return <section className="artifact-canvas"><div className="artifact-head"><span className="canvas-index">检索</span><h2>{artifact.title}</h2></div><ol className="search-results">{Array.isArray(payload.matches) ? payload.matches.map((match, index) => { const item = match && typeof match === "object" ? match as Record<string, unknown> : {}; return <li key={`${String(item.path)}-${index}`}><span>{String(item.path ?? "文件")}:{String(item.line ?? "")}</span><p>{String(item.text ?? "")}</p></li>; }) : <li>没有可显示的命中。</li>}</ol>{payload.truncated === true && <p className="artifact-note">仅显示前 20 条命中。</p>}</section>;
+  if (artifact.kind === "binary_file") {
+    const bytes = typeof payload.bytes === "number" ? payload.bytes : 0;
+    return <section className="artifact-canvas"><div className="artifact-head"><span className="canvas-index">产物</span><h2>{artifact.title}</h2></div><dl className="artifact-meta"><div><dt>类型</dt><dd>{typeof payload.contentType === "string" ? payload.contentType : "application/octet-stream"}</dd></div><div><dt>大小</dt><dd>{formatBytes(bytes)}</dd></div><div><dt>SHA-256</dt><dd className="mono">{typeof payload.sha256 === "string" ? `${payload.sha256.slice(0, 16)}…` : "—"}</dd></div></dl>{typeof payload.downloadUrl === "string" && <a className="command-button artifact-download" href={payload.downloadUrl}>下载文件</a>}<p className="artifact-note">产物来自沙箱执行，二进制内容不进入事件流。</p></section>;
+  }
   return <section className="artifact-canvas"><div className="artifact-head"><span className="canvas-index">{artifact.kind === "execution_output" ? "执行" : "输出"}</span><h2>{artifact.title}</h2></div><pre className={artifact.kind === "execution_output" ? "exec-output" : undefined}>{typeof payload.content === "string" ? payload.content : "等待输出"}</pre>{payload.truncated === true && <p className="artifact-note">输出已截断，完整内容保留在服务端受控日志。</p>}</section>;
 }
 
@@ -157,8 +162,8 @@ function ExecProposalView({ proposal, run, resolvingProposal, onResolve }: { pro
     </dl>
     {snapshot && snapshot.files.length > 0 && <details className="exec-snapshot-files"><summary>快照文件清单（{snapshot.files.length}）</summary><ol>{snapshot.files.map((path) => <li key={path} className="mono">{path}</li>)}</ol></details>}
     {proposal.resultSummary && <pre className="tool-card-detail">{proposal.resultSummary}</pre>}
-    {proposal.status === "pending" && <div className="proposal-actions"><button type="button" className="command-button quiet" disabled={run?.status !== "waiting_approval" || resolvingProposal !== null} onClick={() => onResolve("reject")}>{resolvingProposal === "reject" ? "拒绝中" : "拒绝"}</button><button type="button" className="command-button" disabled={run?.status !== "waiting_approval" || resolvingProposal !== null} onClick={() => onResolve("approve")}>{resolvingProposal === "approve" ? "提交中" : "批准并执行"}</button></div>}
-    <p className="proposal-note">{proposal.status === "pending" ? run?.status === "waiting_approval" ? "批准后命令会在隔离沙箱中运行，基于以上影子快照（含未批准的变更），输出实时返回。" : "Agent 仍在生成执行提案，完成后才可审批。" : proposal.status === "approved" ? (proposal.exitCode !== null ? `执行完成 · 退出码 ${proposal.exitCode}${proposal.durationMs ? ` · ${durationLabel(proposal.durationMs)}` : ""}` : "执行已批准，正在准备沙箱…") : proposal.status === "rejected" ? "执行被拒绝，命令未运行。" : "执行提案已过期。"}</p>
+    {proposal.status === "pending" && <div className="proposal-actions"><button type="button" className="command-button quiet" disabled={run?.status !== "waiting_approval" || resolvingProposal !== null} onClick={() => onResolve("reject")}>{resolvingProposal === "reject" ? "拒绝中" : "拒绝"}</button><button type="button" className="command-button" disabled={run?.status !== "waiting_approval" || resolvingProposal !== null} onClick={() => onResolve("approve")}>{resolvingProposal === "approve" ? "授权中" : "批准并授权执行"}</button></div>}
+    <p className="proposal-note">{proposal.status === "pending" ? run?.status === "waiting_approval" ? "批准后命令在隔离沙箱中运行（基于以上影子快照），本任务获得执行授权：后续命令可直接运行直至预算用尽，输出实时返回，生成的产物可下载。" : "Agent 仍在生成执行提案，完成后才可审批。" : proposal.status === "approved" ? (proposal.exitCode !== null ? `执行完成 · 退出码 ${proposal.exitCode}${proposal.durationMs ? ` · ${durationLabel(proposal.durationMs)}` : ""}` : "执行已批准，正在准备沙箱…") : proposal.status === "rejected" ? "执行被拒绝，命令未运行。" : "执行提案已过期。"}</p>
   </section>;
 }
 
@@ -192,6 +197,7 @@ export function AgentWorkbench() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [streamState, setStreamState] = useState<StreamState>("idle");
+  const [grant, setGrant] = useState<Grant | null>(null);
   const [followScroll, setFollowScroll] = useState(true);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const eventSource = useRef<EventSource | null>(null);
@@ -241,6 +247,13 @@ export function AgentWorkbench() {
     return result.proposals;
   }, []);
 
+  const refreshRunDetail = useCallback(async (runId: string) => {
+    try {
+      const result = await requestJson<{ run: Run; grant: Grant | null }>(`/api/runs/${runId}`);
+      setGrant(result.grant);
+    } catch { /* non-fatal: grant chip simply stays hidden */ }
+  }, []);
+
   const handleTaskEvent = useCallback((runId: string, workspaceId: string, event: TaskEvent, source: EventSource) => {
     setEventsByRunId((current) => {
       const existing = current[runId] ?? [];
@@ -256,17 +269,19 @@ export function AgentWorkbench() {
     if (event.type === "run.waiting_approval") applyRunStatus(runId, "waiting_approval");
     if (event.type === "run.resumed") {
       applyRunStatus(runId, "running");
+      void refreshRunDetail(runId);
       if (canvasFollow) setCanvasTab("task");
     }
     if (["run.completed", "run.failed", "run.cancelled"].includes(event.type)) {
       const status = event.type === "run.completed" ? "succeeded" : event.type === "run.cancelled" ? "cancelled" : "failed";
       applyRunStatus(runId, status);
+      void refreshRunDetail(runId);
       void loadWorkspaceContext(workspaceId).catch(() => undefined);
       source.close();
       if (eventSource.current === source) eventSource.current = null;
       setStreamState("closed");
     }
-  }, [applyRunStatus, canvasFollow, loadProposals, loadWorkspaceContext]);
+  }, [applyRunStatus, canvasFollow, loadProposals, loadWorkspaceContext, refreshRunDetail]);
 
   const subscribe = useCallback((runId: string, workspaceId: string, historicalTerminal = false) => {
     closeEvents();
@@ -302,6 +317,7 @@ export function AgentWorkbench() {
       setCanvasTab("task");
       setCanvasFollow(true);
       setPinnedArtifactId(null);
+      setGrant(null);
       return;
     }
     const latest = runs[0];
@@ -325,9 +341,10 @@ export function AgentWorkbench() {
           });
         }
       }
+      void refreshRunDetail(current.id);
       void loadProposals(current.id).catch(() => undefined);
     }
-  }, [subscribe, loadProposals]);
+  }, [subscribe, refreshRunDetail, loadProposals]);
 
   const selectWorkspace = useCallback(async (workspaceId: string) => {
     closeEvents();
@@ -442,6 +459,7 @@ export function AgentWorkbench() {
       setPrompt("");
       setMode(nextMode);
       subscribe(nextRun.id, workspace.id);
+      void refreshRunDetail(nextRun.id);
       textareaRef.current?.focus();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "无法启动任务");
@@ -457,6 +475,7 @@ export function AgentWorkbench() {
     setCanvasTab("task");
     setCanvasFollow(true);
     setPinnedArtifactId(null);
+    setGrant(null);
     setError(null);
     textareaRef.current?.focus();
   }
@@ -520,6 +539,7 @@ export function AgentWorkbench() {
         });
       }
     }
+    void refreshRunDetail(current.id);
     void loadProposals(current.id).catch(() => undefined);
   }
 
@@ -555,7 +575,7 @@ export function AgentWorkbench() {
         </aside>
 
         <section className="conversation-pane">
-          <div className="run-toolbar"><div><span className="eyebrow">{thread.length ? "会话转录" : "任务转录"}</span><h1>{run ? run.prompt : "从 Workspace 开始"}</h1></div>{run && <div className="run-toolbar-meta"><span className={`run-phase ${run.status}`}>{runPhase(run.status)}</span>{!terminalRunStates.includes(run.status) && <span className="run-timer">{elapsedLabel(elapsedSeconds)}</span>}{streamState === "reconnecting" && <span className="stream-state reconnecting">连接恢复中</span>}{streamState === "live" && activeRun && <span className="stream-state live">实时</span>}{sandboxRunning && <span className="stream-state live">沙箱执行中</span>}<span>{run.mode.toUpperCase()} · {run.model}</span>{activeRun && <button type="button" className="icon-command" title="停止任务" onClick={() => void cancelRun()}>■</button>}<button type="button" className="icon-command" title="新会话" onClick={startNewSession}>＋</button></div>}</div>
+          <div className="run-toolbar"><div><span className="eyebrow">{thread.length ? "会话转录" : "任务转录"}</span><h1>{run ? run.prompt : "从 Workspace 开始"}</h1></div>{run && <div className="run-toolbar-meta"><span className={`run-phase ${run.status}`}>{runPhase(run.status)}</span>{!terminalRunStates.includes(run.status) && <span className="run-timer">{elapsedLabel(elapsedSeconds)}</span>}{streamState === "reconnecting" && <span className="stream-state reconnecting">连接恢复中</span>}{streamState === "live" && activeRun && <span className="stream-state live">实时</span>}{grant && <span className="stream-state live" title="任务级执行授权，剩余预算见画布">执行授权中</span>}{sandboxRunning && <span className="stream-state live">沙箱执行中</span>}<span>{run.mode.toUpperCase()} · {run.model}</span>{activeRun && <button type="button" className="icon-command" title="停止任务" onClick={() => void cancelRun()}>■</button>}<button type="button" className="icon-command" title="新会话" onClick={startNewSession}>＋</button></div>}</div>
           <div className="conversation-scroll" ref={scrollRef} onScroll={() => {
             const element = scrollRef.current;
             if (!element) return;
@@ -593,7 +613,7 @@ export function AgentWorkbench() {
           <div className="pane-heading"><span>上下文画布</span><span className={canvasFollow ? "canvas-live" : "canvas-pinned"}>{canvasFollow ? "跟随执行" : "已固定"}</span></div>
           <div className="canvas-tabs"><button type="button" className={canvasTab === "task" ? "active" : ""} onClick={() => { setCanvasFollow(false); setCanvasTab("task"); }}>任务</button><button type="button" className={canvasTab === "file" ? "active" : ""} onClick={() => { setCanvasFollow(false); setSelectedFile(selectedFile ?? files[0]?.path ?? null); setCanvasTab("file"); }}>文件</button>{proposals.length > 0 && <button type="button" className={canvasTab === "proposal" ? "active" : ""} onClick={() => { setCanvasFollow(false); setCanvasTab("proposal"); }}>提案 <span>{proposals.length}</span></button>}{activeArtifact && <button type="button" className={canvasTab === "artifact" ? "active" : ""} onClick={() => setCanvasTab("artifact")}>执行</button>}</div>
           {!canvasFollow && <button type="button" className="follow-canvas" onClick={() => { setCanvasFollow(true); setPinnedArtifactId(null); setCanvasTab(activeArtifact ? "artifact" : "task"); }}>跟随最新执行</button>}
-          {canvasTab === "proposal" && selectedProposal ? (selectedProposal.kind === "exec" ? <ExecProposalView proposal={selectedProposal} run={run} resolvingProposal={resolvingProposal} onResolve={(action) => void resolveSelectedProposal(action)} /> : <section className="proposal-canvas"><div className="proposal-head"><div><span className="canvas-index">变更提案</span><h2>{selectedProposal.summary}</h2></div><span className={`proposal-status ${selectedProposal.status}`}>{proposalStatusLabel(selectedProposal.status)}</span></div><div className="proposal-files">{(selectedProposal.changes ?? []).map((change) => <button type="button" key={change.path} className="proposal-file" onClick={() => { setSelectedFile(change.path); }}><span>{change.operation === "create" ? "+" : change.operation === "delete" ? "-" : "~"}</span>{change.path}</button>)}</div><DiffView diff={selectedProposal.diff ?? ""} />{selectedProposal.status === "pending" && <div className="proposal-actions"><button type="button" className="command-button quiet" disabled={run?.status !== "waiting_approval" || resolvingProposal !== null} onClick={() => void resolveSelectedProposal("reject")}>{resolvingProposal === "reject" ? "拒绝中" : "拒绝"}</button><button type="button" className="command-button" disabled={run?.status !== "waiting_approval" || resolvingProposal !== null} onClick={() => void resolveSelectedProposal("approve")}>{resolvingProposal === "approve" ? "提交中" : "批准并提交"}</button></div>}<p className="proposal-note">{selectedProposal.status === "pending" ? run?.status === "waiting_approval" ? "批准会创建一个不可变 Revision，并推进 Workspace 当前版本；Agent 随后自动继续。" : "Agent 仍在生成提案，完成后才可审批。" : selectedProposal.status === "superseded" ? "Workspace 已推进到新版本。请重新运行 Build 生成新的提案。" : selectedProposal.status === "approved" ? `已提交为 ${selectedProposal.approvedRevisionId ?? "新版本"}。` : "提案被拒绝，Workspace 文件未改变。"}</p></section>) : canvasTab === "file" && currentFile ? <section className="file-preview"><div className="file-preview-title">{currentFile.path}</div><pre>{currentFile.content || "此文件为空。"}</pre></section> : canvasTab === "artifact" && activeArtifact ? <ArtifactView artifact={activeArtifact} /> : <section className="task-canvas"><span className="canvas-index">01</span><h2>{workspace?.name ?? "未选择 Workspace"}</h2><dl><div><dt>模式</dt><dd>{run?.mode === "build" ? "提案式 Build" : "只读 Plan"}</dd></div><div><dt>模型</dt><dd>{model || "未选择"}</dd></div><div><dt>文件</dt><dd>{files.length} 项</dd></div><div><dt>版本</dt><dd>{workspace?.currentRevisionId ? "当前版本" : "尚未创建"}</dd></div><div><dt>会话</dt><dd>{thread.length ? `第 ${thread.length} 轮` : "尚未开始"}</dd></div></dl><p>画布仅投影 Workspace、任务与事件的持久化状态。</p></section>}
+          {canvasTab === "proposal" && selectedProposal ? (selectedProposal.kind === "exec" ? <ExecProposalView proposal={selectedProposal} run={run} resolvingProposal={resolvingProposal} onResolve={(action) => void resolveSelectedProposal(action)} /> : <section className="proposal-canvas"><div className="proposal-head"><div><span className="canvas-index">变更提案</span><h2>{selectedProposal.summary}</h2></div><span className={`proposal-status ${selectedProposal.status}`}>{proposalStatusLabel(selectedProposal.status)}</span></div><div className="proposal-files">{(selectedProposal.changes ?? []).map((change) => <button type="button" key={change.path} className="proposal-file" onClick={() => { setSelectedFile(change.path); }}><span>{change.operation === "create" ? "+" : change.operation === "delete" ? "-" : "~"}</span>{change.path}</button>)}</div><DiffView diff={selectedProposal.diff ?? ""} />{selectedProposal.status === "pending" && <div className="proposal-actions"><button type="button" className="command-button quiet" disabled={run?.status !== "waiting_approval" || resolvingProposal !== null} onClick={() => void resolveSelectedProposal("reject")}>{resolvingProposal === "reject" ? "拒绝中" : "拒绝"}</button><button type="button" className="command-button" disabled={run?.status !== "waiting_approval" || resolvingProposal !== null} onClick={() => void resolveSelectedProposal("approve")}>{resolvingProposal === "approve" ? "提交中" : "批准并提交"}</button></div>}<p className="proposal-note">{selectedProposal.status === "pending" ? run?.status === "waiting_approval" ? "批准会创建一个不可变 Revision，并推进 Workspace 当前版本；Agent 随后自动继续。" : "Agent 仍在生成提案，完成后才可审批。" : selectedProposal.status === "superseded" ? "Workspace 已推进到新版本。请重新运行 Build 生成新的提案。" : selectedProposal.status === "approved" ? `已提交为 ${selectedProposal.approvedRevisionId ?? "新版本"}。` : "提案被拒绝，Workspace 文件未改变。"}</p></section>) : canvasTab === "file" && currentFile ? <section className="file-preview"><div className="file-preview-title">{currentFile.path}</div><pre>{currentFile.content || "此文件为空。"}</pre></section> : canvasTab === "artifact" && activeArtifact ? <ArtifactView artifact={activeArtifact} /> : <section className="task-canvas"><span className="canvas-index">01</span><h2>{workspace?.name ?? "未选择 Workspace"}</h2><dl><div><dt>模式</dt><dd>{run?.mode === "build" ? "提案式 Build" : "只读 Plan"}</dd></div><div><dt>模型</dt><dd>{model || "未选择"}</dd></div><div><dt>文件</dt><dd>{files.length} 项</dd></div><div><dt>版本</dt><dd>{workspace?.currentRevisionId ? "当前版本" : "尚未创建"}</dd></div><div><dt>会话</dt><dd>{thread.length ? `第 ${thread.length} 轮` : "尚未开始"}</dd></div><div><dt>执行授权</dt><dd>{grant ? `已授权 · 剩余 ${grant.remainingCommands} 条 / ${Math.max(1, Math.round(grant.remainingWallTimeMs / 60000))} 分钟` : "未授权（每次执行需审批）"}</dd></div></dl><p>画布仅投影 Workspace、任务与事件的持久化状态。</p></section>}
         </aside>
       </div>
     </main>
