@@ -1,1 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="4" y="4" width="92" height="92" rx="2" fill="#8A2D22"/><text x="50" y="62" text-anchor="middle" font-size="52" font-weight="700" fill="#FBF8F2" font-family="serif">使</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- 朱文方印 favicon：印泥红边 + 暖纸底 + 印泥红「使」字（独立文件用字面品牌色） -->
+  <rect x="5" y="5" width="90" height="90" rx="3" fill="#F4EFE6" stroke="#A8392C" stroke-width="7"/>
+  <text x="50" y="67" text-anchor="middle" font-size="46" font-weight="700" fill="#A8392C" font-family="'Noto Serif SC','Source Han Serif SC','Songti SC','SimSun',serif">使</text>
+</svg>

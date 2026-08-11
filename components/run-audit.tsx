@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+
+import { Seal } from "@/components/seal";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Workspace = { id: string; name: string };
@@ -330,7 +332,7 @@ export function RunAudit() {
     <main className="audit-page">
       <header className="audit-header">
         <nav className="audit-header-nav" aria-label="主导航">
-          <Link href="/" className="audit-brand"><span className="agent-mark">使</span><span className="font-mono text-sm font-bold tracking-[0.08em]">ZMZAI AGENT</span></Link>
+          <Link href="/" className="audit-brand"><span className="agent-mark"><Seal size={24} className="agent-seal" /></span><span className="font-mono text-sm font-bold tracking-[0.08em]">ZMZAI AGENT</span></Link>
           <Link href="/" className="audit-nav-link">工作台</Link>
           <Link href="/audit" className="audit-nav-link active">运行审计</Link>
         </nav>

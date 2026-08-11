@@ -4,7 +4,9 @@ import Link from "next/link";
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DiffView } from "@/components/diff-view";
+import { Icon } from "@/components/icon";
 import { Markdown } from "@/components/markdown";
+import { Seal } from "@/components/seal";
 import { projectTaskEvents, type CanvasArtifact, type TaskEvent, type ToolNode } from "@/lib/task-event-projection";
 
 type Workspace = { id: string; name: string; description: string; defaultModel: string; currentRevisionId: string | null; updatedAt: string };
@@ -112,7 +114,7 @@ function ToolCard({ tool, onOpenArtifact }: { tool: ToolNode; onOpenArtifact: (t
   const running = tool.status === "requested" || tool.status === "running";
   return <article className={`tool-card ${tool.status}`}>
     <div className="tool-card-head">
-      <div className="tool-card-title"><span className={`tool-card-indicator ${tool.status}`} aria-hidden>{tool.status === "completed" ? "✓" : tool.status === "failed" ? "✗" : ""}</span><span className="tool-card-name">{tool.name}</span><span className="tool-card-args">{tool.argsSummary}</span></div>
+      <div className="tool-card-title"><span className={`tool-card-indicator ${tool.status}`} aria-hidden>{tool.status === "completed" ? <Icon name="check" size={11} /> : tool.status === "failed" ? <Icon name="cross" size={11} /> : null}</span><span className="tool-card-name">{tool.name}</span><span className="tool-card-args">{tool.argsSummary}</span></div>
       <span className="tool-card-state">{running ? (tool.status === "requested" ? "准备中" : "执行中") : tool.status === "failed" ? "失败" : "完成"}</span>
     </div>
     <div className="tool-card-body"><span>{tool.resultSummary?.text ?? tool.label}</span><span className="tool-card-meta">{durationLabel(tool.durationMs)}</span></div>
@@ -128,7 +130,7 @@ function ArtifactView({ artifact }: { artifact: CanvasArtifact }) {
   if (artifact.kind === "search_results") return <section className="artifact-canvas"><div className="artifact-head"><span className="canvas-index">检索</span><h2>{artifact.title}</h2></div><ol className="search-results">{Array.isArray(payload.matches) ? payload.matches.map((match, index) => { const item = match && typeof match === "object" ? match as Record<string, unknown> : {}; return <li key={`${String(item.path)}-${index}`}><span>{String(item.path ?? "文件")}:{String(item.line ?? "")}</span><p>{String(item.text ?? "")}</p></li>; }) : <li>没有可显示的命中。</li>}</ol>{payload.truncated === true && <p className="artifact-note">仅显示前 20 条命中。</p>}</section>;
   if (artifact.kind === "binary_file") {
     const bytes = typeof payload.bytes === "number" ? payload.bytes : 0;
-    return <section className="artifact-canvas"><div className="artifact-head"><span className="canvas-index">产物</span><h2>{artifact.title}</h2></div><dl className="artifact-meta"><div><dt>类型</dt><dd>{typeof payload.contentType === "string" ? payload.contentType : "application/octet-stream"}</dd></div><div><dt>大小</dt><dd>{formatBytes(bytes)}</dd></div><div><dt>SHA-256</dt><dd className="mono">{typeof payload.sha256 === "string" ? `${payload.sha256.slice(0, 16)}…` : "—"}</dd></div></dl>{typeof payload.downloadUrl === "string" && <a className="command-button artifact-download" href={payload.downloadUrl}>下载文件</a>}<p className="artifact-note">产物来自沙箱执行，二进制内容不进入事件流。</p></section>;
+    return <section className="artifact-canvas"><div className="artifact-head"><span className="canvas-index">产物</span><h2>{artifact.title}</h2></div><dl className="artifact-meta"><div><dt>类型</dt><dd>{typeof payload.contentType === "string" ? payload.contentType : "application/octet-stream"}</dd></div><div><dt>大小</dt><dd>{formatBytes(bytes)}</dd></div><div><dt>SHA-256</dt><dd className="mono">{typeof payload.sha256 === "string" ? `${payload.sha256.slice(0, 16)}…` : "—"}</dd></div></dl>{typeof payload.downloadUrl === "string" && <a className="command-button artifact-download" href={payload.downloadUrl}><Icon name="download" size={12} />下载文件</a>}<p className="artifact-note">产物来自沙箱执行，二进制内容不进入事件流。</p></section>;
   }
   return <section className="artifact-canvas"><div className="artifact-head"><span className="canvas-index">{artifact.kind === "execution_output" ? "执行" : "输出"}</span><h2>{artifact.title}</h2></div><pre className={artifact.kind === "execution_output" ? "exec-output" : undefined}>{typeof payload.content === "string" ? payload.content : "等待输出"}</pre>{payload.truncated === true && <p className="artifact-note">输出已截断，完整内容保留在服务端受控日志。</p>}</section>;
 }
@@ -555,7 +557,7 @@ export function AgentWorkbench() {
   return (
     <main className="workbench">
       <header className="workbench-header">
-        <div className="flex items-center gap-3"><span className="agent-mark">使</span><span className="font-mono text-sm font-bold tracking-[0.08em]">ZMZAI AGENT</span></div>
+        <div className="flex items-center gap-3"><Seal size={26} className="agent-seal" /><span className="font-mono text-sm font-bold tracking-[0.08em]">ZMZAI AGENT</span></div>
         <nav className="workbench-nav" aria-label="主导航"><Link href="/audit">运行审计</Link></nav>
         <div className="workbench-status"><span className="status-dot" />AGENT WORKBENCH <span className="header-domain">a.zmzai.cloud</span></div>
       </header>
@@ -563,7 +565,7 @@ export function AgentWorkbench() {
 
       <div className="workbench-grid">
         <aside className="workspace-pane">
-          <div className="pane-heading"><span>WORKSPACE</span><button type="button" className="icon-command" title="新建 Workspace" onClick={() => setCreating((value) => !value)}>+</button></div>
+          <div className="pane-heading"><span>WORKSPACE</span><button type="button" className="icon-command" title="新建 Workspace" onClick={() => setCreating((value) => !value)}><Icon name="plus" /></button></div>
           {creating && <form className="workspace-create" onSubmit={createWorkspace}><input name="name" autoFocus maxLength={120} placeholder="Workspace 名称" /><button type="submit">创建</button></form>}
           <nav className="workspace-list" aria-label="Workspace 列表">
             {workspaces.map((item) => <button type="button" key={item.id} className={item.id === selectedId ? "workspace-item active" : "workspace-item"} onClick={() => void selectWorkspace(item.id)}><span>{item.name}</span><small>{item.currentRevisionId ? "已版本化" : "草稿"}</small></button>)}
@@ -575,7 +577,7 @@ export function AgentWorkbench() {
         </aside>
 
         <section className="conversation-pane">
-          <div className="run-toolbar"><div><span className="eyebrow">{thread.length ? "会话转录" : "任务转录"}</span><h1>{run ? run.prompt : "从 Workspace 开始"}</h1></div>{run && <div className="run-toolbar-meta"><span className={`run-phase ${run.status}`}>{runPhase(run.status)}</span>{!terminalRunStates.includes(run.status) && <span className="run-timer">{elapsedLabel(elapsedSeconds)}</span>}{streamState === "reconnecting" && <span className="stream-state reconnecting">连接恢复中</span>}{streamState === "live" && activeRun && <span className="stream-state live">实时</span>}{grant && <span className="stream-state live" title="任务级执行授权，剩余预算见画布">执行授权中</span>}{sandboxRunning && <span className="stream-state live">沙箱执行中</span>}<span>{run.mode.toUpperCase()} · {run.model}</span>{activeRun && <button type="button" className="icon-command" title="停止任务" onClick={() => void cancelRun()}>■</button>}<button type="button" className="icon-command" title="新会话" onClick={startNewSession}>＋</button></div>}</div>
+          <div className="run-toolbar"><div><span className="eyebrow">{thread.length ? "会话转录" : "任务转录"}</span><h1>{run ? run.prompt : "从 Workspace 开始"}</h1></div>{run && <div className="run-toolbar-meta"><span className={`run-phase ${run.status}`}>{runPhase(run.status)}</span>{!terminalRunStates.includes(run.status) && <span className="run-timer">{elapsedLabel(elapsedSeconds)}</span>}{streamState === "reconnecting" && <span className="stream-state reconnecting">连接恢复中</span>}{streamState === "live" && activeRun && <span className="stream-state live">实时</span>}{grant && <span className="stream-state live" title="任务级执行授权，剩余预算见画布">执行授权中</span>}{sandboxRunning && <span className="stream-state live">沙箱执行中</span>}<span>{run.mode.toUpperCase()} · {run.model}</span>{activeRun && <button type="button" className="icon-command" title="停止任务" onClick={() => void cancelRun()}><Icon name="stop" /></button>}<button type="button" className="icon-command" title="新会话" onClick={startNewSession}><Icon name="new-session" /></button></div>}</div>
           <div className="conversation-scroll" ref={scrollRef} onScroll={() => {
             const element = scrollRef.current;
             if (!element) return;
@@ -600,7 +602,7 @@ export function AgentWorkbench() {
                 {turnRun.status === "succeeded" && <div className="run-note completed-note">任务已完成。可以在下方继续追问，或点击「新会话」开始全新任务。</div>}
               </div>
             ))}
-            {!followScroll && <button type="button" className="jump-to-latest" onClick={() => { const element = scrollRef.current; if (element) { element.scrollTop = element.scrollHeight; setFollowScroll(true); } }}>跳至最新 ↓</button>}
+            {!followScroll && <button type="button" className="jump-to-latest" onClick={() => { const element = scrollRef.current; if (element) { element.scrollTop = element.scrollHeight; setFollowScroll(true); } }}><Icon name="arrow-down" size={12} />跳至最新</button>}
           </div>
           <form className="prompt-composer" onSubmit={(event) => { event.preventDefault(); void submitPrompt(); }}>
             <div className="composer-controls"><div className="mode-switch" role="group" aria-label="任务模式"><button type="button" className={mode === "plan" ? "active" : ""} onClick={() => setMode("plan")} disabled={activeRun}>PLAN</button><button type="button" className={mode === "build" ? "active" : ""} onClick={() => setMode("build")} disabled={activeRun}>BUILD</button></div><select value={model} onChange={(event) => setModel(event.target.value)} disabled={!models.length || !workspace}>{models.length ? models.map((item) => <option key={item.model} value={item.model}>{item.model}</option>) : <option>模型目录不可用</option>}</select></div>
