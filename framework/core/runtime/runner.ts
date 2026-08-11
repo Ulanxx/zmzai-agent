@@ -6,6 +6,7 @@ import { leaseDurationMs } from "@/framework/core/runtime/lease-recovery";
 import { publishFrameworkEvent } from "@/framework/core/events/bus";
 import type { FrameworkEvent } from "@/framework/core/events/manifest";
 import { PermissionEngine, RejectedError, type Reply } from "@/framework/core/permission/engine";
+import type { Ruleset } from "@/framework/core/permission/ruleset";
 import { PartProjector, serializeEmit } from "@/framework/core/runtime/pi-bridge";
 import { mongoSessionStore } from "@/framework/core/session/mongo-store";
 import { createJsonlSessionStore } from "@/framework/core/session/jsonl-store";
@@ -395,20 +396,17 @@ export class SessionRunner {
       metadata: { subagent: input.subagentType, description: input.description },
     });
 
-    const child = await createFrameworkSession({
+    const childSession = await createFrameworkSession({
       store: this.deps.store,
       userId: parent.userId,
       workspaceId: parent.workspaceId,
       agent: input.subagentType,
       model: subagent.model ?? parent.model,
       prompt: input.prompt,
-    });
-    await this.deps.store.updateSession(child.id, {
       parentId: parent.id,
-      permission: [...parent.permission],
       title: input.description,
+      permission: [...parent.permission],
     });
-    const childSession = (await this.deps.store.getSession(child.id))!;
 
     try {
       // Run the child with a FRESH runner (not this instance's nested runLoop):
@@ -416,12 +414,12 @@ export class SessionRunner {
       // the parent's event chain. A dedicated runner owns the child's loop.
       const childRunner = new SessionRunner(this.deps);
       await childRunner.runLoop(childSession, { text: input.prompt, agent: input.subagentType });
-      const summary = await this.lastAssistantText(child.id);
-      await this.recordSubtask(parent, { prompt: input.prompt, description: input.description, agent: input.subagentType, childSessionId: child.id });
-      return { childSessionId: child.id, summary: summary || "（子代理无文本输出）", state: "completed" };
+      const summary = await this.lastAssistantText(childSession.id);
+      await this.recordSubtask(parent, { prompt: input.prompt, description: input.description, agent: input.subagentType, childSessionId: childSession.id });
+      return { childSessionId: childSession.id, summary: summary || "（子代理无文本输出）", state: "completed" };
     } catch (error) {
-      await this.recordSubtask(parent, { prompt: input.prompt, description: input.description, agent: input.subagentType, childSessionId: child.id });
-      return { childSessionId: child.id, summary: `子代理失败：${error instanceof Error ? error.message : "未知错误"}`, state: "error" };
+      await this.recordSubtask(parent, { prompt: input.prompt, description: input.description, agent: input.subagentType, childSessionId: childSession.id });
+      return { childSessionId: childSession.id, summary: `子代理失败：${error instanceof Error ? error.message : "未知错误"}`, state: "error" };
     }
   }
 
@@ -511,15 +509,19 @@ export async function createFrameworkSession(input: {
   agent?: string;
   model: ModelRef;
   prompt?: string;
+  parentId?: string;    // subagent child: links to the spawning session (§6.4)
+  title?: string;       // override the prompt-truncation default
+  permission?: Ruleset; // pre-stamped session rules (subagent inherits parent's)
 }): Promise<SessionInfo> {
   const session: SessionInfo = {
     id: newSessionId(),
     workspaceId: input.workspaceId,
     userId: input.userId,
-    title: (input.prompt ?? "新会话").slice(0, 40),
+    ...(input.parentId ? { parentId: input.parentId } : {}),
+    title: (input.title ?? input.prompt ?? "新会话").slice(0, 40),
     agent: input.agent ?? "default",
     model: input.model,
-    permission: [],
+    permission: input.permission ?? [],
     queuedPrompts: [],
     time: { created: new Date().toISOString(), updated: new Date().toISOString() },
   };
