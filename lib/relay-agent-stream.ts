@@ -131,20 +131,19 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
       return;
     }
 
-    const partial = assistant(model, [], "pending");
-    stream.push({ type: "start", partial });
-    try {
-      const requestBody = JSON.stringify({
-        userId: identity.userId,
-        taskRunId: identity.taskRunId,
-        requestId: `${identity.taskRunId}_${Date.now()}`,
-        model: model.id,
-        messages: toOpenAiMessages(context),
-        tools: toOpenAiTools(context.tools),
-        tool_choice: context.tools?.length ? "auto" : "none",
-        stream: true,
-        ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
-      });
+    const requestBody = JSON.stringify({
+      userId: identity.userId,
+      taskRunId: identity.taskRunId,
+      requestId: `${identity.taskRunId}_${Date.now()}`,
+      model: model.id,
+      messages: toOpenAiMessages(context),
+      tools: toOpenAiTools(context.tools),
+      tool_choice: context.tools?.length ? "auto" : "none",
+      stream: true,
+      ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
+    });
+
+    const fetchTurn = async (): Promise<Response> => {
       let response: Response | null = null;
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
@@ -162,7 +161,7 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
           }
           throw cause;
         }
-        if (response.ok && response.body) break;
+        if (response.ok && response.body) return response;
         const error = relayError(response.status, await response.json().catch(() => null));
         if (attempt === 0 && isRetryableRelayStatus(response.status) && !options?.signal?.aborted) {
           await new Promise((resolve) => setTimeout(resolve, 250));
@@ -170,11 +169,13 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
         }
         throw error;
       }
-      if (!response?.ok || !response.body) throw relayError(response?.status ?? 500, null);
+      throw relayError(response?.status ?? 500, null);
+    };
 
+    const consumeTurn = async (response: Response, partial: AssistantMessage): Promise<{ textStarted: boolean; toolCallCount: number }> => {
+      if (!response.body) throw relayError(500, null);
       let buffer = "";
       let textStarted = false;
-      let finishReason: string | null = null;
       const toolCalls = new Map<number, { id: string; name: string; arguments: string }>();
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -184,7 +185,6 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
         const chunk = JSON.parse(payload) as OpenAiChunk;
         const choice = chunk.choices?.[0];
         if (!choice) return;
-        finishReason ??= choice.finish_reason ?? null;
         if (choice.delta?.content) {
           if (!textStarted) {
             partial.content.push({ type: "text", text: "" });
@@ -224,9 +224,32 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
         partial.content.push(toolCall);
         stream.push({ type: "toolcall_end", contentIndex: partial.content.length - 1, toolCall, partial });
       }
-      partial.stopReason = toolCalls.size || finishReason === "tool_calls" ? "toolUse" : finishReason === "length" ? "length" : "stop";
+      return { textStarted, toolCallCount: toolCalls.size };
+    };
+
+    try {
+      const partial = assistant(model, [], "pending");
+      stream.push({ type: "start", partial });
+      // Upstream occasionally returns a 200 stream with no content at all
+      // (relay marks these "unsettled / stream omitted usage"). Retry once,
+      // then fail loudly instead of recording an empty successful turn.
+      let turn = { textStarted: false, toolCallCount: 0 };
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        partial.content = [];
+        const response = await fetchTurn();
+        turn = await consumeTurn(response, partial);
+        if (turn.textStarted || turn.toolCallCount > 0 || attempt === 1 || options?.signal?.aborted) break;
+      }
+      if (!turn.textStarted && turn.toolCallCount === 0) {
+        const message = options?.signal?.aborted ? "已中止" : "Relay 返回了空响应（上游未产出任何内容），请重试";
+        const error = assistant(model, [], options?.signal?.aborted ? "aborted" : "error", message);
+        stream.push({ type: "error", reason: error.stopReason === "aborted" ? "aborted" : "error", error });
+        stream.end(error);
+        return;
+      }
+      partial.stopReason = turn.toolCallCount > 0 ? "toolUse" : "stop";
       partial.usage = emptyUsage();
-      stream.push({ type: "done", reason: partial.stopReason as "stop" | "length" | "toolUse", message: partial });
+      stream.push({ type: "done", reason: partial.stopReason as "stop" | "toolUse", message: partial });
       stream.end(partial);
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "Relay 调用失败";
