@@ -59,6 +59,7 @@ export const mongoSessionStore: SessionStore = {
     if (patch.model !== undefined) $set.model = patch.model;
     if (patch.permission !== undefined) $set.permission = patch.permission;
     if (patch.queuedPrompts !== undefined) $set.queuedPrompts = patch.queuedPrompts;
+    if (patch.parentId !== undefined) $set.parentId = patch.parentId;
     if (patch.time?.archived !== undefined) $set["time.archived"] = patch.time.archived;
     await FrameworkSessionModel.updateOne({ sessionId: id }, { $set });
   },

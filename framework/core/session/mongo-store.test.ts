@@ -103,6 +103,13 @@ describe("mongoSessionStore sessions", () => {
     expect(update.$set.agent).toBeUndefined();
   });
 
+  it("updateSession persists parentId (subagent child stamping)", async () => {
+    await mongoSessionStore.updateSession("ses_child", { parentId: "ses_parent", title: "子代理" });
+    const update = sessionModel.updateOne.mock.calls[0]![1] as { $set: Record<string, unknown> };
+    expect(update.$set.parentId).toBe("ses_parent");
+    expect(update.$set.title).toBe("子代理");
+  });
+
   it("listSessions filters by userId and optional workspaceId", async () => {
     sessionModel.find.mockReturnValue(findChain([sessionRecord()]));
     const sessions = await mongoSessionStore.listSessions({ userId: "user_1", workspaceId: "ws_1" });
