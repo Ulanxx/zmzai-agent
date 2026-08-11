@@ -6,6 +6,12 @@ import { defineConfig } from "vitest/config";
 const rootDirectory = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  resolve: { alias: { "@": rootDirectory } },
+  resolve: {
+    alias: {
+      "@": rootDirectory,
+      "@zmzai/agent-framework": path.join(rootDirectory, "packages/agent-framework/src/index.ts"),
+      "@zmzai/agent-framework/": path.join(rootDirectory, "packages/agent-framework/src/"),
+    },
+  },
   test: { environment: "node" },
 });

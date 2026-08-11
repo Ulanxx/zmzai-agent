@@ -25,6 +25,12 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@zmzai/agent-framework": [
+        "./packages/agent-framework/src/index.ts"
+      ],
+      "@zmzai/agent-framework/*": [
+        "./packages/agent-framework/src/*"
       ]
     }
   },

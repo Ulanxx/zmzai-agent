@@ -406,6 +406,8 @@ M1–M3 是产品价值闭环（= 此前讨论的"取消 toggle + 自动执行 +
 - 113 测试绿、typecheck/lint/build 通过。
 - **遗留**：① workspace facade 的本地 FS 实现（JSONL 后端的 workspace 仍走 Mongo，FW_MODE=local 目前只覆盖 session 存储）；② title 异步生成（streamOneText 已就绪，未接 runner）；③ 子代理嵌套完成的端到端单测（单进程双 PI 循环时序脆弱，生产已用真模型验证）。
 
+- **M5 抽包完成（2026-08-11，代码级）**：`packages/agent-framework`（@zmzai/agent-framework）独立 npm 包。核心（session/events/permission/agent/tools/runtime）全部适配器化——ModelProvider/SandboxExecutor/LeaseStore/EventLog/WorkspaceFiles 五个注入接口，包带参考实现（JSONL store、FS workspace、子进程 sandbox、OpenAI-compatible provider、内存 event log）。`createServer(deps)` 组装；`zmzai-agent serve/run` CLI（bin）；openapi.yaml 契约；examples/standalone.mjs 演示。产品侧 `framework/` 变为薄兼容层（mongo-store/mongo-event-log/mongo-workspace + 从包 re-export），产品组装在 framework/server/context.ts，路由零改动。tsconfig/vitest alias 指向包源码。包独立 build 产出 dist（NodeNext + .js 扩展），第三方 `createServer()` 验证通过，CLI serve 建 session 201 验证通过。191 测试绿（包 77 + 产品 114）+ typecheck + next build 全过。**未做**：发布公共 npm、完整 TUI、webfetch 实现。
+
 ## 12. 非目标（v0）
 
 - 不做 LSP、formatter、MCP、plugin npm 安装器（M5 后）。

@@ -1,40 +1,85 @@
-import { AgentRegistry } from "@/framework/core/agent/registry";
-import { loadCustomAgents } from "@/framework/core/agent/loader";
-import { SessionRunner, defaultStore } from "@/framework/core/runtime/runner";
+import { AgentRegistry, SessionRunner, type SessionInfo, type ModelRef, type ToolContext, type PermissionEngine } from "@zmzai/agent-framework";
+import { loadCustomAgents } from "@zmzai/agent-framework";
+import { mongoEventLog } from "@/framework/core/events/mongo-event-log";
+import { mongoSessionStore } from "@/framework/core/session/mongo-store";
 import { createMongoWorkspaceFiles } from "@/framework/core/tools/mongo-workspace";
 import { createRelayModel, createRelayStreamFunction } from "@/lib/relay-agent-stream";
-import type { ModelRef } from "@/framework/core/session/types";
+import { buildExecSnapshot } from "@/lib/sandbox-snapshot";
+import { runSandboxCommandAndStream } from "@/lib/sandbox-execution";
+import { FrameworkSessionModel } from "@/framework/core/session/mongo-models";
 
-/** Process-wide runner singleton (globalThis guard against Next.js HMR
- *  module re-instantiation). */
+/** Process-wide runner singleton assembled from the framework package + the
+ *  product's Mongo/relay/OpenSandbox adapters (M5 §3). */
 
-type RunnerHolder = { runner: SessionRunner | null };
+const globalHolder = globalThis as typeof globalThis & { __zmzaiFrameworkRunner?: SessionRunner | null };
 
-const globalHolder = globalThis as typeof globalThis & { __zmzaiFrameworkRunner?: RunnerHolder };
-const holder = globalHolder.__zmzaiFrameworkRunner ?? { runner: null };
-globalHolder.__zmzaiFrameworkRunner = holder;
+function getOrCreateRunner(): SessionRunner {
+  if (globalHolder.__zmzaiFrameworkRunner) return globalHolder.__zmzaiFrameworkRunner;
+
+  const runner = new SessionRunner({
+    store: mongoSessionStore,
+    registry: new AgentRegistry(),
+    eventLog: mongoEventLog,
+    streamFnFor: (session) => createRelayStreamFunction({ userId: session.userId, taskRunId: session.id }),
+    modelFor: (ref: ModelRef) => createRelayModel(ref.modelId),
+    workspaceFor: (session) => createMongoWorkspaceFiles({ userId: session.userId, workspaceId: session.workspaceId }),
+    sandbox: {
+      buildSnapshot: async (input) => (await buildExecSnapshot({ userId: input.userId, workspaceId: input.workspaceId, runId: input.runId })).snapshot,
+      run: async (input) => {
+        const result = await runSandboxCommandAndStream({
+          userId: input.userId,
+          runId: input.runId,
+          workspaceId: input.workspaceId,
+          toolCallId: input.toolCallId,
+          snapshot: input.snapshot,
+          command: input.command,
+        });
+        return {
+          ok: result.ok,
+          exitCode: result.exitCode,
+          outputText: result.outputText,
+          durationMs: result.durationMs,
+          artifacts: result.artifacts.map((artifact) => {
+            const previewable = /^(text\/html|image\/(png|jpeg|gif|svg\+xml|webp)|application\/pdf|text\/(plain|markdown|css))/.test(artifact.contentType.toLowerCase());
+            const base = artifact.artifactId ? `/api/fw/sessions/${input.runId}/artifacts/${artifact.artifactId}` : null;
+            return {
+              path: artifact.path,
+              bytes: artifact.bytes,
+              contentType: artifact.contentType,
+              downloadUrl: base ? `${base}/download` : "",
+              ...(base && previewable ? { previewUrl: `${base}/preview` } : {}),
+            };
+          }),
+        };
+      },
+    },
+    leaseStore: {
+      stamp: async (sessionId, owner, expiresAt) => {
+        await FrameworkSessionModel.updateOne({ sessionId }, { $set: { leaseOwner: owner, leaseExpiresAt: expiresAt } }).catch(() => undefined);
+      },
+      clear: async (sessionId) => {
+        await FrameworkSessionModel.updateOne({ sessionId }, { $set: { leaseOwner: null, leaseExpiresAt: null } }).catch(() => undefined);
+      },
+    },
+    loadWorkspaceAgents: async (session: SessionInfo) => {
+      const workspace = createMongoWorkspaceFiles({ userId: session.userId, workspaceId: session.workspaceId });
+      const { agents } = await loadCustomAgents(workspace);
+      return agents;
+    },
+    subagentDepth: 1,
+    compaction: { enabled: true, contextWindow: 128_000, summaryModel: createRelayModel("gpt-5.6-luna") },
+  });
+
+  globalHolder.__zmzaiFrameworkRunner = runner;
+  return runner;
+}
 
 export function getFrameworkRunner(): SessionRunner {
-  if (!holder.runner) {
-    holder.runner = new SessionRunner({
-      store: defaultStore,
-      registry: new AgentRegistry(),
-      streamFnFor: (session) => createRelayStreamFunction({ userId: session.userId, taskRunId: session.id }),
-      modelFor: (ref: ModelRef) => createRelayModel(ref.modelId),
-      loadWorkspaceAgents: async (session) => {
-        const workspace = createMongoWorkspaceFiles({ userId: session.userId, workspaceId: session.workspaceId });
-        const { agents } = await loadCustomAgents(workspace);
-        return agents;
-      },
-      subagentDepth: 1,
-      // v0: reuse the relay model for summaries (no dedicated cheap-model
-      // catalog entry yet). contextWindow matches createRelayModel's 128k.
-      compaction: { enabled: true, contextWindow: 128_000, summaryModel: createRelayModel("gpt-5.6-luna") },
-    });
-  }
-  return holder.runner;
+  return getOrCreateRunner();
 }
 
 export function getFrameworkRegistry(): AgentRegistry {
   return new AgentRegistry();
 }
+
+export type { SessionInfo, ModelRef, ToolContext, PermissionEngine };

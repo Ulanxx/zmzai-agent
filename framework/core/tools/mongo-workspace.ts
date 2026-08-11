@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { WorkspaceFiles } from "@/framework/core/tools/context";
+import type { WorkspaceFiles } from "@zmzai/agent-framework";
 import { connectMongo } from "@/lib/database/mongodb";
 import { applySingleEdit, createUnifiedDiff } from "@/lib/workspace-edit";
 import { validatedWorkspacePath } from "@/lib/workspaces";

@@ -6,7 +6,26 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { startFrameworkLeaseRecovery } = await import("./framework/core/runtime/lease-recovery");
-    startFrameworkLeaseRecovery();
+    const { startLeaseRecovery } = await import("@zmzai/agent-framework");
+    const { mongoEventLog } = await import("@/framework/core/events/mongo-event-log");
+    startLeaseRecovery({
+      store: {
+        listExpiredLeases: async () => {
+          const { FrameworkSessionModel } = await import("@/framework/core/session/mongo-models");
+          const rows = await FrameworkSessionModel.find({ leaseExpiresAt: { $ne: null, $lt: new Date() } }).select({ sessionId: 1 }).limit(50).lean();
+          return rows.map((r) => ({ sessionId: r.sessionId }));
+        },
+        clearLeaseIfExpired: async (sessionId) => {
+          const { FrameworkSessionModel } = await import("@/framework/core/session/mongo-models");
+          const reclaimed = await FrameworkSessionModel.findOneAndUpdate(
+            { sessionId, leaseExpiresAt: { $ne: null, $lt: new Date() } },
+            { $set: { leaseOwner: null, leaseExpiresAt: null } },
+            { new: true },
+          ).lean();
+          return Boolean(reclaimed);
+        },
+      },
+      log: mongoEventLog,
+    });
   }
 }
