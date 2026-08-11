@@ -143,14 +143,22 @@ async function projectTaskEvent(input: { runId: string; userId: string; type: st
   if (input.type.startsWith("artifact.")) await projectArtifact(input);
 }
 
+// Terminal events must always be persistable, even when the run's event
+// budget is exhausted (spec: 运行进入 failed 后必须保证 run.failed 可持久化
+// 和推送，禁止静默丢弃). The counter may exceed the cap for these events.
+const terminalEventTypes = new Set(["run.completed", "run.failed", "run.cancelled"]);
+
 export async function appendTaskEvent(input: { runId: string; userId: string; type: string; data: unknown; session?: ClientSession }): Promise<PersistedTaskEvent> {
   const dataBytes = Buffer.byteLength(JSON.stringify(input.data), "utf8");
+  const isTerminal = terminalEventTypes.has(input.type);
   const run = await TaskRunModel.findOneAndUpdate(
-    {
-      runId: input.runId,
-      userId: input.userId,
-      $expr: { $lte: [{ $add: ["$persistedEventBytes", dataBytes] }, "$budget.maxPersistedEventBytes"] },
-    },
+    isTerminal
+      ? { runId: input.runId, userId: input.userId }
+      : {
+          runId: input.runId,
+          userId: input.userId,
+          $expr: { $lte: [{ $add: ["$persistedEventBytes", dataBytes] }, "$budget.maxPersistedEventBytes"] },
+        },
     { $inc: { nextEventSequence: 1, persistedEventBytes: dataBytes } },
     { new: true },
   ).session(input.session ?? null).lean();

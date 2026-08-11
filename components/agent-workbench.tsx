@@ -249,11 +249,12 @@ export function AgentWorkbench() {
     return result.proposals;
   }, []);
 
-  const refreshRunDetail = useCallback(async (runId: string) => {
+  const refreshRunDetail = useCallback(async (runId: string): Promise<Run | null> => {
     try {
       const result = await requestJson<{ run: Run; grant: Grant | null }>(`/api/runs/${runId}`);
       setGrant(result.grant);
-    } catch { /* non-fatal: grant chip simply stays hidden */ }
+      return result.run;
+    } catch { return null; }
   }, []);
 
   const handleTaskEvent = useCallback((runId: string, workspaceId: string, event: TaskEvent, source: EventSource) => {
@@ -306,9 +307,22 @@ export function AgentWorkbench() {
         setStreamState("closed");
         return;
       }
-      setStreamState("reconnecting");
+      // If the run already reached a terminal state server-side but the
+      // terminal event never arrived (e.g. event-budget failure), sync from
+      // the run snapshot instead of reconnecting forever.
+      void refreshRunDetail(runId).then((snapshotRun) => {
+        if (eventSource.current !== source) return;
+        if (snapshotRun && terminalRunStates.includes(snapshotRun.status)) {
+          applyRunStatus(runId, snapshotRun.status);
+          source.close();
+          eventSource.current = null;
+          setStreamState("closed");
+        } else {
+          setStreamState("reconnecting");
+        }
+      }).catch(() => setStreamState("reconnecting"));
     };
-  }, [closeEvents, handleTaskEvent]);
+  }, [applyRunStatus, closeEvents, handleTaskEvent, refreshRunDetail]);
 
   const restoreThread = useCallback(async (runs: Run[]) => {
     if (!runs.length) {

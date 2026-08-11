@@ -17,6 +17,38 @@ const runningAgents = globalThis as typeof globalThis & { __zmzaiAgentRuntime?: 
 const agents = runningAgents.__zmzaiAgentRuntime ?? new Map<string, Agent>();
 runningAgents.__zmzaiAgentRuntime = agents;
 
+// Token-level message.delta events are batched into ~2 KiB chunks: the
+// frontend projection joins deltas per messageId, so this is transparent, and
+// long replies stop consuming one event per token against the run budget.
+const deltaTargetBytes = 2 * 1024;
+type DeltaBatch = { messageId: string | null; parts: string[]; bytes: number };
+const deltaBatches = new Map<string, DeltaBatch>();
+
+async function flushDeltaBatch(input: { runId: string; userId: string }): Promise<void> {
+  const batch = deltaBatches.get(input.runId);
+  if (!batch || !batch.parts.length) return;
+  const delta = batch.parts.join("");
+  deltaBatches.set(input.runId, { messageId: batch.messageId, parts: [], bytes: 0 });
+  await appendTaskEvent({ runId: input.runId, userId: input.userId, type: "message.delta", data: { messageId: batch.messageId, delta } });
+}
+
+async function pushVisibleEvent(input: { runId: string; userId: string; visible: { type: string; data: Record<string, unknown> } }): Promise<void> {
+  if (input.visible.type === "message.delta") {
+    const messageId = String(input.visible.data.messageId ?? "legacy");
+    const batch = deltaBatches.get(input.runId) ?? { messageId: null, parts: [], bytes: 0 };
+    if (batch.messageId !== null && batch.messageId !== messageId) await flushDeltaBatch(input);
+    const current = deltaBatches.get(input.runId) ?? { messageId: null, parts: [], bytes: 0 };
+    current.messageId = messageId;
+    current.parts.push(String(input.visible.data.delta ?? ""));
+    current.bytes += Buffer.byteLength(current.parts[current.parts.length - 1]!, "utf8");
+    deltaBatches.set(input.runId, current);
+    if (current.bytes >= deltaTargetBytes) await flushDeltaBatch(input);
+    return;
+  }
+  await flushDeltaBatch(input);
+  await appendTaskEvent({ runId: input.runId, userId: input.userId, ...input.visible });
+}
+
 const leaseDurationMs = 10 * 60 * 1000;
 
 type RuntimeRun = {
@@ -111,12 +143,13 @@ export async function runAgentTask(input: { userId: string; runId: string; conti
   const toolStartedAt = new Map<string, number>();
   agent.subscribe(async (event) => {
     for (const visible of presentAgentEvent(event, toolStartedAt)) {
-      await appendTaskEvent({ runId: input.runId, userId: input.userId, ...visible });
+      await pushVisibleEvent({ runId: input.runId, userId: input.userId, visible });
     }
   });
 
   try {
     await agent.prompt(run.prompt);
+    await flushDeltaBatch({ runId: input.runId, userId: input.userId });
     await settleRun(agent, run);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Agent Runtime 失败";
@@ -173,6 +206,7 @@ export async function resumeAgentRun(input: { userId: string; runId: string; kin
         injectToolResult(agent, result.toolCallId, result);
         agent.state.messages = [...agent.state.messages, { role: "user", content: input.note, timestamp: Date.now() }];
         await agent.continue();
+        await flushDeltaBatch({ runId: input.runId, userId: input.userId });
         await settleRun(agent, run);
         return;
       }
@@ -192,6 +226,7 @@ export async function resumeAgentRun(input: { userId: string; runId: string; kin
       // Rejected or otherwise non-approved: no sandbox run, just continue.
       agent.state.messages = [...agent.state.messages, { role: "user", content: input.note, timestamp: Date.now() }];
       await agent.continue();
+      await flushDeltaBatch({ runId: input.runId, userId: input.userId });
       await settleRun(agent, run);
       return;
     }
@@ -199,6 +234,7 @@ export async function resumeAgentRun(input: { userId: string; runId: string; kin
     if (!agent) return;
     agent.state.messages = [...agent.state.messages, { role: "user", content: input.note, timestamp: Date.now() }];
     await agent.continue();
+    await flushDeltaBatch({ runId: input.runId, userId: input.userId });
     await settleRun(agent, run);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Agent Runtime 恢复失败";
