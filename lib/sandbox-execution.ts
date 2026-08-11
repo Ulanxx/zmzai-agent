@@ -71,12 +71,15 @@ export async function runSandboxCommandAndStream(input: {
   let outputBytes = 0;
   const pushOutput = async (text: string) => {
     if (!text) return;
-    const bytes = Buffer.byteLength(text, "utf8");
+    // Execd delivers each stdout line as one event without the trailing
+    // newline; restore it so the artifact reads as proper lines.
+    const line = text.endsWith("\n") ? text : `${text}\n`;
+    const bytes = Buffer.byteLength(line, "utf8");
     const offset = outputBytes;
     if (outputBytes + bytes > maxArtifactBytes) {
       const room = maxArtifactBytes - outputBytes;
       if (room > 0) {
-        const sliced = text.slice(0, Math.max(0, room));
+        const sliced = line.slice(0, Math.max(0, room));
         outputParts.push(sliced);
         outputBytes += Buffer.byteLength(sliced, "utf8");
         await safeAppend({ type: "artifact.append", data: { artifactId: `artifact_${input.toolCallId}`, offset, text: sliced, truncated: false, omittedBytes: 0 } });
@@ -84,9 +87,9 @@ export async function runSandboxCommandAndStream(input: {
       await safeAppend({ type: "artifact.append", data: { artifactId: `artifact_${input.toolCallId}`, offset: outputBytes, text: "", truncated: true, omittedBytes: 0 } });
       return;
     }
-    outputParts.push(text);
+    outputParts.push(line);
     outputBytes += bytes;
-    await safeAppend({ type: "artifact.append", data: { artifactId: `artifact_${input.toolCallId}`, offset, text, truncated: false, omittedBytes: 0 } });
+    await safeAppend({ type: "artifact.append", data: { artifactId: `artifact_${input.toolCallId}`, offset, text: line, truncated: false, omittedBytes: 0 } });
   };
 
   try {
