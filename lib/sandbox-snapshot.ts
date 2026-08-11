@@ -1,6 +1,6 @@
-import { getShadowFiles } from "@/lib/proposals";
 import type { SandboxSnapshot } from "@/lib/sandbox-types";
 import { WorkspaceModel } from "@/models/workspace";
+import { WorkspaceFileModel } from "@/models/workspace-file";
 
 const maxSnapshotFiles = 200;
 const maxSnapshotBytes = 1024 * 1024;
@@ -15,14 +15,16 @@ export class SnapshotError extends Error {
 }
 
 /**
- * Builds the shadow-view snapshot for an approved execution: the current
- * committed workspace state overlaid with this run's pending (uncommitted)
- * change proposals. This lets the user approve running code that includes
- * changes that have not been committed yet — test before commit.
+ * Builds the execution snapshot from the workspace's committed files. Under
+ * the framework protocol every write lands immediately as an immutable
+ * revision (auto mode), so the committed state IS the execution state — there
+ * are no pending proposals to overlay. runId is accepted for call-site
+ * compatibility but no longer scopes a shadow view.
  */
 export async function buildExecSnapshot(input: { userId: string; workspaceId: string; runId: string }): Promise<{ snapshot: SandboxSnapshot; summary: ExecSnapshotSummary }> {
+  void input.runId;
   const [files, workspace] = await Promise.all([
-    getShadowFiles({ workspaceId: input.workspaceId, runId: input.runId }),
+    WorkspaceFileModel.find({ workspaceId: input.workspaceId }).sort({ path: 1 }).lean(),
     WorkspaceModel.findOne({ workspaceId: input.workspaceId, userId: input.userId }).lean(),
   ]);
   if (files.length > maxSnapshotFiles) throw new SnapshotError("SNAPSHOT_TOO_LARGE", `快照文件数超过 ${maxSnapshotFiles} 限制，无法在沙箱中执行`);

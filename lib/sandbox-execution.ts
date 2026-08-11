@@ -2,12 +2,10 @@ import { randomUUID } from "node:crypto";
 
 import { maxRunArtifactTotalBytes, storeArtifactBytes } from "@/lib/artifact-storage";
 import { AgentSandboxError, createAgentSandboxRun, getAgentSandboxRun, getAgentSandboxRunArtifact, getAgentSandboxRunArtifacts, streamAgentSandboxEvents } from "@/lib/sandbox-client";
-import { appendTaskEvent } from "@/lib/task-events";
 import type { SandboxCommand, SandboxLimits, SandboxSnapshot } from "@/lib/sandbox-types";
 import { SandboxArtifactModel } from "@/models/sandbox-artifact";
 
 const maxArtifactBytes = 64 * 1024;
-const maxResultSummaryBytes = 4 * 1024;
 
 export type SandboxCommandRunResult = {
   ok: boolean;
@@ -16,29 +14,19 @@ export type SandboxCommandRunResult = {
   durationMs: number;
   sandboxRunId: string | null;
   errorMessage: string | null;
-  artifacts: Array<{ path: string; bytes: number; contentType: string; sha256: string; tooLarge: boolean }>;
+  artifacts: Array<{ path: string; bytes: number; contentType: string; sha256: string; tooLarge: boolean; artifactId?: string }>;
 };
-
-function truncateBytes(value: string, limit: number): { text: string; truncated: boolean; omittedBytes: number } {
-  const bytes = Buffer.byteLength(value, "utf8");
-  if (bytes <= limit) return { text: value, truncated: false, omittedBytes: 0 };
-  let text = value;
-  while (Buffer.byteLength(text, "utf8") > limit) text = text.slice(0, -1);
-  return { text, truncated: true, omittedBytes: bytes - Buffer.byteLength(text, "utf8") };
-}
 
 function basename(path: string): string {
   return path.split("/").pop() ?? "artifact";
 }
 
 /**
- * Runs one sandbox command for the agent: streams `execution_output` events,
- * finishes the exec tool node with the real result, and imports any
- * deliverables the sandbox produced into GridFS (§11.4), emitting a
- * `binary_file` artifact per imported file.
- *
- * Used by both the approved-resume path (execution-resume) and the
- * task-granted direct-execution path (exec-tool-broker).
+ * Runs one sandbox command for the framework's bash tool: executes in the
+ * isolated sandbox, captures stdout/stderr, and imports any deliverables into
+ * GridFS. Returns the result to the caller — event/part projection is the
+ * caller's job (the FW runner owns the tool part lifecycle), so this module
+ * no longer writes to the legacy task-event log.
  */
 export async function runSandboxCommandAndStream(input: {
   userId: string;
@@ -48,52 +36,36 @@ export async function runSandboxCommandAndStream(input: {
   snapshot: SandboxSnapshot;
   command: SandboxCommand;
   limits?: SandboxLimits;
+  /** Optional raw output tap (streamed sandbox stdout/stderr lines). */
+  onOutput?: (text: string) => void;
 }): Promise<SandboxCommandRunResult> {
   const startedAt = Date.now();
-  const commandLabel = [input.command.program, ...input.command.args].join(" ");
-
-  const safeAppend = async (event: { type: string; data: Record<string, unknown> }) => {
-    try {
-      await appendTaskEvent({ runId: input.runId, userId: input.userId, ...event });
-    } catch { /* budget guard: drop non-terminal events when over budget */ }
-  };
-  const emitToolEnd = async (failed: boolean, resultSummary: { text: string; truncated: boolean; omittedBytes: number }) => {
-    try {
-      await appendTaskEvent({ runId: input.runId, userId: input.userId, type: failed ? "tool.failed" : "tool.completed", data: { toolCallId: input.toolCallId, name: "exec", durationMs: Date.now() - startedAt, resultSummary } });
-    } catch { /* budget exhausted */ }
-  };
-
-  await safeAppend({ type: "tool.progress", data: { toolCallId: input.toolCallId, name: "exec", label: "正在准备沙箱" } });
-  await safeAppend({ type: "artifact.upsert", data: { artifactId: `artifact_${input.toolCallId}`, toolCallId: input.toolCallId, kind: "execution_output", title: commandLabel, payload: { content: "", truncated: false, omittedBytes: 0 } } });
 
   let sandboxRunId: string | null = null;
   const outputParts: string[] = [];
   let outputBytes = 0;
-  const pushOutput = async (text: string) => {
+  const pushOutput = (text: string) => {
     if (!text) return;
     // Execd delivers each stdout line as one event without the trailing
-    // newline; restore it so the artifact reads as proper lines.
+    // newline; restore it so the output reads as proper lines.
     const line = text.endsWith("\n") ? text : `${text}\n`;
     const bytes = Buffer.byteLength(line, "utf8");
-    const offset = outputBytes;
     if (outputBytes + bytes > maxArtifactBytes) {
       const room = maxArtifactBytes - outputBytes;
       if (room > 0) {
         const sliced = line.slice(0, Math.max(0, room));
         outputParts.push(sliced);
         outputBytes += Buffer.byteLength(sliced, "utf8");
-        await safeAppend({ type: "artifact.append", data: { artifactId: `artifact_${input.toolCallId}`, offset, text: sliced, truncated: false, omittedBytes: 0 } });
+        input.onOutput?.(sliced);
       }
-      await safeAppend({ type: "artifact.append", data: { artifactId: `artifact_${input.toolCallId}`, offset: outputBytes, text: "", truncated: true, omittedBytes: 0 } });
       return;
     }
     outputParts.push(line);
     outputBytes += bytes;
-    await safeAppend({ type: "artifact.append", data: { artifactId: `artifact_${input.toolCallId}`, offset, text: line, truncated: false, omittedBytes: 0 } });
+    input.onOutput?.(line);
   };
 
   try {
-    await safeAppend({ type: "tool.progress", data: { toolCallId: input.toolCallId, name: "exec", label: "沙箱执行中" } });
     const created = await createAgentSandboxRun({
       userId: input.userId,
       taskRunId: input.runId,
@@ -105,15 +77,13 @@ export async function runSandboxCommandAndStream(input: {
     sandboxRunId = created.id;
 
     await streamAgentSandboxEvents(created.id, (event) => {
-      if (event.type === "sandbox.output" && event.text) void pushOutput(event.text);
+      if (event.type === "sandbox.output" && event.text) pushOutput(event.text);
     });
 
     const final = await getAgentSandboxRun(created.id);
     const failed = final?.status === "failed" || final?.status === "cancelled" || (final?.exitCode ?? 0) !== 0;
     const exitCode = final?.exitCode ?? (failed ? 1 : 0);
     const outputText = outputParts.join("");
-    const summary = truncateBytes(outputText.slice(-maxResultSummaryBytes * 2), maxResultSummaryBytes);
-    await emitToolEnd(failed, summary);
 
     let artifacts: SandboxCommandRunResult["artifacts"] = [];
     if (!failed) {
@@ -122,15 +92,14 @@ export async function runSandboxCommandAndStream(input: {
     return { ok: !failed, exitCode, outputText, durationMs: Date.now() - startedAt, sandboxRunId: created.id, artifacts, errorMessage: failed ? `命令以退出码 ${exitCode} 结束` : null };
   } catch (error) {
     const message = error instanceof AgentSandboxError ? error.message : error instanceof Error ? error.message : "沙箱执行失败";
-    await emitToolEnd(true, { text: message, truncated: false, omittedBytes: 0 });
     return { ok: false, exitCode: 1, outputText: outputParts.join(""), durationMs: Date.now() - startedAt, sandboxRunId, artifacts: [], errorMessage: message };
   }
 }
 
 /**
- * Imports the sandbox deliverables manifest into GridFS (per-run budget 100 MiB)
- * and emits a `binary_file` artifact per imported file. Bytes never enter the
- * task event stream — only metadata.
+ * Imports the sandbox deliverables manifest into GridFS (per-run budget
+ * 100 MiB). Bytes never enter any event stream — only metadata is returned.
+ * The caller (FW runner) emits artifact.created per imported file.
  */
 async function importDeliverables(input: { userId: string; runId: string; toolCallId: string }, sandboxRunId: string): Promise<SandboxCommandRunResult["artifacts"]> {
   const manifest = await getAgentSandboxRunArtifacts(sandboxRunId).catch(() => []);
@@ -160,19 +129,7 @@ async function importDeliverables(input: { userId: string; runId: string; toolCa
       tooLarge: false,
     }).catch(() => undefined);
     runTotal += meta.bytes;
-    imported.push({ path: meta.path, bytes: meta.bytes, contentType: meta.contentType, sha256: meta.sha256, tooLarge: false });
-    await appendTaskEvent({
-      runId: input.runId,
-      userId: input.userId,
-      type: "artifact.upsert",
-      data: {
-        artifactId: `bin_${artifactId}`,
-        toolCallId: input.toolCallId,
-        kind: "binary_file",
-        title: meta.path,
-        payload: { path: meta.path, bytes: meta.bytes, contentType: meta.contentType, sha256: meta.sha256, downloadUrl: `/api/runs/${input.runId}/artifacts/${artifactId}/download` },
-      },
-    }).catch(() => undefined);
+    imported.push({ path: meta.path, bytes: meta.bytes, contentType: meta.contentType, sha256: meta.sha256, tooLarge: false, artifactId });
   }
   return imported;
 }

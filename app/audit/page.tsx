@@ -1,5 +1,7 @@
-import { RunAudit } from "@/components/run-audit";
+import { FrameworkAudit } from "@/components/framework-audit";
+
+export const dynamic = "force-dynamic";
 
 export default function AuditPage() {
-  return <RunAudit />;
+  return <FrameworkAudit />;
 }

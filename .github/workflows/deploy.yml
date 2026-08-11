@@ -42,7 +42,8 @@ jobs:
     steps:
       - name: Deploy
         run: bash /opt/zmzai/scripts/deploy-app.sh ${APP_NAME}
-      - name: Migrate task-run active lock index
-        run: |
-          cd /opt/zmzai/zmzai-agent
-          /opt/zmzai/actions-agent/externals/node24/bin/node --env-file=.env.production scripts/migrate-task-run-active-index.mjs
+      # NOTE: the task-run active-lock migration step was removed with the old
+      # plan/build protocol (M1–M3 收尾). The legacy TaskRun/ChangeProposal/
+      # ExecutionProposal collections can be dropped manually once production
+      # is verified on the FW protocol — see docs/superpowers/plans/
+      # 2026-08-11-fw-protocol-acceptance.md.
