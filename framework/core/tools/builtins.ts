@@ -183,4 +183,6 @@ export const bashTool: ToolDef = {
   },
 };
 
-export const builtinTools: ToolDef[] = [readTool, globTool, grepTool, writeTool, editTool, todoTool, bashTool];
+import { taskTool } from "@/framework/core/tools/task";
+
+export const builtinTools: ToolDef[] = [readTool, globTool, grepTool, writeTool, editTool, todoTool, bashTool, taskTool];

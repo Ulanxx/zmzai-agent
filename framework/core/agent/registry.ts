@@ -109,4 +109,19 @@ export class AgentRegistry {
     const agent = this.get(name);
     return agent ? [builtinDefaults, agent.permission] : [builtinDefaults];
   }
+
+  /** Returns a NEW registry with additional agents layered on top (workspace
+   *  custom agents). The base registry is shared/process-wide, so per-run
+   *  customization must not mutate it — this derive keeps the singleton
+   *  immutable while letting a session see its workspace's .zmzai/agents. */
+  derive(extraAgents: AgentInfo[]): AgentRegistry {
+    if (!extraAgents.length) return this;
+    const merged = new AgentRegistry([...this.customAgents, ...extraAgents]);
+    return merged;
+  }
+
+  /** Custom agents registered beyond the builtins (for derive()). */
+  get customAgents(): AgentInfo[] {
+    return [...this.agents.values()].filter((agent) => !builtinAgents.some((builtin) => builtin.name === agent.name));
+  }
 }

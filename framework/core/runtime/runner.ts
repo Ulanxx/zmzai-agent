@@ -1,15 +1,16 @@
 import { Agent, type AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 
-import { AgentRegistry } from "@/framework/core/agent/registry";
+import { AgentRegistry, type AgentInfo } from "@/framework/core/agent/registry";
 import { leaseDurationMs } from "@/framework/core/runtime/lease-recovery";
 import { publishFrameworkEvent } from "@/framework/core/events/bus";
 import type { FrameworkEvent } from "@/framework/core/events/manifest";
 import { PermissionEngine, RejectedError, type Reply } from "@/framework/core/permission/engine";
 import { PartProjector, serializeEmit } from "@/framework/core/runtime/pi-bridge";
 import { mongoSessionStore } from "@/framework/core/session/mongo-store";
+import { createJsonlSessionStore } from "@/framework/core/session/jsonl-store";
 import type { SessionStore } from "@/framework/core/session/store";
-import { newSessionId } from "@/framework/core/session/ids";
+import { newPartId, newSessionId } from "@/framework/core/session/ids";
 import type { ModelRef, Part, SessionInfo } from "@/framework/core/session/types";
 import { adaptTool, permissionForCall } from "@/framework/core/tools/adapter";
 import { builtinTools } from "@/framework/core/tools/builtins";
@@ -31,6 +32,14 @@ export type RunnerDeps = {
   modelFor: (ref: ModelRef) => Model<Api>;
   tools?: ToolDef[];
   buildToolContext?: (input: { session: SessionInfo; engine: PermissionEngine }) => ToolContext;
+  /** Loads workspace custom agents (spec §6.3); defaults to .zmzai/agents/*.md
+   *  via the mongo workspace facade. */
+  loadWorkspaceAgents?: (session: SessionInfo) => Promise<AgentInfo[]>;
+  /** Max subagent nesting depth (spec §6.4, default 1). */
+  subagentDepth: number;
+  /** Auto-compaction (spec §8.3): condense the model's working context when it
+   *  nears the window. Disabled when summaryModel is null. */
+  compaction?: { enabled: boolean; contextWindow: number; summaryModel: Model<Api> | null };
 };
 
 type ActiveRun = {
@@ -170,9 +179,57 @@ export class SessionRunner {
     active.abort();
   }
 
+  /** Builds the compaction transformContext (spec §8.3) when the runner has a
+   *  summary model configured. Emits a `compaction` part on the latest
+   *  assistant message so the boundary shows in the transcript. */
+  private async buildCompaction(session: SessionInfo, emit: (event: FrameworkEvent) => void) {
+    if (!this.deps.compaction?.enabled || !this.deps.compaction.summaryModel) return undefined;
+    const { buildCompactionTransform, streamOneText } = await import("@/framework/core/runtime/compaction");
+    return buildCompactionTransform({
+      enabled: true,
+      contextWindow: this.deps.compaction.contextWindow,
+      summaryModel: this.deps.compaction.summaryModel,
+      streamOne: async (model, messages) => {
+        const streamFn = this.deps.streamFnFor(session);
+        return streamOneText(
+          async (m, ctx) => {
+            const stream = await streamFn(m, ctx as never);
+            return stream;
+          },
+          model,
+          "你是上下文压缩助手。只输出结构化摘要，不续写对话。",
+          messages,
+        );
+      },
+      onCompacted: (summary) => {
+        void (async () => {
+          const entries = await this.deps.store.getMessages(session.id);
+          const lastAssistant = [...entries].reverse().find((entry) => entry.info.role === "assistant");
+          if (!lastAssistant) return;
+          const part: Part = { id: newPartId(), sessionId: session.id, messageId: lastAssistant.info.id, type: "compaction", summary };
+          await this.deps.store.appendPart(part).catch(() => undefined);
+          emit({ type: "message.part.updated", data: { part } });
+        })();
+      },
+    });
+  }
+
+  /** Layers the session's workspace custom agents (`.zmzai/agents/*.md`) on top
+   *  of the shared registry without mutating it (spec §6.3). Load failures
+   *  degrade to the base registry — a malformed md never blocks a run. */
+  private async registryFor(session: SessionInfo): Promise<AgentRegistry> {    const base = this.deps.registry;
+    if (!this.deps.loadWorkspaceAgents) return base;
+    try {
+      const custom = await this.deps.loadWorkspaceAgents(session);
+      return base.derive(custom);
+    } catch {
+      return base;
+    }
+  }
+
   private async runLoop(session: SessionInfo, input: { text: string; agent?: string; model?: ModelRef }): Promise<void> {
     this.currentSessionId = session.id;
-    const registry = this.deps.registry;
+    const registry = await this.registryFor(session);
     const agentName = input.agent ?? session.agent;
     const agentInfo = registry.get(agentName) ?? registry.get("default");
     const model = input.model ?? agentInfo?.model ?? session.model;
@@ -198,10 +255,19 @@ export class SessionRunner {
     });
 
     const projector = new PartProjector({ sessionId: session.id, agent: agentInfo?.name ?? "default", model });
-    const toolDefs = new Map<string, ToolDef>((this.deps.tools ?? builtinTools).map((def) => [def.id, def]));
+    // Exclude task from contexts that can't nest; include for primary runs.
+    const baseTools = this.deps.tools ?? builtinTools;
+    const toolList = session.parentId ? baseTools.filter((def) => def.id !== "task") : baseTools;
+    const toolDefs = new Map<string, ToolDef>(toolList.map((def) => [def.id, def]));
     const toolContext = (this.deps.buildToolContext ?? defaultToolContext)({ session, engine });
+    // Subagent spawning is only available to primary (non-child) sessions, and
+    // only when the runner can host a nested run (spec §6.4).
+    if (!session.parentId) {
+      toolContext.spawnSubagent = (spawnInput) => this.spawnSubagent(session, spawnInput, registry, engine);
+    }
     const piTools = [...toolDefs.values()].map((def) => adaptTool(def, toolContext));
 
+    const compactionTransform = await this.buildCompaction(session, emit);
     const agent = new Agent({
       initialState: {
         systemPrompt: agentInfo?.prompt ?? "",
@@ -211,6 +277,7 @@ export class SessionRunner {
       },
       streamFn: this.deps.streamFnFor(session),
       toolExecution: "sequential",
+      ...(compactionTransform ? { transformContext: compactionTransform } : {}),
       shouldStopAfterTurn: ({ newMessages }) => newMessages.filter((message) => message.role === "assistant").length >= (agentInfo?.steps ?? 12),
     });
 
@@ -302,8 +369,108 @@ export class SessionRunner {
     }
   }
 
-  /** Rebuilds PI-visible context from the persisted message log so a session
-   *  survives process restarts (spec §8.2). */
+  /** Spawns a subagent child session (spec §6.4): depth-capped, permission
+   *  stamped from parent session + subagent preset, runs a nested PI loop to
+   *  completion, and returns the child's final assistant text as the parent
+   *  tool's result. Awaits the nested runLoop directly. */
+  private async spawnSubagent(
+    parent: SessionInfo,
+    input: { description: string; prompt: string; subagentType: string },
+    registry: AgentRegistry,
+    parentEngine: PermissionEngine,
+  ): Promise<{ childSessionId: string; summary: string; state: "completed" | "error" }> {
+    const depth = await this.sessionDepth(parent);
+    if (depth >= this.deps.subagentDepth) {
+      throw new Error(`子代理嵌套深度超过限制（${this.deps.subagentDepth}）`);
+    }
+    const subagent = registry.get(input.subagentType);
+    if (!subagent || (subagent.mode !== "subagent" && subagent.mode !== "all")) {
+      throw new Error(`未知或非子代理类型：${input.subagentType}`);
+    }
+    await parentEngine.ask({
+      sessionId: parent.id,
+      permission: "task",
+      patterns: [input.subagentType],
+      always: ["*"],
+      metadata: { subagent: input.subagentType, description: input.description },
+    });
+
+    const child = await createFrameworkSession({
+      store: this.deps.store,
+      userId: parent.userId,
+      workspaceId: parent.workspaceId,
+      agent: input.subagentType,
+      model: subagent.model ?? parent.model,
+      prompt: input.prompt,
+    });
+    await this.deps.store.updateSession(child.id, {
+      parentId: parent.id,
+      permission: [...parent.permission],
+      title: input.description,
+    });
+    const childSession = (await this.deps.store.getSession(child.id))!;
+
+    try {
+      // Run the child with a FRESH runner (not this instance's nested runLoop):
+      // reusing runLoop here would deadlock on the shared in-process state and
+      // the parent's event chain. A dedicated runner owns the child's loop.
+      const childRunner = new SessionRunner(this.deps);
+      await childRunner.runLoop(childSession, { text: input.prompt, agent: input.subagentType });
+      const summary = await this.lastAssistantText(child.id);
+      await this.recordSubtask(parent, { prompt: input.prompt, description: input.description, agent: input.subagentType, childSessionId: child.id });
+      return { childSessionId: child.id, summary: summary || "（子代理无文本输出）", state: "completed" };
+    } catch (error) {
+      await this.recordSubtask(parent, { prompt: input.prompt, description: input.description, agent: input.subagentType, childSessionId: child.id });
+      return { childSessionId: child.id, summary: `子代理失败：${error instanceof Error ? error.message : "未知错误"}`, state: "error" };
+    }
+  }
+
+  /** Persists a subtask part on the parent's latest assistant message so the
+   *  transcript links to the child session (spec §6.4 step 5). */
+  private async recordSubtask(parent: SessionInfo, input: { prompt: string; description: string; agent: string; childSessionId: string }): Promise<void> {
+    const entries = await this.deps.store.getMessages(parent.id);
+    const lastAssistant = [...entries].reverse().find((entry) => entry.info.role === "assistant");
+    if (!lastAssistant) return;
+    const part: Part = {
+      id: newPartId(),
+      sessionId: parent.id,
+      messageId: lastAssistant.info.id,
+      type: "subtask",
+      prompt: input.prompt,
+      description: input.description,
+      agent: input.agent,
+      childSessionId: input.childSessionId,
+    };
+    await this.deps.store.appendPart(part).catch(() => undefined);
+    await this.publish({ type: "message.part.updated", data: { part } }, parent.id);
+  }
+
+  private async lastAssistantText(sessionId: string): Promise<string> {
+    const entries = await this.deps.store.getMessages(sessionId);
+    for (let index = entries.length - 1; index >= 0; index--) {
+      const entry = entries[index]!;
+      if (entry.info.role !== "assistant") continue;
+      const text = entry.parts
+        .filter((part): part is Extract<Part, { type: "text" }> => part.type === "text")
+        .map((part) => part.text)
+        .join("\n")
+        .trim();
+      if (text) return text;
+    }
+    return "";
+  }
+
+  private async sessionDepth(session: SessionInfo): Promise<number> {
+    let depth = 0;
+    let current = session;
+    while (current.parentId) {
+      depth += 1;
+      const next = await this.deps.store.getSession(current.parentId);
+      if (!next) break;
+      current = next;
+    }
+    return depth;
+  }
   private async rebuildMessages(sessionId: string): Promise<AgentMessage[]> {
     const entries = await this.deps.store.getMessages(sessionId);
     const messages: AgentMessage[] = [];
@@ -364,5 +531,16 @@ export function isSessionActive(sessionId: string): boolean {
   return activeRuns.has(sessionId);
 }
 
-/** Test seam: the default store is Mongo; tests inject an in-memory one. */
-export const defaultStore: SessionStore = mongoSessionStore;
+/** Test seam: tests inject an in-memory store. The default is Mongo (cloud);
+ *  FW_MODE=local swaps to the zero-dependency JSONL backend (spec §3.1 / M4):
+ *  `FW_MODE=local FW_DATA_DIR=./.fw-data pnpm dev` runs with no Mongo. */
+function resolveDefaultStore(): SessionStore {
+  if (process.env.FW_MODE?.trim() === "local") {
+    // Static import; the JSONL backend is dependency-free so bundling it costs
+    // nothing and keeps this module ESM-clean.
+    return createJsonlSessionStore({ dataDir: process.env.FW_DATA_DIR?.trim() || "./.fw-data" });
+  }
+  return mongoSessionStore;
+}
+
+export const defaultStore: SessionStore = resolveDefaultStore();

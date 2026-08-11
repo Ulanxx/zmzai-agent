@@ -48,4 +48,10 @@ export interface ToolContext {
   emitFileEdited(input: { path: string; revisionId: string; diff: string }): Promise<void>;
   /** Emits artifact.created for every sandbox deliverable. */
   emitArtifact(input: { artifactId: string; path: string; bytes: number; contentType: string; downloadUrl: string; previewUrl?: string }): Promise<void>;
+  /** Spawns a subagent as a child session (spec §6.4), wired by the runner.
+   *  Absent in contexts that can't nest (e.g. the JSONL demo without a
+   *  subagent-capable runner). */
+  spawnSubagent?: (input: { description: string; prompt: string; subagentType: string }) => Promise<{ childSessionId: string; summary: string; state: "completed" | "error" }>;
+  /** Records a subtask part on the parent transcript (childSessionId link). */
+  emitSubtask?: (input: { prompt: string; description: string; agent: string; childSessionId: string }) => Promise<void>;
 }

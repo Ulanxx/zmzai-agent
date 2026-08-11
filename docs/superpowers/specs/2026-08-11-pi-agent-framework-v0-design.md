@@ -395,6 +395,17 @@ GET    /api/models                            沿用现有
 
 M1–M3 是产品价值闭环（= 此前讨论的"取消 toggle + 自动执行 + 内联审批 + 作品预览"），M4–M5 是框架价值闭环。
 
+## 11.1 实现状态（2026-08-11 更新）
+
+- **M1–M3 完成并已上生产**：commit `ea5f65d` 部署 a.zmzai.cloud，PPT 垂直场景端到端验收通过（写脚本→沙箱→10 页 pptx 下载可打开）。旧 plan/build 协议已下线。
+- **M4 完成（代码级）**：
+  - `task` 子代理：`framework/core/tools/task.ts` + runner `spawnSubagent`——深度上限（subagentDepth=1，parentId 链）、权限合并（父会话 ruleset 烙印到子会话）、子会话用独立 SessionRunner 跑、结论回传父上下文、subtask part 链接父子。
+  - 自定义 agent：`framework/core/agent/loader.ts` 解析 `.zmzai/agents/*.md`（零依赖 frontmatter 解析器，支持 description/mode/model/temperature/top_p/steps/hidden/permission），runner 经 `registry.derive()` 注入 workspace agents（不动共享单例）。
+  - compaction：`framework/core/runtime/compaction.ts`——`transformContext` 检测超长（chars/4 估算 + contextWindow 阈值）→ relay 模型生成摘要 → 旧历史替换为摘要 + 保留尾部 8 条，发 `compaction` part；摘要失败降级全量上下文。`streamOneText` 驱动 AssistantMessageEventStream.result() 取全文（也供 title 生成复用）。
+  - JSONL 本地后端：`framework/core/session/jsonl-store.ts`（SessionStore 文件实现， sessions/messages/parts 各一个 JSON 目录），`FW_MODE=local FW_DATA_DIR=...` 时 `defaultStore` 切换为 JSONL（零 Mongo 演示）。
+- 113 测试绿、typecheck/lint/build 通过。
+- **遗留**：① workspace facade 的本地 FS 实现（JSONL 后端的 workspace 仍走 Mongo，FW_MODE=local 目前只覆盖 session 存储）；② title 异步生成（streamOneText 已就绪，未接 runner）；③ 子代理嵌套完成的端到端单测（单进程双 PI 循环时序脆弱，生产已用真模型验证）。
+
 ## 12. 非目标（v0）
 
 - 不做 LSP、formatter、MCP、plugin npm 安装器（M5 后）。
