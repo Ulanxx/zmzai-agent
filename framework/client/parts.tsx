@@ -79,6 +79,7 @@ export function MessageView({ entry }: { entry: MessageWithParts }) {
       .filter((part): part is Extract<Part, { type: "text" }> => part.type === "text")
       .map((part) => part.text)
       .join("\n");
+    if (!text.trim()) return null;
     return (
       <article className="user-message">
         <span>你的任务</span>

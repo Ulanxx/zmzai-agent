@@ -199,7 +199,12 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
           AGENT <span className="header-domain">a.zmzai.cloud</span>
         </div>
       </header>
-      {actionError && <div className="workbench-alert">{actionError}</div>}
+      {actionError && (
+        <div className="workbench-alert">
+          {actionError}
+          {actionError === "请先登录" && <a href="/dev/login">本地登录</a>}
+        </div>
+      )}
 
       <div className="fw-grid">
         <aside className="fw-sidebar">
