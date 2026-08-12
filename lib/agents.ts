@@ -94,8 +94,16 @@ export async function createAgent(input: {
 /** Every cloud project has one immediately usable default Agent. This is
  *  idempotent so retries and existing workspaces are safe. */
 export async function ensureDefaultAgent(input: { userId: string; workspaceId: string }): Promise<{ agent: AgentSummary; version: AgentVersionSnapshot } | null> {
-  const existing = await AgentModel.findOne({ workspaceId: input.workspaceId, userId: input.userId }).sort({ createdAt: 1 });
+  const workspace = await WorkspaceModel.findOne({ workspaceId: input.workspaceId, userId: input.userId }).select({ defaultAgentId: 1 }).lean();
+  const existing = await AgentModel.findOne({
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    ...(workspace?.defaultAgentId ? { agentId: workspace.defaultAgentId } : {}),
+  }).sort({ createdAt: 1 });
   if (existing?.publishedVersionId) {
+    if (workspace?.defaultAgentId !== existing.agentId) {
+      await WorkspaceModel.updateOne({ workspaceId: input.workspaceId, userId: input.userId }, { $set: { defaultAgentId: existing.agentId } });
+    }
     const version = await AgentVersionModel.findOne({ agentVersionId: existing.publishedVersionId }).lean();
     return version ? { agent: summary(existing), version: snapshot(version) } : null;
   }
@@ -117,7 +125,12 @@ export async function listAgents(userId: string, workspaceId: string): Promise<A
 }
 
 export async function getPublishedAgentVersion(input: { userId: string; workspaceId: string; agentId?: string }): Promise<AgentVersionSnapshot | null> {
-  const selector = { userId: input.userId, workspaceId: input.workspaceId, ...(input.agentId ? { agentId: input.agentId } : {}) };
+  const workspace = input.agentId ? null : await WorkspaceModel.findOne({ userId: input.userId, workspaceId: input.workspaceId }).select({ defaultAgentId: 1 }).lean();
+  const selector = {
+    userId: input.userId,
+    workspaceId: input.workspaceId,
+    ...(input.agentId ? { agentId: input.agentId } : workspace?.defaultAgentId ? { agentId: workspace.defaultAgentId } : {}),
+  };
   const agent = await AgentModel.findOne(selector).sort({ createdAt: 1 }).lean();
   if (!agent?.publishedVersionId) return null;
   const version = await AgentVersionModel.findOne({ agentVersionId: agent.publishedVersionId, workspaceId: input.workspaceId }).lean();
