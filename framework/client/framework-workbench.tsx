@@ -20,12 +20,26 @@ type Workspace = { id: string; name: string; defaultModel: string };
 
 type CanvasTab = "artifacts" | "edits";
 
+type WorkspaceSummary = Workspace & { defaultAgentId?: string | null };
+
+async function fetchList<T>(url: string, key: string): Promise<T[]> {
+  const response = await fetch(url, { cache: "no-store" });
+  const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!response.ok) {
+    const message = typeof body?.error === "string" ? body.error : "请求失败，请先确认服务和登录状态";
+    throw new Error(message);
+  }
+  const value = body?.[key];
+  if (!Array.isArray(value)) throw new Error(`接口响应缺少 ${key} 列表`);
+  return value as T[];
+}
+
 export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) {
   const router = useRouter();
   const { snapshot, live, loading, loadError } = useFrameworkSession(sessionId);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [models, setModels] = useState<Model[]>([]);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [prompt, setPrompt] = useState("");
@@ -46,13 +60,19 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   // Bootstrap: agents, models, workspaces, and this workspace's session list.
   useEffect(() => {
     void (async () => {
-      const [agentResult, modelResult, workspaceResult] = await Promise.allSettled([fwApi.listAgents(), fetch("/api/models").then((r) => r.json() as Promise<{ models: Model[] }>), fetch("/api/workspaces").then((r) => r.json() as Promise<{ workspaces: Workspace[] }>)]);
+      const [agentResult, modelResult, workspaceResult] = await Promise.allSettled([
+        fwApi.listAgents(),
+        fetchList<Model>("/api/models", "models"),
+        fetchList<WorkspaceSummary>("/api/workspaces", "workspaces"),
+      ]);
       if (agentResult.status === "fulfilled") setAgents(agentResult.value.agents.filter((item) => item.mode !== "subagent"));
-      if (modelResult.status === "fulfilled") setModels(modelResult.value.models);
+      if (modelResult.status === "fulfilled") setModels(modelResult.value);
       if (workspaceResult.status === "fulfilled") {
-        setWorkspaces(workspaceResult.value.workspaces);
-        const first = workspaceResult.value.workspaces[0];
+        setWorkspaces(workspaceResult.value);
+        const first = workspaceResult.value[0];
         if (first) setWorkspaceId((current) => current ?? first.id);
+      } else {
+        setActionError(workspaceResult.reason instanceof Error ? workspaceResult.reason.message : "无法加载项目列表");
       }
     })();
   }, []);
