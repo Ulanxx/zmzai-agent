@@ -98,14 +98,17 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
     void fwApi.listSessions(workspaceId).then((result) => setSessions(result.sessions)).catch(() => undefined);
   }, [workspaceId, snapshot?.session.time.updated]);  
 
+  // Initialize the model once models/workspace are known. Works for BOTH a new
+  // session (no snapshot yet — was broken before: model stayed "" so send()
+  // silently no-oped) and an existing session (restore its pinned model).
   useEffect(() => {
-    if (snapshot && models.length && !model) {
-      queueMicrotask(() => {
-        const workspace = workspaces.find((item) => item.id === snapshot.session.workspaceId);
-        setModel(snapshot.session.model.modelId || workspace?.defaultModel || models[0]?.model || "");
-      });
-    }
-  }, [snapshot, models, workspaces, model]);
+    if (!models.length || model) return;
+    queueMicrotask(() => {
+      const workspace = workspaces.find((item) => item.id === workspaceId);
+      const initial = snapshot?.session.model.modelId || workspace?.defaultModel || models[0]?.model || "";
+      if (initial) setModel(initial);
+    });
+  }, [snapshot, models, workspaces, model, workspaceId]);
 
   // Auto-scroll the conversation while following.
   useEffect(() => {
@@ -207,7 +210,12 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
       {actionError && (
         <div className="workbench-alert">
           {actionError}
-          {actionError === "请先登录" && <a href="/dev/login">本地登录</a>}
+          {actionError === "请先登录" &&
+            (process.env.NODE_ENV === "development" ? (
+              <a href="/dev/login">本地登录</a>
+            ) : (
+              <a href="https://auth.zmzai.cloud/login">去登录</a>
+            ))}
         </div>
       )}
 
