@@ -13,7 +13,7 @@ import {
   type Reply,
   type SessionInfo,
 } from "@/framework/client/use-framework-session";
-import { ArtifactPreviewCard, EditCard, MessageView, PermissionCard, TodoChecklist } from "@/framework/client/parts";
+import { ArtifactPreviewCard, EditCard, groupAssistantMessages, MessageView, PermissionCard, TodoChecklist } from "@/framework/client/parts";
 
 type Model = { model: string; maxOutputTokens: number };
 type Workspace = { id: string; name: string; defaultModel: string };
@@ -178,7 +178,12 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
     setCanvasTab("artifacts");
   }, []);
 
-  const messages = useMemo(() => snapshot?.messages ?? [], [snapshot]);
+  const sourceMessages = snapshot?.messages;
+  const messages = useMemo(() => groupAssistantMessages(sourceMessages ?? []), [sourceMessages]);
+  const taskTools = useMemo(
+    () => (sourceMessages ?? []).flatMap((entry) => entry.parts.filter((part): part is Extract<typeof part, { type: "tool" }> => part.type === "tool")),
+    [sourceMessages],
+  );
 
   if (loading) return <main className="workbench-loading">正在建立工作台…</main>;
   if (loadError) return <main className="workbench-loading">{loadError}</main>;
@@ -219,6 +224,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
             ))}
           </nav>
           <section className="run-history">
+            {workspaceId && agentId && <button type="button" className="workspace-agent-link" onClick={() => router.push(`/fw/w/${workspaceId}/agents/${agentId}`)}>配置 Agent <Icon name="chevron-down" size={12} /></button>}
             <div className="pane-heading">
               <span>会话</span>
               <small>{sessions.length}</small>
@@ -271,9 +277,9 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                 <p>读取、改文件、跑命令都在隔离沙箱中自动进行；文件改动生成可回滚版本，命令执行首次需要一次授权。左侧选择 Workspace，下方直接开始。</p>
               </div>
             )}
-            <TodoChecklist todos={live.todos} />
-            {messages.map((entry) => (
-              <MessageView key={entry.info.id} entry={entry} />
+            <TodoChecklist todos={live.todos} tools={taskTools} />
+            {messages.map((entry, index) => (
+              <MessageView key={Array.isArray(entry) ? `assistant-${index}-${entry[0]?.info.id}` : entry.info.id} entry={entry} hideTools={live.todos.length > 0} />
             ))}
             {live.pendingPermission && <PermissionCard request={live.pendingPermission} busy={replying} onReply={(reply, feedback) => void replyPermission(reply, feedback)} />}
             {live.error && <div className="run-note">{live.error}</div>}

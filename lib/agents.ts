@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { builtinAgents, type AgentInfo, type ResolvedAgent } from "@zmzai/agent-framework";
 import { AgentModel, AgentVersionModel } from "@/models/agent";
 import { WorkspaceModel } from "@/models/workspace";
+import { getWorkspaceSkillsByIds } from "@/lib/workspace-skills";
+import { getWorkspacePluginSkillsByIds } from "@/lib/workspace-plugins";
 
 export type AgentSummary = {
   id: string;
@@ -22,6 +24,18 @@ export type AgentVersionSnapshot = {
   agent: AgentInfo;
   capabilities: { tools: string[]; pluginIds: string[]; skillIds: string[]; connectorIds: string[] };
   createdAt: string;
+};
+
+export type AgentDraft = {
+  agent: AgentInfo;
+  capabilities: AgentVersionSnapshot["capabilities"];
+};
+
+export type AgentDetail = {
+  agent: AgentSummary;
+  draft: AgentDraft;
+  published: AgentVersionSnapshot | null;
+  versions: AgentVersionSnapshot[];
 };
 
 function summary(record: { agentId: string; name: string; description: string; icon: string; publishedVersionId?: string | null; createdAt: Date; updatedAt: Date }): AgentSummary {
@@ -53,6 +67,20 @@ function snapshot(record: { agentVersionId: string; agentId: string; workspaceId
   };
 }
 
+function normalizedDraft(value: unknown, fallback: AgentVersionSnapshot): AgentDraft {
+  const draft = value && typeof value === "object" ? value as Partial<AgentDraft> : null;
+  const capabilities = draft?.capabilities;
+  return {
+    agent: (draft?.agent && typeof draft.agent === "object" ? draft.agent : fallback.agent) as AgentInfo,
+    capabilities: {
+      tools: Array.isArray(capabilities?.tools) ? capabilities.tools : fallback.capabilities.tools,
+      pluginIds: Array.isArray(capabilities?.pluginIds) ? capabilities.pluginIds : fallback.capabilities.pluginIds,
+      skillIds: Array.isArray(capabilities?.skillIds) ? capabilities.skillIds : fallback.capabilities.skillIds,
+      connectorIds: Array.isArray(capabilities?.connectorIds) ? capabilities.connectorIds : fallback.capabilities.connectorIds,
+    },
+  };
+}
+
 export async function createAgent(input: {
   userId: string;
   workspaceId: string;
@@ -72,6 +100,15 @@ export async function createAgent(input: {
     name: input.name,
     description: input.description ?? input.agent.description ?? "",
     icon: input.icon ?? "spark",
+    draft: {
+      agent: input.agent,
+      capabilities: {
+        tools: input.capabilities?.tools ?? [],
+        pluginIds: input.capabilities?.pluginIds ?? [],
+        skillIds: input.capabilities?.skillIds ?? [],
+        connectorIds: input.capabilities?.connectorIds ?? [],
+      },
+    },
     publishedVersionId: agentVersionId,
   });
   const version = await AgentVersionModel.create({
@@ -142,5 +179,57 @@ export async function resolveAgentVersion(input: { userId: string; workspaceId: 
   if (!record || (input.agentId && record.agentId !== input.agentId)) return null;
   const owner = await AgentModel.exists({ agentId: record.agentId, workspaceId: input.workspaceId, userId: input.userId });
   if (!owner) return null;
-  return { agent: record.agent as AgentInfo };
+  const skills = await getWorkspaceSkillsByIds({
+    userId: input.userId,
+    workspaceId: input.workspaceId,
+    skillIds: record.capabilities?.skillIds ?? [],
+  });
+  const pluginSkills = await getWorkspacePluginSkillsByIds({
+    userId: input.userId,
+    workspaceId: input.workspaceId,
+    pluginIds: record.capabilities?.pluginIds ?? [],
+  });
+  const base = record.agent as AgentInfo;
+  const skillPrompt = [...skills, ...pluginSkills].map((skill) => `\n\n<workspace-skill name="${skill.name}">\n${skill.markdown}\n</workspace-skill>`).join("");
+  return { agent: { ...base, ...(skillPrompt ? { prompt: `${base.prompt ?? ""}${skillPrompt}` } : {}) } };
+}
+
+export async function getAgentDetail(input: { userId: string; workspaceId: string; agentId: string }): Promise<AgentDetail | null> {
+  const record = await AgentModel.findOne({ agentId: input.agentId, workspaceId: input.workspaceId, userId: input.userId }).lean();
+  if (!record) return null;
+  const versions = await AgentVersionModel.find({ agentId: record.agentId, workspaceId: input.workspaceId }).sort({ version: -1 }).lean();
+  const publishedRecord = record.publishedVersionId ? versions.find((version) => version.agentVersionId === record.publishedVersionId) ?? null : null;
+  const latest = publishedRecord ?? versions[0] ?? null;
+  if (!latest) return null;
+  const published = publishedRecord ? snapshot(publishedRecord) : null;
+  return { agent: summary(record), draft: normalizedDraft(record.draft, snapshot(latest)), published, versions: versions.map(snapshot) };
+}
+
+export async function updateAgentDraft(input: { userId: string; workspaceId: string; agentId: string; name: string; description: string; icon: string; draft: AgentDraft }): Promise<AgentDetail | null> {
+  const updated = await AgentModel.findOneAndUpdate(
+    { agentId: input.agentId, workspaceId: input.workspaceId, userId: input.userId },
+    { $set: { name: input.name, description: input.description, icon: input.icon, draft: input.draft } },
+    { new: true, runValidators: true },
+  ).lean();
+  if (!updated) return null;
+  return getAgentDetail(input);
+}
+
+export async function publishAgentDraft(input: { userId: string; workspaceId: string; agentId: string }): Promise<AgentDetail | null> {
+  const record = await AgentModel.findOne({ agentId: input.agentId, workspaceId: input.workspaceId, userId: input.userId }).lean();
+  if (!record) return null;
+  const versions = await AgentVersionModel.find({ agentId: record.agentId, workspaceId: input.workspaceId }).sort({ version: -1 }).lean();
+  const baseline = versions[0];
+  if (!baseline) return null;
+  const draft = normalizedDraft(record.draft, snapshot(baseline));
+  const next = await AgentVersionModel.create({
+    agentVersionId: `agtver_${randomUUID()}`,
+    agentId: record.agentId,
+    workspaceId: input.workspaceId,
+    version: (baseline.version ?? 0) + 1,
+    agent: draft.agent,
+    capabilities: draft.capabilities,
+  });
+  await AgentModel.updateOne({ agentId: record.agentId, workspaceId: input.workspaceId, userId: input.userId }, { $set: { publishedVersionId: next.agentVersionId } });
+  return getAgentDetail(input);
 }

@@ -10,6 +10,9 @@ const agentSchema = new Schema(
     name: { type: String, required: true, trim: true, maxlength: 64 },
     description: { type: String, required: true, default: "", maxlength: 2_000 },
     icon: { type: String, required: true, default: "spark", maxlength: 64 },
+    /** Mutable control-plane draft. Sessions never read this directly: they
+     *  pin an immutable AgentVersion at creation time. */
+    draft: { type: Schema.Types.Mixed, default: null },
     publishedVersionId: { type: String, default: null },
   },
   { strict: "throw", timestamps: true },

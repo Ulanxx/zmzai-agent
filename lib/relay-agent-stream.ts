@@ -27,7 +27,7 @@ export function createRelayModel(id: string): Model<Api> {
     api: "openai-completions",
     provider: "zmzai-relay",
     baseUrl: getServerEnvironment().RELAY_AGENT_URL,
-    reasoning: false,
+    reasoning: true,
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128_000,
@@ -99,6 +99,10 @@ type OpenAiChunk = {
   choices?: Array<{
     delta?: {
       content?: string | null;
+      reasoning_content?: string | null;
+      reasoning?: string | null;
+      reasoning_text?: string | null;
+      thinking?: string | null;
       tool_calls?: Array<{ index?: number; id?: string; function?: { name?: string; arguments?: string } }>;
     };
     finish_reason?: string | null;
@@ -141,6 +145,7 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
       tool_choice: context.tools?.length ? "auto" : "none",
       stream: true,
       ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
+      ...(options?.reasoning ? { reasoning_effort: options.reasoning } : {}),
     });
 
     const fetchTurn = async (): Promise<Response> => {
@@ -172,10 +177,13 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
       throw relayError(response?.status ?? 500, null);
     };
 
-    const consumeTurn = async (response: Response, partial: AssistantMessage): Promise<{ textStarted: boolean; toolCallCount: number }> => {
+    const consumeTurn = async (response: Response, partial: AssistantMessage): Promise<{ textStarted: boolean; reasoningStarted: boolean; toolCallCount: number }> => {
       if (!response.body) throw relayError(500, null);
       let buffer = "";
       let textStarted = false;
+      let reasoningStarted = false;
+      let textContentIndex: number | null = null;
+      let thinkingContentIndex: number | null = null;
       const toolCalls = new Map<number, { id: string; name: string; arguments: string }>();
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -191,10 +199,24 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
             stream.push({ type: "text_start", contentIndex: partial.content.length - 1, partial });
             textStarted = true;
           }
-          const contentIndex = partial.content.length - 1;
+          const contentIndex = textContentIndex ?? (partial.content.length - 1);
+          textContentIndex = contentIndex;
           const item = partial.content[contentIndex];
           if (item.type === "text") item.text += choice.delta.content;
           stream.push({ type: "text_delta", contentIndex, delta: choice.delta.content, partial });
+        }
+        const reasoning = [choice.delta?.reasoning_content, choice.delta?.reasoning, choice.delta?.reasoning_text, choice.delta?.thinking]
+          .find((value): value is string => typeof value === "string" && value.length > 0);
+        if (reasoning) {
+          if (thinkingContentIndex === null) {
+            partial.content.push({ type: "thinking", thinking: "" } as never);
+            thinkingContentIndex = partial.content.length - 1;
+            reasoningStarted = true;
+            stream.push({ type: "thinking_start", contentIndex: thinkingContentIndex, partial });
+          }
+          const item = partial.content[thinkingContentIndex];
+          if (item.type === "thinking") item.thinking += reasoning;
+          stream.push({ type: "thinking_delta", contentIndex: thinkingContentIndex, delta: reasoning, partial });
         }
         for (const call of choice.delta?.tool_calls ?? []) {
           const index = call.index ?? 0;
@@ -224,7 +246,7 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
         partial.content.push(toolCall);
         stream.push({ type: "toolcall_end", contentIndex: partial.content.length - 1, toolCall, partial });
       }
-      return { textStarted, toolCallCount: toolCalls.size };
+      return { textStarted, reasoningStarted, toolCallCount: toolCalls.size };
     };
 
     try {
@@ -233,14 +255,14 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
       // Upstream occasionally returns a 200 stream with no content at all
       // (relay marks these "unsettled / stream omitted usage"). Retry once,
       // then fail loudly instead of recording an empty successful turn.
-      let turn = { textStarted: false, toolCallCount: 0 };
+      let turn = { textStarted: false, reasoningStarted: false, toolCallCount: 0 };
       for (let attempt = 0; attempt < 2; attempt += 1) {
         partial.content = [];
         const response = await fetchTurn();
         turn = await consumeTurn(response, partial);
-        if (turn.textStarted || turn.toolCallCount > 0 || attempt === 1 || options?.signal?.aborted) break;
+        if (turn.textStarted || turn.reasoningStarted || turn.toolCallCount > 0 || attempt === 1 || options?.signal?.aborted) break;
       }
-      if (!turn.textStarted && turn.toolCallCount === 0) {
+      if (!turn.textStarted && !turn.reasoningStarted && turn.toolCallCount === 0) {
         const message = options?.signal?.aborted ? "已中止" : "Relay 返回了空响应（上游未产出任何内容），请重试";
         const error = assistant(model, [], options?.signal?.aborted ? "aborted" : "error", message);
         stream.push({ type: "error", reason: error.stopReason === "aborted" ? "aborted" : "error", error });

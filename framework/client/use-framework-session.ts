@@ -176,7 +176,12 @@ export function useFrameworkSession(sessionId: string | null) {
 
       setSnapshot((current) => (current ? { ...current, messages: applyEventToMessages(current.messages, { type, data: frame }) } : current));
       setLive((current) => {
-        if (type === "session.status") return { ...current, status: (frame as { status: SessionStatus }).status };
+        if (type === "session.status") {
+          const status = (frame as { status: SessionStatus }).status;
+          // A session error belongs to one run. Once a new run starts, do not
+          // keep rendering the previous run's failure under its new response.
+          return { ...current, status, ...(status === "running" || status === "waiting_permission" ? { error: null } : {}) };
+        }
         if (type === "session.error") return { ...current, error: (frame as { message: string }).message, status: "idle" };
         if (type === "todo.updated") return { ...current, todos: (frame as { todos: TodoItem[] }).todos };
         if (type === "permission.asked") return { ...current, pendingPermission: (frame as { request: PermissionRequest }).request };

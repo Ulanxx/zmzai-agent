@@ -48,4 +48,21 @@ describe("relay stream empty-response handling", () => {
     expect(events.some((event) => event.type === "done")).toBe(true);
     expect(events.some((event) => event.type === "error")).toBe(false);
   });
+
+  it("forwards OpenAI-compatible reasoning deltas before the visible response", async () => {
+    const sse = [
+      'data: {"choices":[{"delta":{"reasoning_content":"先检查当前任务。"}}]}',
+      'data: {"choices":[{"delta":{"reasoning":"然后执行工具。"}}]}',
+      'data: {"choices":[{"delta":{"content":"开始处理。"},"finish_reason":"stop"}]}',
+      "data: [DONE]",
+      "",
+    ].join("\n\n");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } })));
+    const streamFn = createRelayStreamFunction({ userId: "user_1", taskRunId: "run_1" });
+    const events = await collect(streamFn(createRelayModel("deepseek-v4-flash"), minimalContext(), { reasoning: "low" } as never) as never);
+
+    expect(events.map((event) => event.type)).toContain("thinking_start");
+    expect(events.map((event) => event.type)).toContain("thinking_delta");
+    expect(events.some((event) => event.type === "done")).toBe(true);
+  });
 });

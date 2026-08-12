@@ -363,6 +363,8 @@
   .command-button:hover { background: var(--color-accent-strong); }
   .command-button:disabled { cursor: not-allowed; opacity: 0.45; }
   .command-button.quiet { border-color: var(--color-line); background: transparent; color: var(--color-ink); }
+  .workspace-agent-link { display: inline-flex; align-items: center; justify-content: space-between; gap: 0.35rem; width: 100%; margin: 0 0 1rem; border: 1px solid var(--color-line); background: var(--color-surface); color: var(--color-accent-strong); padding: 0.45rem 0.55rem; font-family: var(--font-mono); font-size: 0.625rem; cursor: pointer; }
+  .workspace-agent-link:hover { border-color: var(--color-accent); }
 
   .canvas-tabs { display: flex; gap: 0.75rem; padding: 0.85rem 0; border-bottom: 1px solid var(--color-line); }
   .canvas-tabs button { padding: 0; border: 0; border-bottom: 1px solid transparent; background: transparent; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6875rem; cursor: pointer; }
@@ -466,6 +468,70 @@
   .audit-artifact-preview { padding-top: 0.25rem; }
   .audit-artifact-head h3 { margin: 0.4rem 0 0.85rem; font-size: 1rem; line-height: 1.4; overflow-wrap: anywhere; }
   .audit-artifact-preview pre { max-height: calc(100dvh - 20rem); margin: 0; overflow: auto; padding: 0.75rem; background: var(--color-ink); color: var(--color-paper); font-family: var(--font-mono); font-size: 0.6875rem; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+}
+
+/* Workspace Agent control plane. Configuration is intentionally outside the
+   transcript: it publishes immutable versions consumed by future sessions. */
+@layer components {
+  .agent-workbench { min-height: 100dvh; display: flex; flex-direction: column; background: var(--color-paper); }
+  .agent-brand { display: inline-flex; align-items: center; gap: 0.7rem; font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.08em; }
+  .agent-config-grid { min-height: min(48rem, calc(100dvh - 3.5rem)); flex: 1; display: grid; grid-template-columns: 15rem minmax(34rem, 1fr) 17rem; overflow: hidden; }
+  .agent-config-sidebar, .agent-config-meta { min-height: 0; overflow: auto; background: var(--color-surface); padding: 1rem; }
+  .agent-config-sidebar { border-right: 1px solid var(--color-line); }
+  .agent-config-meta { border-left: 1px solid var(--color-line); }
+  .agent-config-list { display: grid; gap: 0.25rem; margin-top: 0.65rem; }
+  .agent-config-item { display: grid; grid-template-columns: 1.4rem minmax(0, 1fr); align-items: center; gap: 0.55rem; width: 100%; border: 1px solid transparent; background: transparent; color: var(--color-ink); padding: 0.55rem 0.45rem; text-align: left; cursor: pointer; }
+  .agent-config-item:hover, .agent-config-item.active { border-color: var(--color-line); background: var(--color-paper); }
+  .agent-config-item.active { box-shadow: inset 2px 0 var(--color-accent); }
+  .agent-config-item-mark { display: grid; place-items: center; }
+  .agent-config-item > span:last-child { display: grid; gap: 0.12rem; min-width: 0; }
+  .agent-config-item strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8125rem; }
+  .agent-config-item small, .agent-config-note, .agent-version-panel small, .agent-capability-row small, .agent-version-history small { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6rem; line-height: 1.45; }
+  .agent-config-note { margin: 1rem 0.35rem; padding-top: 0.85rem; border-top: 1px solid var(--color-line); }
+  .agent-config-editor { min-width: 0; overflow: auto; padding: 1.5rem clamp(1.25rem, 4vw, 4rem) 2.5rem; }
+  .agent-config-titlebar { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding-bottom: 1.25rem; border-bottom: 2px solid var(--color-rule); }
+  .agent-config-titlebar h1 { margin: 0.25rem 0 0; font-size: 1.6rem; line-height: 1.2; letter-spacing: 0; }
+  .agent-config-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.45rem; }
+  .agent-form { display: grid; gap: 1.05rem; max-width: 52rem; padding-top: 1.5rem; }
+  .agent-form label { display: grid; gap: 0.4rem; }
+  .agent-form label > span { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.625rem; letter-spacing: 0.08em; text-transform: uppercase; }
+  .agent-form input, .agent-form select, .agent-form textarea { width: 100%; border: 1px solid var(--color-line); background: var(--color-surface); color: var(--color-ink); padding: 0.6rem 0.7rem; font: inherit; border-radius: 0; }
+  .agent-form select { font-family: var(--font-mono); font-size: 0.75rem; }
+  .agent-form-row { display: grid; grid-template-columns: minmax(0, 1fr) 8rem; gap: 1rem; }
+  .agent-prompt-label { margin-top: 0.5rem; }
+  .agent-prompt-label textarea { min-height: 32rem; resize: vertical; background: var(--color-ink); color: var(--color-paper); font-family: var(--font-mono); font-size: 0.75rem; line-height: 1.75; }
+  .agent-version-panel, .agent-capability-panel, .agent-version-history { display: grid; gap: 0.45rem; padding: 0 0 1.1rem; margin-bottom: 1.1rem; border-bottom: 1px solid var(--color-line); }
+  .agent-version-panel strong { color: var(--color-accent-strong); font-family: var(--font-mono); font-size: 1.4rem; }
+  .agent-capability-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: baseline; padding: 0.35rem 0; border-bottom: 1px dotted var(--color-line); font-size: 0.78rem; }
+  .agent-capability-row b { color: var(--color-accent-strong); font-family: var(--font-mono); font-size: 0.7rem; }
+  .agent-capability-row small { grid-column: 1 / -1; }
+  .agent-capability-row.muted { color: var(--color-muted); }
+  .agent-version-history > div { display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.18rem 0; }
+  .agent-version-history strong { font-family: var(--font-mono); font-size: 0.7rem; }
+  .agent-back-button { display: inline-flex; align-items: center; gap: 0.4rem; border: 0; background: transparent; color: var(--color-accent-strong); padding: 0; font-family: var(--font-mono); font-size: 0.6875rem; cursor: pointer; }
+  .agent-back-button svg { transform: rotate(90deg); }
+  .agent-skill-drawer { display: grid; gap: 1rem; border-top: 2px solid var(--color-rule); padding: 1.5rem max(1.25rem, calc((100% - 52rem) / 2)); background: var(--color-surface); }
+  .agent-skill-drawer-head { display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
+  .agent-skill-drawer-head h2 { margin: 0.25rem 0 0; font-size: 1.15rem; letter-spacing: 0; }
+  .agent-skill-drawer-head > span { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.65rem; }
+  .agent-skill-import { display: grid; grid-template-columns: minmax(10rem, 1fr) minmax(10rem, 1fr) auto; gap: 0.5rem; }
+  .agent-skill-import input, .agent-connector-import input, .agent-connector-import select { min-width: 0; border: 1px solid var(--color-line); background: var(--color-paper); color: var(--color-ink); padding: 0.5rem 0.6rem; font-family: var(--font-mono); font-size: 0.7rem; }
+  .agent-connector-import { display: grid; grid-template-columns: minmax(8rem, 0.7fr) minmax(9rem, 0.8fr) minmax(14rem, 1.4fr) minmax(12rem, 1fr) auto; gap: 0.5rem; }
+  .agent-skill-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.5rem; }
+  .agent-skill-item { display: grid; grid-template-columns: 1rem minmax(0, 1fr); gap: 0.55rem; border: 1px solid var(--color-line); background: var(--color-paper); padding: 0.65rem; cursor: pointer; }
+  .agent-skill-item.selected { border-color: var(--color-accent); box-shadow: inset 2px 0 var(--color-accent); }
+  .agent-skill-item input { margin: 0.18rem 0 0; accent-color: var(--color-accent); }
+  .agent-skill-item span { display: grid; gap: 0.2rem; min-width: 0; }
+  .agent-skill-item strong { font-size: 0.8rem; }
+  .agent-skill-item small, .agent-skill-item em { overflow: hidden; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6rem; font-style: normal; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+  .agent-skill-item:has(.connector-test-button) { grid-template-columns: 1rem minmax(0, 1fr) auto; align-items: start; }
+  .connector-test-button { border: 1px solid var(--color-line); background: transparent; color: var(--color-accent-strong); padding: 0.28rem 0.45rem; font-family: var(--font-mono); font-size: 0.6rem; cursor: pointer; }
+  .connector-test-button:hover:not(:disabled) { border-color: var(--color-accent); background: var(--color-surface); }
+  .connector-test-button:disabled { cursor: wait; opacity: 0.6; }
+  .connector-status.ready { color: var(--color-success); }
+  .connector-status.error { color: #b03a28; }
+  @media (max-width: 64rem) { .agent-config-grid { grid-template-columns: 13rem minmax(0, 1fr); } .agent-config-meta { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; border-top: 1px solid var(--color-line); border-left: 0; } .agent-version-panel, .agent-capability-panel, .agent-version-history { margin: 0; border-bottom: 0; } .agent-connector-import { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 46rem) { .agent-config-grid { grid-template-columns: 1fr; overflow: auto; } .agent-config-sidebar, .agent-config-editor, .agent-config-meta { overflow: visible; } .agent-config-sidebar { border-right: 0; border-bottom: 1px solid var(--color-line); } .agent-config-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } .agent-config-editor { padding: 1rem; } .agent-config-titlebar { display: grid; } .agent-config-actions { justify-content: flex-start; } .agent-form-row, .agent-config-meta, .agent-skill-import, .agent-connector-import { grid-template-columns: 1fr; } }
 }
 
 @media (max-width: 960px) {
@@ -619,6 +685,47 @@
 
   .fw-assistant-turn { display: grid; gap: 0.5rem; margin-bottom: 1rem; }
 
+  /* Cloudflare Workshop-style transcript: one role row owns all parts of a turn. */
+  .fw-message { display: flex; align-items: flex-start; gap: 0.7rem; max-width: 52rem; margin: 0 0 1.35rem; }
+  .fw-message-avatar { display: grid; width: 1.5rem; height: 1.5rem; flex: 0 0 1.5rem; place-items: center; border-radius: 50%; background: var(--color-surface-strong); color: var(--color-accent-strong); font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700; }
+  .fw-message-avatar.assistant { background: var(--color-accent); color: var(--color-accent-ink); }
+  .fw-message-column { display: grid; min-width: 0; flex: 1; gap: 0.55rem; }
+  .fw-message-meta { display: flex; align-items: baseline; gap: 0.55rem; min-height: 1.5rem; }
+  .fw-message-meta strong { font-size: 0.75rem; font-weight: 700; color: var(--color-ink); }
+  .fw-message-meta span { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6rem; }
+  .fw-message-content { min-width: 0; color: var(--color-ink); font-size: 0.875rem; line-height: 1.65; overflow-wrap: anywhere; }
+  .fw-message.user .fw-message-content { padding: 0.65rem 0.8rem; border: 1px solid var(--color-line); background: var(--color-surface); }
+  .fw-execution-tree { position: relative; display: grid; gap: 0; margin: 0.05rem 0 0.15rem; padding: 0.1rem 0 0.1rem 1.15rem; }
+  .fw-execution-tree::before { position: absolute; top: 0; bottom: 0.2rem; left: 0.34rem; width: 1px; background: var(--color-line); content: ""; }
+  .fw-execution-tree > .fw-message-content { margin-bottom: 0.35rem; }
+
+  /* Execution tree: each tool is a branch, not a standalone card. */
+  .tool-card { position: relative; width: 100%; max-width: none; margin: 0; overflow: visible; border: 0; border-radius: 0; background: transparent; }
+  .tool-card::before { position: absolute; top: 1.08rem; left: -0.81rem; width: 0.81rem; height: 1px; background: var(--color-line); content: ""; }
+  .tool-card-trigger { display: flex; width: 100%; min-height: 2.15rem; align-items: center; gap: 0.5rem; border: 0; border-radius: 0.3rem; background: transparent; color: var(--color-ink); padding: 0.38rem 0.4rem; text-align: left; cursor: pointer; }
+  .tool-card-trigger:hover { background: color-mix(in oklab, var(--color-accent) 5%, transparent); }
+  .tool-card-glyph { position: relative; z-index: 1; display: grid; width: 1rem; height: 1rem; flex: 0 0 1rem; place-items: center; border-radius: 50%; background: var(--color-paper); color: var(--color-muted); }
+  .tool-card.running .tool-card-glyph { color: var(--color-accent); animation: tool-pulse 1s ease-in-out infinite; }
+  .tool-card.completed .tool-card-glyph { color: var(--color-success); }
+  .tool-card.failed .tool-card-glyph { color: #b03a28; }
+  .tool-card-label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; }
+  .tool-card-duration { flex: 0 0 auto; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6rem; }
+  .tool-card-chevron { flex: 0 0 auto; color: var(--color-muted); transition: transform var(--animate-dur-fast) var(--ease-out); }
+  .tool-card-chevron.open { transform: rotate(180deg); }
+  .tool-card-detail { display: grid; gap: 0.6rem; max-height: 18rem; margin: 0 0 0.25rem 1.5rem; overflow: auto; border-left: 1px solid var(--color-line); padding: 0.45rem 0.65rem; background: color-mix(in oklab, var(--color-surface-strong) 42%, var(--color-surface)); }
+  .tool-card-detail-section { display: grid; gap: 0.25rem; }
+  .tool-card-detail-label { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.58rem; letter-spacing: 0.08em; text-transform: uppercase; }
+  .tool-card-detail pre { margin: 0; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.68rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .tool-card-live-note { color: var(--color-accent-strong); font-family: var(--font-mono); font-size: 0.62rem; }
+
+  .fw-subtask-row { position: relative; display: flex; align-items: center; gap: 0.5rem; min-height: 2.15rem; padding: 0.38rem 0.4rem; background: transparent; }
+  .fw-subtask-row::before { position: absolute; top: 1.08rem; left: -0.81rem; width: 0.81rem; height: 1px; background: var(--color-line); content: ""; }
+  .fw-subtask-icon { display: grid; width: 1rem; height: 1rem; place-items: center; color: var(--color-accent); }
+  .fw-subtask-copy { display: grid; min-width: 0; flex: 1; gap: 0.1rem; }
+  .fw-subtask-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; font-weight: 600; }
+  .fw-subtask-copy small, .fw-subtask-state { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6rem; }
+  .fw-subtask-state { flex: 0 0 auto; }
+
   /* 思考过程（可折叠） */
   .fw-reasoning { border-left: 2px solid var(--color-line); padding-left: 0.6rem; }
   .fw-reasoning-toggle { display: inline-flex; align-items: center; gap: 0.3rem; background: none; border: 0; cursor: pointer; font-family: var(--font-mono); font-size: 0.625rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-muted); padding: 0.15rem 0; }
@@ -634,15 +741,38 @@
   .fw-permission-note { margin: 0.5rem 0 0.75rem; font-size: 0.8125rem; color: var(--color-muted); }
   .fw-feedback-input { flex: 1; min-width: 8rem; border: 1px solid var(--color-line); background: var(--color-surface); padding: 0.4rem 0.6rem; font-size: 0.8125rem; font-family: var(--font-serif); color: var(--color-ink); border-radius: var(--radius-input); }
 
-  /* 任务清单（置顶） */
-  .fw-todo { border: 1px solid var(--color-line); border-radius: var(--radius-card); background: var(--color-surface); padding: 0.7rem 0.9rem; margin-bottom: 0.9rem; }
-  .fw-todo-head { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--font-mono); font-size: 0.625rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-muted); margin-bottom: 0.5rem; }
-  .fw-todo-list { display: grid; gap: 0.3rem; margin: 0; padding: 0; list-style: none; }
-  .fw-todo-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; }
-  .fw-todo-item.completed .fw-todo-content { color: var(--color-muted); text-decoration: line-through; }
-  .fw-todo-item.cancelled .fw-todo-content { color: var(--color-muted); }
-  .fw-todo-marker { display: inline-flex; width: 0.9rem; height: 0.9rem; align-items: center; justify-content: center; border: 1px solid var(--color-line); border-radius: 50%; color: var(--color-success); flex: none; }
-  .fw-todo-item.in_progress .fw-todo-marker { border-color: var(--color-accent); }
+  /* Task Plan: a compact execution rail, distinct from ordinary content cards. */
+  .fw-todo { margin: 0 0 1rem; padding: 0.75rem 0.8rem 0.7rem; border: 1px solid var(--color-line); border-left: 2px solid var(--color-accent); border-radius: 0.55rem; background: color-mix(in oklab, var(--color-surface) 94%, var(--color-paper)); }
+  .fw-todo-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 0.55rem; }
+  .fw-todo-heading { display: flex; align-items: baseline; gap: 0.55rem; }
+  .fw-todo-kicker { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.58rem; letter-spacing: 0.1em; text-transform: uppercase; }
+  .fw-todo-heading strong { color: var(--color-accent-strong); font-family: var(--font-mono); font-size: 0.62rem; font-weight: 600; }
+  .fw-todo-progress { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.62rem; }
+  .fw-todo-progress b { color: var(--color-ink); font-weight: 700; }
+  .fw-todo-summary { display: flex; justify-content: space-between; gap: 1rem; min-width: 0; margin-bottom: 0.45rem; color: var(--color-ink); font-size: 0.78rem; line-height: 1.35; }
+  .fw-todo-summary span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fw-todo-summary span:last-child { flex: 0 0 auto; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6rem; }
+  .fw-todo-progressbar { height: 3px; margin-bottom: 0.65rem; overflow: hidden; background: var(--color-surface-strong); }
+  .fw-todo-progressbar span { display: block; height: 100%; background: var(--color-accent); transition: width 220ms var(--ease-out); }
+  .fw-todo-list { position: relative; display: grid; gap: 0; margin: 0; padding: 0 0 0 0.15rem; list-style: none; }
+  .fw-task-node { position: relative; }
+  .fw-task-node:not(:last-child)::before { position: absolute; z-index: 0; top: 1.35rem; bottom: -0.1rem; left: 0.47rem; width: 1px; background: var(--color-line); content: ""; }
+  .fw-task-node-trigger { position: relative; z-index: 1; display: grid; width: 100%; min-height: 2rem; grid-template-columns: 1rem minmax(0, 1fr) auto auto; align-items: center; gap: 0.45rem; border: 0; border-radius: 0.35rem; background: transparent; color: var(--color-ink); padding: 0.35rem 0.25rem; text-align: left; cursor: pointer; }
+  .fw-task-node-trigger:hover { background: color-mix(in oklab, var(--color-accent) 5%, transparent); }
+  .fw-task-node-trigger:disabled { cursor: default; }
+  .fw-task-node-trigger:disabled:hover { background: transparent; }
+  .fw-task-node-marker { display: inline-flex; width: 0.9rem; height: 0.9rem; align-items: center; justify-content: center; border: 1px solid var(--color-line); border-radius: 50%; background: var(--color-surface); color: var(--color-success); }
+  .fw-task-node.in_progress .fw-task-node-marker { border-color: var(--color-accent); }
+  .fw-task-node-copy { display: flex; min-width: 0; align-items: baseline; gap: 0.45rem; }
+  .fw-task-node-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.76rem; font-weight: 600; }
+  .fw-task-node-index { flex: 0 0 auto; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.55rem; }
+  .fw-task-node-state { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.55rem; }
+  .fw-task-node.completed .fw-task-node-copy strong { color: var(--color-muted); text-decoration: line-through; }
+  .fw-task-node.in_progress .fw-task-node-copy strong, .fw-task-node.in_progress .fw-task-node-state { color: var(--color-accent-strong); }
+  .fw-task-executions { position: relative; display: grid; gap: 0; margin: 0 0 0.15rem 1.3rem; padding: 0.05rem 0 0.1rem 1rem; }
+  .fw-task-executions::before { position: absolute; top: 0; bottom: 0.2rem; left: 0.35rem; width: 1px; background: var(--color-line); content: ""; }
+  .fw-task-executions .tool-card::before { left: -0.65rem; width: 0.65rem; }
+  .fw-task-executions .tool-card-detail { margin-left: 1.3rem; }
   .fw-todo-spinner { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--color-accent); animation: fw-pulse 1s var(--ease-out) infinite; }
   @keyframes fw-pulse { 50% { opacity: 0.25; } }
 
