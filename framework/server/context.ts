@@ -7,6 +7,7 @@ import { createRelayModel, createRelayStreamFunction } from "@/lib/relay-agent-s
 import { buildExecSnapshot } from "@/lib/sandbox-snapshot";
 import { runSandboxCommandAndStream } from "@/lib/sandbox-execution";
 import { FrameworkSessionModel } from "@/framework/core/session/mongo-models";
+import { resolveAgentVersion } from "@/lib/agents";
 
 /** Process-wide runner singleton assembled from the framework package + the
  *  product's Mongo/relay/OpenSandbox adapters (M5 §3). */
@@ -65,6 +66,17 @@ function getOrCreateRunner(): SessionRunner {
       const workspace = createMongoWorkspaceFiles({ userId: session.userId, workspaceId: session.workspaceId });
       const { agents } = await loadCustomAgents(workspace);
       return agents;
+    },
+    agentResolver: {
+      resolve: (session) => {
+        if (!session.agentVersionId) return Promise.resolve(null);
+        return resolveAgentVersion({
+          userId: session.userId,
+          workspaceId: session.workspaceId,
+          ...(session.agentId ? { agentId: session.agentId } : {}),
+          agentVersionId: session.agentVersionId,
+        });
+      },
     },
     subagentDepth: 1,
     compaction: { enabled: true, contextWindow: 128_000, summaryModel: createRelayModel("gpt-5.6-luna") },

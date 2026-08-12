@@ -11,7 +11,7 @@ import type { PermissionRequest, Reply } from "@/framework/core/permission/engin
 
 export type { MessageWithParts, Part, SessionInfo, SessionStatus, PermissionRequest, Reply };
 
-export type AgentSummary = { name: string; description: string; mode: "primary" | "subagent" | "all" };
+export type AgentSummary = { id?: string; name: string; description: string; mode?: "primary" | "subagent" | "all"; icon?: string; publishedVersionId?: string | null };
 
 export type TodoItem = { content: string; status: "pending" | "in_progress" | "completed" | "cancelled"; priority?: "high" | "medium" | "low" };
 
@@ -35,14 +35,14 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const fwApi = {
   listSessions: (workspaceId?: string) => requestJson<{ sessions: SessionInfo[] }>(`/api/fw/sessions${workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ""}`),
-  createSession: (input: { workspaceId: string; agent?: string; model: { providerId: string; modelId: string }; prompt?: string }) =>
+  createSession: (input: { workspaceId: string; agentId?: string; model: { providerId: string; modelId: string }; prompt?: string }) =>
     requestJson<{ session: SessionInfo }>("/api/fw/sessions", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
     }),
   getSession: (sessionId: string) => requestJson<SessionSnapshot>(`/api/fw/sessions/${encodeURIComponent(sessionId)}`),
-  prompt: (sessionId: string, input: { text: string; agent?: string }) =>
+  prompt: (sessionId: string, input: { text: string }) =>
     requestJson<{ accepted: boolean; queued: boolean }>(`/api/fw/sessions/${encodeURIComponent(sessionId)}/prompt`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -56,6 +56,7 @@ export const fwApi = {
       body: JSON.stringify({ reply, ...(feedback ? { feedback } : {}) }),
     }),
   listAgents: () => requestJson<{ agents: AgentSummary[] }>("/api/fw/agents"),
+  listWorkspaceAgents: (workspaceId: string) => requestJson<{ agents: AgentSummary[] }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/agents`),
 };
 
 export type LiveState = {

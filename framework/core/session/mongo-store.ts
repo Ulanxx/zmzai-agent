@@ -16,6 +16,8 @@ function toSessionInfo(record: FrameworkSessionRecord): SessionInfo {
     ...(record.parentId ? { parentId: record.parentId } : {}),
     title: record.title,
     agent: record.agent,
+    ...(record.agentId ? { agentId: record.agentId } : {}),
+    ...(record.agentVersionId ? { agentVersionId: record.agentVersionId } : {}),
     model,
     permission: (record.permission ?? []).map((rule) => ({ permission: rule.permission, pattern: rule.pattern, action: rule.action })),
     queuedPrompts: (record.queuedPrompts ?? []).map((prompt) => ({
@@ -40,6 +42,8 @@ export const mongoSessionStore: SessionStore = {
       ...(info.parentId ? { parentId: info.parentId } : {}),
       title: info.title,
       agent: info.agent,
+      ...(info.agentId ? { agentId: info.agentId } : {}),
+      ...(info.agentVersionId ? { agentVersionId: info.agentVersionId } : {}),
       model: info.model,
       permission: info.permission,
       queuedPrompts: info.queuedPrompts,

@@ -9,6 +9,7 @@ const workspaceSchema = new Schema(
     currentRevisionId: { type: String, default: null },
     defaultModel: { type: String, required: true, maxlength: 160 },
     approvalMode: { type: String, enum: ["always"], required: true, default: "always" },
+    defaultAgentId: { type: String, default: null },
   },
   { strict: "throw", timestamps: true },
 );

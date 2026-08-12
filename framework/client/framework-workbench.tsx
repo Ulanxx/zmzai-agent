@@ -29,7 +29,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [prompt, setPrompt] = useState("");
-  const [agent, setAgent] = useState("default");
+  const [agentId, setAgentId] = useState<string | null>(null);
   const [model, setModel] = useState("");
   const [sending, setSending] = useState(false);
   const [replying, setReplying] = useState(false);
@@ -56,6 +56,15 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    void fwApi.listWorkspaceAgents(workspaceId).then((result) => {
+      const available = result.agents.filter((item) => item.publishedVersionId !== null);
+      setAgents(available);
+      setAgentId((current) => current && available.some((item) => item.id === current) ? current : available[0]?.id ?? null);
+    }).catch(() => setAgents([]));
+  }, [workspaceId]);
 
   // Align workspace with the loaded session, then list its sessions. The
   // setState calls are deferred so the effect body stays free of sync updates.
@@ -95,7 +104,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
       if (!workspaceId || !model) return;
       setSending(true);
       try {
-        const result = await fwApi.createSession({ workspaceId, agent, model: { providerId: "relay", modelId: model }, prompt: text });
+        const result = await fwApi.createSession({ workspaceId, ...(agentId ? { agentId } : {}), model: { providerId: "relay", modelId: model }, prompt: text });
         setPrompt("");
         router.push(`/fw/s/${result.session.id}`);
       } catch (cause) {
@@ -108,14 +117,14 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
 
     setSending(true);
     try {
-      await fwApi.prompt(snapshot.session.id, { text, agent });
+      await fwApi.prompt(snapshot.session.id, { text });
       setPrompt("");
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : "发送失败");
     } finally {
       setSending(false);
     }
-  }, [prompt, sending, snapshot, workspaceId, model, agent, router]);
+  }, [prompt, sending, snapshot, workspaceId, model, agentId, router]);
 
   const replyPermission = useCallback(
     async (reply: Reply, feedback?: string) => {
@@ -269,12 +278,12 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
             }}
           >
             <div className="composer-controls">
-              <select value={agent} onChange={(event) => setAgent(event.target.value)} aria-label="Agent">
-                {(agents.length ? agents : [{ name: "default", description: "", mode: "primary" as const }]).map((item) => (
-                  <option key={item.name} value={item.name}>
+              <select value={agentId ?? ""} onChange={(event) => setAgentId(event.target.value || null)} aria-label="Agent" disabled={!agents.length}>
+                {agents.length ? agents.map((item) => (
+                  <option key={item.id ?? item.name} value={item.id ?? item.name}>
                     {item.name}
                   </option>
-                ))}
+                )) : <option value="">项目暂无可用 Agent</option>}
               </select>
               <select value={model} onChange={(event) => setModel(event.target.value)} aria-label="模型" disabled={!models.length}>
                 {models.length ? models.map((item) => <option key={item.model} value={item.model}>{item.model}</option>) : <option>模型目录不可用</option>}

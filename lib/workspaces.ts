@@ -10,6 +10,7 @@ export type WorkspaceSummary = {
   currentRevisionId?: string | null;
   defaultModel: string;
   approvalMode: "always";
+  defaultAgentId?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -21,6 +22,7 @@ function toWorkspaceSummary(workspace: {
   currentRevisionId?: string | null;
   defaultModel: string;
   approvalMode: "always";
+  defaultAgentId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }): WorkspaceSummary {
@@ -31,6 +33,7 @@ function toWorkspaceSummary(workspace: {
     currentRevisionId: workspace.currentRevisionId ?? null,
     defaultModel: workspace.defaultModel,
     approvalMode: workspace.approvalMode,
+    defaultAgentId: workspace.defaultAgentId ?? null,
     createdAt: workspace.createdAt.toISOString(),
     updatedAt: workspace.updatedAt.toISOString(),
   };

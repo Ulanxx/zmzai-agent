@@ -83,6 +83,13 @@ describe("mongoSessionStore sessions", () => {
     expect(sessionModel.create).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "ses_1", workspaceId: "ws_1", title: "测试会话" }));
   });
 
+  it("createSession persists the immutable Agent binding when present", async () => {
+    await mongoSessionStore.createSession(sessionInfo({ agentId: "agt_1", agentVersionId: "agtver_1" }));
+    expect(sessionModel.create).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: "agt_1", agentVersionId: "agtver_1" }),
+    );
+  });
+
   it("getSession maps the record back to SessionInfo", async () => {
     sessionModel.findOne.mockReturnValue(lean(sessionRecord()));
     const session = await mongoSessionStore.getSession("ses_1");
@@ -92,6 +99,11 @@ describe("mongoSessionStore sessions", () => {
   it("getSession returns null when missing", async () => {
     sessionModel.findOne.mockReturnValue(lean(null));
     expect(await mongoSessionStore.getSession("ses_x")).toBeNull();
+  });
+
+  it("getSession restores the immutable Agent binding", async () => {
+    sessionModel.findOne.mockReturnValue(lean(sessionRecord({ agentId: "agt_1", agentVersionId: "agtver_1" })));
+    await expect(mongoSessionStore.getSession("ses_1")).resolves.toMatchObject({ agentId: "agt_1", agentVersionId: "agtver_1" });
   });
 
   it("updateSession only sets provided fields and bumps time.updated", async () => {

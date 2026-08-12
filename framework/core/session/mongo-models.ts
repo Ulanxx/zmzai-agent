@@ -26,6 +26,8 @@ const frameworkSessionSchema = new Schema(
     parentId: { type: String, required: false, immutable: true },
     title: { type: String, required: true },
     agent: { type: String, required: true },
+    agentId: { type: String, required: false, immutable: true },
+    agentVersionId: { type: String, required: false, immutable: true },
     model: {
       providerId: { type: String, required: true },
       modelId: { type: String, required: true },
