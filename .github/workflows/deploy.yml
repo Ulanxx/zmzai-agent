@@ -1,18 +1,24 @@
 name: deploy
 
+# 部署优化方案 A：构建在 GitHub 托管 runner 完成，产物直传香港服务器秒切。
+# 服务器端只做：解压 → 软链切换 → pm2 重启（见 /opt/zmzai/scripts/receive-deploy.sh）。
+# quality 里原先的 "Restore Linux SWC fallback" 步骤依赖服务器 /opt/zmzai/cache
+# 路径，仅对自托管 runner 有效；ubuntu-latest 上 @next/swc-linux-x64-gnu 原生安装，已删除。
+
 "on":
   push:
     branches: [main]
   workflow_dispatch: {}
 
+env:
+  APP_NAME: agent
+  HK_HOST: 149.88.84.189
+  HK_USER: root
+
 jobs:
   quality:
-    runs-on: [self-hosted, hk]
-    env:
-      PNPM_FETCH_TIMEOUT: "300000"
-      PNPM_FETCH_RETRIES: "5"
-      PNPM_NETWORK_CONCURRENCY: "1"
-      PNPM_STORE_DIR: "/home/runner/.pnpm-store"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -21,29 +27,62 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: pnpm install --frozen-lockfile --store-dir=/home/runner/.pnpm-store
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        env:
+          PNPM_FETCH_TIMEOUT: "300000"
+          PNPM_FETCH_RETRIES: "5"
       - run: pnpm test
       - run: pnpm run typecheck
       - run: pnpm run lint
-      - name: Restore Linux SWC fallback
-        run: |
-          SWC_DIR="node_modules/.pnpm/@next+swc-linux-x64-gnu@15.5.21/node_modules/@next/swc-linux-x64-gnu"
-          if [ ! -f "$SWC_DIR/next-swc.linux-x64-gnu.node" ]; then
-            mkdir -p "$SWC_DIR"
-            tar -xzf /opt/zmzai/cache/next-swc-linux-x64-gnu-15.5.21.tgz --strip-components=1 -C "$SWC_DIR"
-          fi
-      - run: pnpm run build
 
   deploy:
     needs: quality
-    runs-on: [self-hosted, hk]
-    env:
-      APP_NAME: agent
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - name: Deploy
-        run: bash /opt/zmzai/scripts/deploy-app.sh ${APP_NAME}
-      # NOTE: the task-run active-lock migration step was removed with the old
-      # plan/build protocol (M1–M3 收尾). The legacy TaskRun/ChangeProposal/
-      # ExecutionProposal collections can be dropped manually once production
-      # is verified on the FW protocol — see docs/superpowers/plans/
-      # 2026-08-11-fw-protocol-acceptance.md.
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          PNPM_FETCH_TIMEOUT: "300000"
+          PNPM_FETCH_RETRIES: "5"
+
+      - name: Restore production env for build
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.HK_DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
+            ${HK_USER}@${HK_HOST} "envget ${APP_NAME}" > .env.production
+
+      - name: Build
+        run: pnpm build
+
+      - name: Pack artifact
+        run: |
+          FILES=".next package.json pnpm-lock.yaml pnpm-workspace.yaml"
+          for p in next.config.ts next.config.mjs next.config.js public messages content scripts middleware.ts src; do
+            [ -e "$p" ] && FILES="$FILES $p"
+          done
+          tar -czf /tmp/${APP_NAME}-${{ github.sha }}.tar.gz \
+            --exclude='node_modules' --exclude='.git' --exclude='.next/cache' \
+            --exclude='.env*' --exclude='.vercel' $FILES
+
+      - name: Upload & deploy to HK server
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
+            ${HK_USER}@${HK_HOST} "store ${APP_NAME} ${{ github.sha }}" \
+            < /tmp/${APP_NAME}-${{ github.sha }}.tar.gz
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
+            ${HK_USER}@${HK_HOST} "deploy ${APP_NAME} ${{ github.sha }}"
