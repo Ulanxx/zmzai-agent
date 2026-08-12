@@ -65,4 +65,15 @@ describe("relay stream empty-response handling", () => {
     expect(events.map((event) => event.type)).toContain("thinking_delta");
     expect(events.some((event) => event.type === "done")).toBe(true);
   });
+
+  it("normalizes PI's minimal reasoning level for Relay's strict API contract", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('data: {"choices":[{"delta":{"content":"好的"}}]}\n\ndata: [DONE]\n\n', { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const streamFn = createRelayStreamFunction({ userId: "user_1", taskRunId: "run_1" });
+
+    await collect(streamFn(createRelayModel("deepseek-v4-flash"), minimalContext(), { reasoning: "minimal" } as never) as never);
+
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as { reasoning_effort?: string };
+    expect(request.reasoning_effort).toBe("low");
+  });
 });

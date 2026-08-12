@@ -119,6 +119,13 @@ export function isRetryableRelayStatus(status: number): boolean {
   return [408, 500, 502, 503, 504].includes(status);
 }
 
+/** The PI SDK exposes a "minimal" thinking level while the Relay wire
+ * protocol begins at "low". Normalize it before serializing the request. */
+export function relayReasoningEffort(reasoning: SimpleStreamOptions["reasoning"]): "low" | "medium" | "high" | "xhigh" | "max" | undefined {
+  if (!reasoning) return undefined;
+  return reasoning === "minimal" ? "low" : reasoning;
+}
+
 export function createRelayStreamFunction(identity: { userId: string; taskRunId: string }): StreamFunction {
   return (model, context, options) => streamFromRelay(model, context, options, identity);
 }
@@ -135,6 +142,7 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
       return;
     }
 
+    const reasoningEffort = relayReasoningEffort(options?.reasoning);
     const requestBody = JSON.stringify({
       userId: identity.userId,
       taskRunId: identity.taskRunId,
@@ -145,7 +153,7 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
       tool_choice: context.tools?.length ? "auto" : "none",
       stream: true,
       ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
-      ...(options?.reasoning ? { reasoning_effort: options.reasoning } : {}),
+      ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
     });
 
     const fetchTurn = async (): Promise<Response> => {

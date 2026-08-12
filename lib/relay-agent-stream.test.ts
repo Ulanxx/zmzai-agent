@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isRetryableRelayStatus, mergeToolCallName } from "@/lib/relay-agent-stream";
+import { isRetryableRelayStatus, mergeToolCallName, relayReasoningEffort } from "@/lib/relay-agent-stream";
 
 describe("mergeToolCallName", () => {
   it("keeps a repeated full OpenAI-compatible tool name stable", () => {
@@ -20,5 +20,13 @@ describe("isRetryableRelayStatus", () => {
     expect(isRetryableRelayStatus(503)).toBe(true);
     expect(isRetryableRelayStatus(401)).toBe(false);
     expect(isRetryableRelayStatus(402)).toBe(false);
+  });
+});
+
+describe("relayReasoningEffort", () => {
+  it("maps the PI-only minimal level to Relay's lowest accepted level", () => {
+    expect(relayReasoningEffort("minimal")).toBe("low");
+    expect(relayReasoningEffort("high")).toBe("high");
+    expect(relayReasoningEffort(undefined)).toBeUndefined();
   });
 });
