@@ -176,8 +176,11 @@ export function MessageView({ entry: source, hideTools = false, sessionIdle = fa
     if (!pendingTools.length) return;
     const group = pendingTools;
     pendingTools = [];
-    if (hideTools) return;
-    rendered.push(<ToolGroupSummary key={`toolgroup-${keyCounter++}`} tools={group} expanded={toolGroupOpen} onToggle={() => setToolGroupOpen((v) => !v)} sessionIdle={sessionIdle} />);
+    // hideTools（todo 模式）下也显示折叠摘要——摘要是消息流的一部分，
+    // 不展开工具卡。但若该组只有 1 个且是 todo 工具，整组跳过（todo 由
+    // TodoChecklist 单独渲染，不重复）。
+    if (hideTools && group.length === 1 && group[0]!.tool === "todo") return;
+    rendered.push(<ToolGroupSummary key={`toolgroup-${keyCounter++}`} tools={hideTools ? group.filter((t) => t.tool !== "todo") : group} expanded={toolGroupOpen} onToggle={() => setToolGroupOpen((v) => !v)} sessionIdle={sessionIdle} />);
   };
   for (const part of parts) {
     if (part.type === "tool") {
