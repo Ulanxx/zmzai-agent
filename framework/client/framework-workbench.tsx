@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
 import { Icon } from "@/components/icon";
@@ -36,6 +36,7 @@ async function fetchList<T>(url: string, key: string): Promise<T[]> {
 
 export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { snapshot, live, loading, loadError } = useFrameworkSession(sessionId);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [models, setModels] = useState<Model[]>([]);
@@ -54,6 +55,10 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   const [creatingWs, setCreatingWs] = useState(false);
   // 窄屏下 sidebar 可收起（按钮仅在 48rem 以下显示）。
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Workspace 重命名/删除（F2）：重命名内联编辑，删除需二次确认。
+  const [renamingWs, setRenamingWs] = useState<string | null>(null);
+  const [renamingName, setRenamingName] = useState("");
+  const [confirmDeleteWs, setConfirmDeleteWs] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [followScroll, setFollowScroll] = useState(true);
@@ -101,6 +106,42 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
       setActionError(cause instanceof Error ? cause.message : "创建 Workspace 失败");
     }
   }, [model]);
+
+  const renameWorkspace = useCallback(async (id: string) => {
+    const name = renamingName.trim();
+    if (!name) {
+      setRenamingWs(null);
+      return;
+    }
+    try {
+      const response = await fetch(`/api/workspaces/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const body = (await response.json()) as { workspace?: WorkspaceSummary; error?: string };
+      if (!response.ok) throw new Error(body.error ?? "重命名失败");
+      if (body.workspace) setWorkspaces((current) => current.map((item) => (item.id === id ? body.workspace! : item)));
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "重命名失败");
+    } finally {
+      setRenamingWs(null);
+    }
+  }, [renamingName]);
+
+  const removeWorkspace = useCallback(async (id: string) => {
+    try {
+      const response = await fetch(`/api/workspaces/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("删除失败");
+      setWorkspaces((current) => current.filter((item) => item.id !== id));
+      setWorkspaceId((current) => (current === id ? null : current));
+      setSessions([]);
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "删除失败");
+    } finally {
+      setConfirmDeleteWs(null);
+    }
+  }, []);
 
   // Bootstrap: agents, models, workspaces, and this workspace's session list.
   useEffect(() => {
@@ -257,8 +298,8 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               ← 返回
             </a>
           )}
-          <a href="/fw">新任务</a>
-          <a href="/audit">运行审计</a>
+          <a href="/fw" className={pathname === "/fw" ? "active" : ""}>新任务</a>
+          <a href="/audit" className={pathname === "/audit" ? "active" : ""}>运行审计</a>
         </nav>
         <div className="workbench-status">
           {user && (
@@ -310,13 +351,74 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
           )}
           <nav className="workspace-list" aria-label="Workspace 列表">
             {workspaces.map((item) => (
-              <button type="button" key={item.id} className={item.id === workspaceId ? "workspace-item active" : "workspace-item"} onClick={() => setWorkspaceId(item.id)}>
-                <span>{item.name}</span>
-              </button>
+              <div key={item.id} className={item.id === workspaceId ? "workspace-item-wrap active" : "workspace-item-wrap"}>
+                {renamingWs === item.id ? (
+                  <form
+                    className="workspace-rename"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void renameWorkspace(item.id);
+                    }}
+                  >
+                    <input value={renamingName} onChange={(event) => setRenamingName(event.target.value)} autoFocus maxLength={120} aria-label="Workspace 名称" />
+                    <button type="submit" className="icon-command" title="保存">
+                      <Icon name="check" />
+                    </button>
+                  </form>
+                ) : (
+                  <button type="button" className="workspace-item" onClick={() => setWorkspaceId(item.id)}>
+                    <span>{item.name}</span>
+                  </button>
+                )}
+                <div className="workspace-item-actions">
+                  {item.defaultAgentId && (
+                    <button
+                      type="button"
+                      className="icon-command"
+                      title="配置 Agent"
+                      onClick={() => router.push(`/fw/w/${item.id}/agents/${item.defaultAgentId}`)}
+                    >
+                      <Icon name="settings" size={12} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="icon-command"
+                    title="重命名"
+                    onClick={() => {
+                      setRenamingWs(item.id);
+                      setRenamingName(item.name);
+                      setConfirmDeleteWs(null);
+                    }}
+                  >
+                    <Icon name="edit" size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-command danger"
+                    title={confirmDeleteWs === item.id ? "确认删除" : "删除"}
+                    onClick={() => setConfirmDeleteWs(confirmDeleteWs === item.id ? null : item.id)}
+                  >
+                    <Icon name="trash" size={12} />
+                  </button>
+                </div>
+                {confirmDeleteWs === item.id && (
+                  <div className="workspace-delete-confirm">
+                    <span>删除后会话、产物、文件版本全部清除，不可恢复。</span>
+                    <div>
+                      <button type="button" onClick={() => void removeWorkspace(item.id)}>
+                        确认删除
+                      </button>
+                      <button type="button" onClick={() => setConfirmDeleteWs(null)}>
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             ))}
           </nav>
           <section className="run-history">
-            {workspaceId && agentId && <button type="button" className="workspace-agent-link" onClick={() => router.push(`/fw/w/${workspaceId}/agents/${agentId}`)}>配置 Agent <Icon name="chevron-down" size={12} /></button>}
             <div className="pane-heading">
               <span>会话</span>
               <small>{sessions.length}</small>

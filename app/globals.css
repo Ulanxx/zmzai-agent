@@ -297,6 +297,28 @@
   .workspace-item.active { box-shadow: inset 3px 0 var(--color-accent); }
   .workspace-item span { font-size: 0.9375rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .workspace-item small, .empty-state { font-family: var(--font-mono); font-size: 0.625rem; color: var(--color-muted); }
+  /* F2：Workspace 项 = 主按钮 + 操作列（重命名/删除）+ 删除确认条 */
+  .workspace-item-wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.15rem;
+    border: 1px solid transparent;
+  }
+  .workspace-item-wrap:hover, .workspace-item-wrap.active { border-color: var(--color-line); background: var(--color-paper); }
+  .workspace-item-wrap.active .workspace-item { box-shadow: inset 3px 0 var(--color-accent); }
+  .workspace-item-wrap .workspace-item { border: 0; }
+  .workspace-item-wrap .workspace-item:hover { border: 0; background: transparent; }
+  .workspace-item-actions { display: flex; gap: 0.1rem; padding-right: 0.3rem; opacity: 0; transition: opacity var(--animate-dur-fast) var(--ease-out); }
+  .workspace-item-wrap:hover .workspace-item-actions, .workspace-item-wrap.active .workspace-item-actions { opacity: 1; }
+  .workspace-item-actions .icon-command { padding: 0.25rem; }
+  .workspace-item-actions .icon-command.danger:hover { color: #b03a28; }
+  .workspace-rename { display: flex; gap: 0.3rem; align-items: center; padding: 0.35rem 0.4rem; min-width: 0; }
+  .workspace-rename input { min-width: 0; flex: 1; border: 1px solid var(--color-accent); background: var(--color-paper); color: var(--color-ink); padding: 0.3rem 0.4rem; font-size: 0.85rem; }
+  .workspace-delete-confirm { grid-column: 1 / -1; display: grid; gap: 0.35rem; padding: 0.5rem 0.6rem; border-top: 1px dashed var(--color-line); font-size: 0.72rem; color: var(--color-muted); }
+  .workspace-delete-confirm div { display: flex; gap: 0.5rem; justify-content: flex-end; }
+  .workspace-delete-confirm button { border: 1px solid var(--color-line); background: transparent; color: var(--color-ink); padding: 0.25rem 0.55rem; font-family: var(--font-mono); font-size: 0.65rem; cursor: pointer; }
+  .workspace-delete-confirm button:first-child { border-color: #b03a28; color: #b03a28; }
   .empty-state { padding: 0.75rem 0.5rem; line-height: 1.7; }
   .run-history, .file-tree, .revision-list { margin-top: 1.35rem; }
   .run-history-list { display: grid; gap: 0.2rem; margin-top: 0.45rem; }
@@ -416,6 +438,8 @@
   .audit-nav-link.active { border-bottom: 1px solid var(--color-accent); padding-bottom: 0.15rem; }
   .workbench-nav { font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-muted); }
   .workbench-nav a:hover { color: var(--color-accent); }
+  /* F3：当前页导航高亮（与 audit-nav-link.active 同风格） */
+  .workbench-nav a.active { color: var(--color-accent); border-bottom: 1px solid var(--color-accent); padding-bottom: 0.15rem; }
 
   .audit-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(22rem, 1fr) minmax(26rem, 1.15fr); overflow: hidden; }
   .audit-list-pane { min-width: 0; min-height: 0; overflow-y: auto; border-right: 1px solid var(--color-line); padding: 1rem 0.75rem; background: color-mix(in oklab, var(--color-surface) 92%, var(--color-paper)); }

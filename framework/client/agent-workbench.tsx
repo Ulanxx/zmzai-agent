@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { Icon } from "@/components/icon";
 import { Seal } from "@/components/seal";
@@ -30,6 +30,7 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
 
 export function AgentWorkbench({ workspaceId, agentId }: { workspaceId: string; agentId: string }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [detail, setDetail] = useState<AgentDetail | null>(null);
   const [models, setModels] = useState<Model[]>([]);
@@ -256,7 +257,7 @@ export function AgentWorkbench({ workspaceId, agentId }: { workspaceId: string; 
     <main className="agent-workbench">
       <header className="workbench-header">
         <a href="/fw" className="agent-brand"><Seal size={26} className="agent-seal" /><span>ZMZAI AGENT</span></a>
-        <nav className="workbench-nav" aria-label="主导航"><a href="/fw">会话</a><a href="/audit">运行审计</a></nav>
+        <nav className="workbench-nav" aria-label="主导航"><a href="/fw" className={pathname === "/fw" || pathname.startsWith("/fw/s/") || pathname.startsWith("/fw/w/") ? "active" : ""}>会话</a><a href="/audit" className={pathname === "/audit" ? "active" : ""}>运行审计</a></nav>
         <span className="workbench-status"><span className="status-dot" />AGENT CONFIG</span>
       </header>
       {error && <div className="workbench-alert">{error}</div>}
