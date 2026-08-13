@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import { Icon } from "@/components/icon";
@@ -256,8 +257,8 @@ export function AgentWorkbench({ workspaceId, agentId }: { workspaceId: string; 
   return (
     <main className="agent-workbench">
       <header className="workbench-header">
-        <a href="/fw" className="agent-brand"><Seal size={26} className="agent-seal" /><span>ZMZAI AGENT</span></a>
-        <nav className="workbench-nav" aria-label="主导航"><a href="/fw" className={pathname === "/fw" || pathname.startsWith("/fw/s/") || pathname.startsWith("/fw/w/") ? "active" : ""}>会话</a><a href="/audit" className={pathname === "/audit" ? "active" : ""}>运行审计</a></nav>
+        <Link href="/fw" className="agent-brand"><Seal size={26} className="agent-seal" /><span>ZMZAI AGENT</span></Link>
+        <nav className="workbench-nav" aria-label="主导航"><Link href="/fw" className={pathname === "/fw" || pathname.startsWith("/fw/s/") || pathname.startsWith("/fw/w/") ? "active" : ""}>会话</Link><Link href="/audit" className={pathname === "/audit" ? "active" : ""}>运行审计</Link></nav>
         <span className="workbench-status"><span className="status-dot" />AGENT CONFIG</span>
       </header>
       {error && <div className="workbench-alert">{error}</div>}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { DiffView } from "@/components/diff-view";
 import { Icon } from "@/components/icon";
@@ -35,6 +35,39 @@ function toolDuration(part: Extract<Part, { type: "tool" }>): string | null {
 }
 
 type ToolPart = Extract<Part, { type: "tool" }>;
+
+/** 工具折叠摘要（G1，借鉴 aipower「运行了 N 个工具」）：assistant 一轮里
+ *  的工具调用默认收起为一行摘要，点开才逐个展开工具卡。避免长任务对话被
+ *  工具卡淹没。运行中/出错/单条工具时直接展开（保持即时反馈）。 */
+function ToolGroupSummary({ tools, expanded, onToggle, sessionIdle }: { tools: ToolPart[]; expanded: boolean; onToggle: () => void; sessionIdle: boolean }) {
+  const running = tools.filter((t) => t.state.status === "running" || t.state.status === "pending");
+  const failed = tools.filter((t) => t.state.status === "error");
+  const done = tools.filter((t) => t.state.status === "completed");
+  // 运行中或有失败时默认展开，给即时反馈。
+  const autoExpand = running.length > 0 || failed.length > 0 || tools.length <= 1;
+  const open = expanded || autoExpand;
+  const glyph = failed.length > 0 ? "cross" : running.length > 0 ? "chevron-down" : "check";
+  const summary = [
+    running.length > 0 && `${running.length} 个进行中`,
+    failed.length > 0 && `${failed.length} 个失败`,
+    done.length > 0 && `${done.length} 个完成`,
+  ].filter(Boolean).join(" · ");
+  return (
+    <div className="fw-tool-group">
+      <button type="button" className="fw-tool-group-trigger" aria-expanded={open} onClick={onToggle} disabled={autoExpand}>
+        <span className="tool-card-glyph" aria-hidden><Icon name={glyph as never} size={12} /></span>
+        <span className="fw-tool-group-label">运行了 {tools.length} 个工具</span>
+        {!autoExpand && <small>{summary}</small>}
+        <Icon name="chevron-down" size={12} className={open ? "tool-card-chevron open" : "tool-card-chevron"} />
+      </button>
+      {open && (
+        <div className="fw-tool-group-body">
+          {tools.map((part) => <ToolPartCard key={`${part.id}:${part.state.status}`} part={part} sessionIdle={sessionIdle} />)}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ToolPartCard({ part, sessionIdle = false }: { part: ToolPart; sessionIdle?: boolean }) {
   const [expanded, setExpanded] = useState(false);
@@ -108,6 +141,7 @@ function SubtaskPart({ part }: { part: Extract<Part, { type: "subtask" }> }) {
 }
 
 export function MessageView({ entry: source, hideTools = false, sessionIdle = false }: { entry: MessageWithParts | MessageWithParts[]; hideTools?: boolean; sessionIdle?: boolean }) {
+  const [toolGroupOpen, setToolGroupOpen] = useState(false);
   const entries = Array.isArray(source) ? source : [source];
   const entry = entries[0];
   if (!entry) return null;
@@ -117,36 +151,65 @@ export function MessageView({ entry: source, hideTools = false, sessionIdle = fa
       .map((part) => part.text)
       .join("\n");
     if (!text.trim()) return null;
-    return <div className="fw-message user"><span className="fw-message-avatar">你</span><div className="fw-message-column"><div className="fw-message-meta"><strong>你</strong><span>用户</span></div><div className="fw-message-content">{text}</div></div></div>;
+    const created = new Date(entry.info.time.created);
+    const timeLabel = Number.isNaN(created.getTime()) ? null : created.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+    return (
+      <div className="fw-message user">
+        <span className="fw-message-avatar">你</span>
+        <div className="fw-message-column">
+          <div className="fw-message-meta"><strong>你</strong>{timeLabel && <span>{timeLabel}</span>}</div>
+          <div className="fw-message-content">{text}</div>
+        </div>
+      </div>
+    );
   }
   const assistantEntries = entries.filter((item) => item.info.role === "assistant");
   const active = assistantEntries.some((item) => !("completed" in item.info.time) || !item.info.time.completed);
   const parts = entries.flatMap((item) => item.parts);
   const errorEntry = assistantEntries.find((item) => "error" in item.info && item.info.error);
   const error = errorEntry && "error" in errorEntry.info ? errorEntry.info.error : undefined;
-  const renderedParts = parts.map((part) => {
+  // 把连续的 tool parts 折叠为一组（G1）；其它 part 正常渲染。
+  const rendered: ReactNode[] = [];
+  let pendingTools: ToolPart[] = [];
+  let keyCounter = 0;
+  const flushTools = () => {
+    if (!pendingTools.length) return;
+    const group = pendingTools;
+    pendingTools = [];
+    if (hideTools) return;
+    rendered.push(<ToolGroupSummary key={`toolgroup-${keyCounter++}`} tools={group} expanded={toolGroupOpen} onToggle={() => setToolGroupOpen((v) => !v)} sessionIdle={sessionIdle} />);
+  };
+  for (const part of parts) {
+    if (part.type === "tool") {
+      pendingTools.push(part);
+      continue;
+    }
+    flushTools();
     switch (part.type) {
       case "text":
-        return <TextPart key={part.id} part={part} />;
+        rendered.push(<TextPart key={part.id} part={part} />);
+        break;
       case "reasoning":
-        return <ReasoningPart key={part.id} part={part} active={active} />;
-      case "tool":
-        return hideTools ? null : <ToolPartCard key={`${part.id}:${part.state.status}`} part={part} sessionIdle={sessionIdle} />;
+        rendered.push(<ReasoningPart key={part.id} part={part} active={active} />);
+        break;
       case "subtask":
-        return <SubtaskPart key={part.id} part={part} />;
-      case "step-start":
-      case "step-finish":
-        return null;
+        rendered.push(<SubtaskPart key={part.id} part={part} />);
+        break;
       default:
-        return null;
+        break;
     }
-  });
+  }
+  flushTools();
+  const firstCreated = assistantEntries[0]?.info.time.created;
+  const timeLabel = firstCreated && !Number.isNaN(new Date(firstCreated).getTime())
+    ? new Date(firstCreated).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
+    : null;
   return (
     <div className="fw-message assistant">
       <span className="fw-message-avatar assistant">使</span>
       <div className="fw-message-column">
-      <div className="fw-message-meta"><strong>ZMZAI Agent</strong><span>{active ? "执行中" : "已完成"}</span></div>
-      <div className="fw-execution-tree">{renderedParts}</div>
+      <div className="fw-message-meta"><strong>ZMZAI Agent</strong><span>{active ? "执行中" : "已完成"}</span>{timeLabel && <span className="fw-message-time">{timeLabel}</span>}</div>
+      <div className="fw-execution-tree">{rendered}</div>
       {error && <div className="run-note">出错了：{error.message}</div>}
       </div>
     </div>
