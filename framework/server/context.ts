@@ -40,6 +40,7 @@ function getOrCreateRunner(): SessionRunner {
           exitCode: result.exitCode,
           outputText: result.outputText,
           durationMs: result.durationMs,
+          ...(result.errorMessage ? { errorMessage: result.errorMessage } : {}),
           artifacts: result.artifacts.map((artifact) => {
             const previewable = /^(text\/html|image\/(png|jpeg|gif|svg\+xml|webp)|application\/pdf|text\/(plain|markdown|css))/.test(artifact.contentType.toLowerCase());
             const base = artifact.artifactId ? `/api/fw/sessions/${input.runId}/artifacts/${artifact.artifactId}` : null;
