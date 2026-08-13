@@ -59,6 +59,8 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   const [confirmDeleteWs, setConfirmDeleteWs] = useState<string | null>(null);
   // G3 会话搜索。
   const [sessionQuery, setSessionQuery] = useState("");
+  // 首页最近任务（跨 workspace）。
+  const [recentSessions, setRecentSessions] = useState<SessionInfo[]>([]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [followScroll, setFollowScroll] = useState(true);
@@ -158,6 +160,12 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
       }
     })();
   }, []);
+
+  // 首页最近任务（跨 workspace，无 session 时加载）。
+  useEffect(() => {
+    if (sessionId) return;
+    void fwApi.listSessions().then((result) => setRecentSessions(result.sessions.slice(0, 6))).catch(() => undefined);
+  }, [sessionId]);
 
   // Align workspace with the loaded session, then list its sessions. The
   // setState calls are deferred so the effect body stays free of sync updates.
@@ -313,6 +321,74 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
         </div>
       )}
 
+      {/* 首页态（Manus 式居中入口）：无任务时隐藏三栏，只显示居中入口 + 最近任务。 */}
+      {!snapshot && !loading && (
+        <div className="fw-home">
+          <div className="fw-home-hero">
+            <h1>今天想做些什么？</h1>
+            <div className="fw-quick-tasks" aria-label="快捷任务">
+              {[
+                { label: "生成 PPT", prompt: "帮我生成一份 10 页的季度汇报 PPT，包含封面、目录、核心数据、总结" },
+                { label: "写文档", prompt: "帮我写一份产品需求文档（PRD），包含背景、目标、功能点、验收标准" },
+                { label: "数据分析", prompt: "分析当前 Workspace 里的数据文件，给出关键指标和趋势总结" },
+                { label: "深度研究", prompt: "深度研究一个主题：先列出大纲，再逐节展开，最后给出参考资料" },
+              ].map((task) => (
+                <button key={task.label} type="button" className="fw-quick-task" onClick={() => setPrompt(task.prompt)}>
+                  {task.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <form
+            className="fw-home-composer"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void send();
+            }}
+          >
+            <div className="composer-controls">
+              <select value={workspaceId ?? ""} onChange={(event) => setWorkspaceId(event.target.value || null)} aria-label="智能体" disabled={!workspaces.length}>
+                {workspaces.length ? workspaces.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                )) : <option value="">请先创建智能体</option>}
+              </select>
+              <select value={model} onChange={(event) => setModel(event.target.value)} aria-label="模型" disabled={!models.length}>
+                {models.length ? models.map((item) => <option key={item.model} value={item.model}>{item.model}</option>) : <option>模型目录不可用</option>}
+              </select>
+            </div>
+            <textarea
+              ref={textareaRef}
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="描述要完成的任务…（Enter 发送）"
+              rows={3}
+            />
+            <div className="composer-actions">
+              <span>{workspaces.find((w) => w.id === workspaceId)?.name ?? "选择智能体"}</span>
+              <button type="submit" className="command-button" disabled={!prompt.trim() || sending || (!workspaceId)}>
+                {sending ? "发送中" : "开始任务"}
+              </button>
+            </div>
+          </form>
+          {recentSessions.length > 0 && (
+            <div className="fw-home-recent">
+              <span className="eyebrow">最近任务</span>
+              <div className="fw-task-cards">
+                {recentSessions.map((item) => (
+                  <button type="button" key={item.id} className="fw-task-card" onClick={() => router.push(`/fw/s/${item.id}`)}>
+                    <strong>{item.title}</strong>
+                    <small>{item.agent}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 任务态：三栏工作台。 */}
+      {snapshot && (
       <div className="fw-grid">
         <aside className={sidebarCollapsed ? "fw-sidebar collapsed" : "fw-sidebar"}>
           <div className="pane-heading">
@@ -461,25 +537,6 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               setFollowScroll(element.scrollHeight - element.scrollTop - element.clientHeight < 160);
             }}
           >
-            {!snapshot && (
-              <div className="agent-intro">
-                <span className="eyebrow">ZMZAI AGENT</span>
-                <h1>今天想做些什么？</h1>
-                <p>读取、改文件、跑命令都在隔离沙箱中自动进行。先选 Workspace，下方描述任务直接开始。</p>
-                <div className="fw-quick-tasks" aria-label="快捷任务">
-                  {[
-                    { label: "生成 PPT", prompt: "帮我生成一份 10 页的季度汇报 PPT，包含封面、目录、核心数据、总结" },
-                    { label: "写文档", prompt: "帮我写一份产品需求文档（PRD），包含背景、目标、功能点、验收标准" },
-                    { label: "数据分析", prompt: "分析当前 Workspace 里的数据文件，给出关键指标和趋势总结" },
-                    { label: "深度研究", prompt: "深度研究一个主题：先列出大纲，再逐节展开，最后给出参考资料" },
-                  ].map((task) => (
-                    <button key={task.label} type="button" className="fw-quick-task" onClick={() => setPrompt(task.prompt)}>
-                      {task.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
             {messages.map((entry, index) => (
               <MessageView key={Array.isArray(entry) ? `assistant-${index}-${entry[0]?.info.id}` : entry.info.id} entry={entry} hideTools={live.todos.length > 0} sessionIdle={live.status === "idle"} />
             ))}
@@ -577,6 +634,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
           )}
         </aside>
       </div>
+      )}
     </main>
   );
 }

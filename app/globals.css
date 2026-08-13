@@ -720,6 +720,19 @@
 
 /* ---- Framework 工作台（FW 协议页 /fw）---- */
 @layer components {
+  /* 首页态（Manus 式居中入口）：无任务时隐藏三栏 */
+  .fw-home { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2rem; padding: 4vh 2rem 6vh; overflow-y: auto; }
+  .fw-home-hero { text-align: center; max-width: 40rem; }
+  .fw-home-hero h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); line-height: 1.2; margin: 0 0 1.5rem; }
+  .fw-home-composer { width: 100%; max-width: 42rem; display: grid; gap: 0.6rem; background: var(--color-surface); border: 1px solid var(--color-line); padding: 1rem; }
+  .fw-home-recent { width: 100%; max-width: 42rem; }
+  .fw-home-recent .eyebrow { display: block; margin-bottom: 0.75rem; }
+  .fw-task-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 0.6rem; }
+  .fw-task-card { display: grid; gap: 0.2rem; border: 1px solid var(--color-line); background: var(--color-surface); padding: 0.75rem; text-align: left; cursor: pointer; transition: border-color var(--animate-dur-fast) var(--ease-out); }
+  .fw-task-card:hover { border-color: var(--color-accent); }
+  .fw-task-card strong { font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fw-task-card small { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.625rem; }
+
   .fw-grid { display: grid; grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr) minmax(16rem, 22rem); flex: 1 1 auto; height: auto; min-height: 0; overflow: hidden; }
   .fw-sidebar, .fw-canvas { background: color-mix(in oklab, var(--color-surface) 92%, var(--color-paper)); overflow: hidden; }
   .fw-sidebar { border-right: 1px solid var(--color-line); padding: 1rem 0.75rem; }
