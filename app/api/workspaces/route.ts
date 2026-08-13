@@ -7,7 +7,6 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { apiError, unauthenticated } from "@/lib/api-error";
 import { IdempotencyError, claimIdempotency } from "@/lib/idempotency";
 import { createWorkspace, getWorkspace, listWorkspaces } from "@/lib/workspaces";
-import { ensureDefaultAgent } from "@/lib/agents";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,12 +41,10 @@ export async function POST(request: NextRequest) {
       const workspace = await getWorkspace(user.id, claim.resourceId);
       if (workspace) return NextResponse.json({ workspace, replayed: true }, { headers: { "cache-control": "no-store" } });
       const recoveredWorkspace = await createWorkspace({ userId: user.id, ...parsed.data, workspaceId: claim.resourceId });
-      await ensureDefaultAgent({ userId: user.id, workspaceId: recoveredWorkspace.id });
       return NextResponse.json({ workspace: (await getWorkspace(user.id, recoveredWorkspace.id)) ?? recoveredWorkspace, replayed: true }, { status: 201, headers: { "cache-control": "no-store" } });
     }
 
     const workspace = await createWorkspace({ userId: user.id, ...parsed.data, workspaceId: claim.resourceId });
-    await ensureDefaultAgent({ userId: user.id, workspaceId: workspace.id });
     return NextResponse.json({ workspace: (await getWorkspace(user.id, workspace.id)) ?? workspace }, { status: 201, headers: { "cache-control": "no-store" } });
   } catch (error) {
     if (error instanceof IdempotencyError) return apiError(error.code, error.code === "IDEMPOTENCY_KEY_REQUIRED" ? 400 : 409, error.code === "IDEMPOTENCY_KEY_REQUIRED" ? "Idempotency-Key 必须是 16 到 128 个可打印字符" : "同一 Idempotency-Key 不能对应不同请求");

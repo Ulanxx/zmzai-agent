@@ -9,7 +9,6 @@ import { Seal } from "@/components/seal";
 import {
   fwApi,
   useFrameworkSession,
-  type AgentSummary,
   type ArtifactCard,
   type Reply,
   type SessionInfo,
@@ -21,7 +20,7 @@ type Workspace = { id: string; name: string; defaultModel: string };
 
 type CanvasTab = "artifacts" | "edits";
 
-type WorkspaceSummary = Workspace & { defaultAgentId?: string | null };
+type WorkspaceSummary = Workspace;
 
 async function fetchList<T>(url: string, key: string): Promise<T[]> {
   const response = await fetch(url, { cache: "no-store" });
@@ -39,13 +38,11 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   const router = useRouter();
   const pathname = usePathname();
   const { snapshot, live, loading, loadError } = useFrameworkSession(sessionId);
-  const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [models, setModels] = useState<Model[]>([]);
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [prompt, setPrompt] = useState("");
-  const [agentId, setAgentId] = useState<string | null>(null);
   const [model, setModel] = useState("");
   const [sending, setSending] = useState(false);
   const [replying, setReplying] = useState(false);
@@ -62,15 +59,11 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   const [confirmDeleteWs, setConfirmDeleteWs] = useState<string | null>(null);
   // G3 会话搜索。
   const [sessionQuery, setSessionQuery] = useState("");
-  // G5 斜杠菜单（/ 唤起 Agent 切换）。
-  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [followScroll, setFollowScroll] = useState(true);
   // 会话列表请求序号：快速切换 Workspace 时丢弃过期响应，避免旧列表覆盖新列表。
   const sessionsReqSeq = useRef(0);
-  // Agent 列表同理。
-  const agentsReqSeq = useRef(0);
 
   const busy = live.status !== "idle";
   const queuedCount = snapshot?.session.queuedPrompts.length ?? 0;
@@ -151,33 +144,20 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   // Bootstrap: agents, models, workspaces, and this workspace's session list.
   useEffect(() => {
     void (async () => {
-      const [agentResult, modelResult, workspaceResult] = await Promise.allSettled([
-        fwApi.listAgents(),
+      const [modelResult, workspaceResult] = await Promise.allSettled([
         fetchList<Model>("/api/models", "models"),
         fetchList<WorkspaceSummary>("/api/workspaces", "workspaces"),
       ]);
-      if (agentResult.status === "fulfilled") setAgents(agentResult.value.agents.filter((item) => item.mode !== "subagent"));
       if (modelResult.status === "fulfilled") setModels(modelResult.value);
       if (workspaceResult.status === "fulfilled") {
         setWorkspaces(workspaceResult.value);
         const first = workspaceResult.value[0];
         if (first) setWorkspaceId((current) => current ?? first.id);
       } else {
-        setActionError(workspaceResult.reason instanceof Error ? workspaceResult.reason.message : "无法加载项目列表");
+        setActionError(workspaceResult.reason instanceof Error ? workspaceResult.reason.message : "无法加载智能体列表");
       }
     })();
   }, []);
-
-  useEffect(() => {
-    if (!workspaceId) return;
-    const seq = ++agentsReqSeq.current;
-    void fwApi.listWorkspaceAgents(workspaceId).then((result) => {
-      if (seq !== agentsReqSeq.current) return; // 已切换 Workspace，丢弃过期响应
-      const available = result.agents.filter((item) => item.publishedVersionId !== null);
-      setAgents(available);
-      setAgentId((current) => current && available.some((item) => item.id === current) ? current : available[0]?.id ?? null);
-    }).catch(() => setAgents([]));
-  }, [workspaceId]);
 
   // Align workspace with the loaded session, then list its sessions. The
   // setState calls are deferred so the effect body stays free of sync updates.
@@ -226,7 +206,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
       if (!workspaceId || !model) return;
       setSending(true);
       try {
-        const result = await fwApi.createSession({ workspaceId, ...(agentId ? { agentId } : {}), model: { providerId: "relay", modelId: model }, prompt: text });
+        const result = await fwApi.createSession({ workspaceId, model: { providerId: "relay", modelId: model }, prompt: text });
         setPrompt("");
         router.push(`/fw/s/${result.session.id}`);
       } catch (cause) {
@@ -246,7 +226,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
     } finally {
       setSending(false);
     }
-  }, [prompt, sending, snapshot, workspaceId, model, agentId, router]);
+  }, [prompt, sending, snapshot, workspaceId, model, router]);
 
   const replyPermission = useCallback(
     async (reply: Reply, feedback?: string) => {
@@ -273,12 +253,6 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
       event.preventDefault();
       void send();
     }
-    // G5：斜杠唤起 Agent 切换（占位符已提示「/ 切换 Agent」）。
-    if (event.key === "/" && !event.shiftKey && prompt === "" && agents.length > 1) {
-      event.preventDefault();
-      setSlashMenuOpen(true);
-    }
-    if (event.key === "Escape") setSlashMenuOpen(false);
   };
 
   const openArtifact = useCallback((artifact: ArtifactCard) => {
@@ -345,7 +319,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
             <button type="button" className="icon-command fw-sidebar-toggle" title={sidebarCollapsed ? "展开侧栏" : "收起侧栏"} onClick={() => setSidebarCollapsed((value) => !value)}>
               <Icon name={sidebarCollapsed ? "chevron-down" : "cross"} size={14} />
             </button>
-            <span>WORKSPACE</span>
+            <span>智能体</span>
             <button type="button" className="icon-command" title="新建 Workspace" onClick={() => setCreatingWs((value) => !value)}>
               <Icon name="plus" />
             </button>
@@ -358,7 +332,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                 void createWorkspace(event);
               }}
             >
-              <input name="name" autoFocus maxLength={120} placeholder="Workspace 名称" />
+              <input name="name" autoFocus maxLength={120} placeholder="智能体名称" />
               <button type="submit">创建</button>
             </form>
           )}
@@ -373,7 +347,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                       void renameWorkspace(item.id);
                     }}
                   >
-                    <input value={renamingName} onChange={(event) => setRenamingName(event.target.value)} autoFocus maxLength={120} aria-label="Workspace 名称" />
+                    <input value={renamingName} onChange={(event) => setRenamingName(event.target.value)} autoFocus maxLength={120} aria-label="智能体名称" />
                     <button type="submit" className="icon-command" title="保存">
                       <Icon name="check" />
                     </button>
@@ -384,16 +358,14 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                   </button>
                 )}
                 <div className="workspace-item-actions">
-                  {item.defaultAgentId && (
-                    <button
-                      type="button"
-                      className="icon-command"
-                      title="配置 Agent"
-                      onClick={() => router.push(`/fw/w/${item.id}/agents/${item.defaultAgentId}`)}
-                    >
-                      <Icon name="settings" size={12} />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="icon-command"
+                    title="配置智能体"
+                    onClick={() => router.push(`/fw/w/${item.id}`)}
+                  >
+                    <Icon name="settings" size={12} />
+                  </button>
                   <button
                     type="button"
                     className="icon-command"
@@ -433,7 +405,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
           </nav>
           <section className="run-history">
             <div className="pane-heading">
-              <span>会话</span>
+              <span>任务</span>
               <small>{sessions.length}</small>
             </div>
             {sessions.length > 5 && (
@@ -454,7 +426,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                   <small>{item.agent}</small>
                 </button>
               ))}
-              {!sessions.length && <p className="empty-state">此 Workspace 还没有会话。</p>}
+              {!sessions.length && <p className="empty-state">此智能体还没有任务。</p>}
               {sessions.length > 0 && sessions.filter((item) => !sessionQuery.trim() || item.title.toLowerCase().includes(sessionQuery.trim().toLowerCase())).length === 0 && <p className="empty-state">没有匹配的会话。</p>}
             </nav>
           </section>
@@ -541,34 +513,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               void send();
             }}
           >
-            {slashMenuOpen && (
-              <div className="fw-slash-menu" role="listbox" aria-label="切换 Agent">
-                <div className="fw-slash-menu-head">切换 Agent · 按 Esc 关闭</div>
-                {agents.map((item) => (
-                  <button
-                    key={item.id ?? item.name}
-                    type="button"
-                    className={item.id === agentId ? "fw-slash-item active" : "fw-slash-item"}
-                    onClick={() => {
-                      setAgentId(item.id ?? null);
-                      setSlashMenuOpen(false);
-                      textareaRef.current?.focus();
-                    }}
-                  >
-                    <strong>{item.name}</strong>
-                    {item.description && <small>{item.description}</small>}
-                  </button>
-                ))}
-              </div>
-            )}
             <div className="composer-controls">
-              <select value={agentId ?? ""} onChange={(event) => setAgentId(event.target.value || null)} aria-label="Agent" disabled={!agents.length}>
-                {agents.length ? agents.map((item) => (
-                  <option key={item.id ?? item.name} value={item.id ?? item.name}>
-                    {item.name}
-                  </option>
-                )) : <option value="">项目暂无可用 Agent</option>}
-              </select>
               <select value={model} onChange={(event) => setModel(event.target.value)} aria-label="模型" disabled={!models.length}>
                 {models.length ? models.map((item) => <option key={item.model} value={item.model}>{item.model}</option>) : <option>模型目录不可用</option>}
               </select>
@@ -578,7 +523,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={snapshot ? (busy ? "Agent 正在执行，发送将排队…（/ 切换 Agent）" : "继续这条对话…（Enter 发送，Shift+Enter 换行，/ 切换 Agent）") : "描述要完成的任务…（/ 切换 Agent）"}
+              placeholder={snapshot ? (busy ? "智能体正在执行，发送将排队…" : "继续这条对话…（Enter 发送，Shift+Enter 换行）") : "描述要完成的任务…"}
               rows={3}
             />
             <div className="composer-actions">

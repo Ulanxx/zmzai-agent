@@ -10,7 +10,14 @@ export type WorkspaceSummary = {
   currentRevisionId?: string | null;
   defaultModel: string;
   approvalMode: "always";
-  defaultAgentId?: string | null;
+  // —— Agent 配置（Workspace = 智能体）——
+  prompt: string;
+  steps: number;
+  tools: string[];
+  skillIds: string[];
+  pluginIds: string[];
+  connectorIds: string[];
+  permission: Array<{ permission: string; pattern: string; action: "allow" | "deny" | "ask" }>;
   createdAt: string;
   updatedAt: string;
 };
@@ -22,10 +29,18 @@ function toWorkspaceSummary(workspace: {
   currentRevisionId?: string | null;
   defaultModel: string;
   approvalMode: "always";
-  defaultAgentId?: string | null;
+  prompt?: string;
+  steps?: number;
+  tools?: string[];
+  skillIds?: string[];
+  pluginIds?: string[];
+  connectorIds?: string[];
+  permission?: unknown;
   createdAt: Date;
   updatedAt: Date;
 }): WorkspaceSummary {
+  // permission 从 mongoose lean 出来是 plain array，类型断言对齐。
+  const permission = (Array.isArray(workspace.permission) ? workspace.permission : []) as Array<{ permission: string; pattern: string; action: "allow" | "deny" | "ask" }>;
   return {
     id: workspace.workspaceId,
     name: workspace.name,
@@ -33,13 +48,19 @@ function toWorkspaceSummary(workspace: {
     currentRevisionId: workspace.currentRevisionId ?? null,
     defaultModel: workspace.defaultModel,
     approvalMode: workspace.approvalMode,
-    defaultAgentId: workspace.defaultAgentId ?? null,
+    prompt: workspace.prompt ?? "",
+    steps: workspace.steps ?? 12,
+    tools: workspace.tools ?? [],
+    skillIds: workspace.skillIds ?? [],
+    pluginIds: workspace.pluginIds ?? [],
+    connectorIds: workspace.connectorIds ?? [],
+    permission,
     createdAt: workspace.createdAt.toISOString(),
     updatedAt: workspace.updatedAt.toISOString(),
   };
 }
 
-export async function createWorkspace(input: { workspaceId: string; userId: string; name: string; description: string; defaultModel: string }): Promise<WorkspaceSummary> {
+export async function createWorkspace(input: { workspaceId: string; userId: string; name: string; description: string; defaultModel: string; prompt?: string }): Promise<WorkspaceSummary> {
   const workspace = await WorkspaceModel.create({
     workspaceId: input.workspaceId,
     userId: input.userId,
@@ -47,6 +68,7 @@ export async function createWorkspace(input: { workspaceId: string; userId: stri
     description: input.description,
     defaultModel: input.defaultModel,
     approvalMode: "always",
+    ...(input.prompt ? { prompt: input.prompt } : {}),
   });
   return toWorkspaceSummary(workspace);
 }
@@ -63,11 +85,28 @@ export async function listWorkspaces(userId: string): Promise<WorkspaceSummary[]
   return workspaces.map(toWorkspaceSummary);
 }
 
-/** 重命名/更新 Workspace 基本信息。 */
-export async function updateWorkspace(userId: string, workspaceId: string, patch: { name?: string; description?: string }): Promise<WorkspaceSummary | null> {
-  const set: Record<string, string> = {};
+/** 重命名/更新描述/更新智能体配置。 */
+export async function updateWorkspace(userId: string, workspaceId: string, patch: {
+  name?: string;
+  description?: string;
+  prompt?: string;
+  steps?: number;
+  tools?: string[];
+  skillIds?: string[];
+  pluginIds?: string[];
+  connectorIds?: string[];
+  permission?: Array<{ permission: string; pattern: string; action: "allow" | "deny" | "ask" }>;
+}): Promise<WorkspaceSummary | null> {
+  const set: Record<string, unknown> = {};
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.description !== undefined) set.description = patch.description;
+  if (patch.prompt !== undefined) set.prompt = patch.prompt;
+  if (patch.steps !== undefined) set.steps = patch.steps;
+  if (patch.tools !== undefined) set.tools = patch.tools;
+  if (patch.skillIds !== undefined) set.skillIds = patch.skillIds;
+  if (patch.pluginIds !== undefined) set.pluginIds = patch.pluginIds;
+  if (patch.connectorIds !== undefined) set.connectorIds = patch.connectorIds;
+  if (patch.permission !== undefined) set.permission = patch.permission;
   if (!Object.keys(set).length) return getWorkspace(userId, workspaceId);
   const updated = await WorkspaceModel.findOneAndUpdate({ userId, workspaceId }, { $set: set }, { new: true }).lean();
   return updated ? toWorkspaceSummary(updated) : null;
@@ -86,7 +125,6 @@ export async function deleteWorkspace(userId: string, workspaceId: string): Prom
   const { FrameworkSessionModel, FrameworkMessageModel, FrameworkPartModel } = await import("@/framework/core/session/mongo-models");
   const { FrameworkEventModel, FrameworkSeqModel } = await import("@/framework/core/events/mongo-models");
   const { deleteRunArtifacts } = await import("@/lib/artifact-storage");
-  const { AgentModel, AgentVersionModel } = await import("@/models/agent");
   const { WorkspaceSkillModel } = await import("@/models/workspace-skill");
   const { WorkspacePluginModel } = await import("@/models/workspace-plugin");
   const { WorkspaceConnectorModel } = await import("@/models/workspace-connector");
@@ -110,8 +148,6 @@ export async function deleteWorkspace(userId: string, workspaceId: string): Prom
     WorkspaceSkillModel.deleteMany({ workspaceId }),
     WorkspacePluginModel.deleteMany({ workspaceId }),
     WorkspaceConnectorModel.deleteMany({ workspaceId }),
-    AgentModel.deleteMany({ workspaceId }),
-    AgentVersionModel.deleteMany({ workspaceId }),
     WorkspaceModel.deleteOne({ workspaceId }),
   ]);
   return true;

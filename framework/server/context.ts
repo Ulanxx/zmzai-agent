@@ -1,4 +1,4 @@
-import { AgentRegistry, SessionRunner, type SessionInfo, type ModelRef, type ToolContext, type PermissionEngine } from "@zmzai/agent-framework";
+import { AgentRegistry, SessionRunner, type SessionInfo, type ModelRef, type ToolContext, type PermissionEngine, type Ruleset } from "@zmzai/agent-framework";
 import { loadCustomAgents } from "@zmzai/agent-framework";
 import { mongoEventLog } from "@/framework/core/events/mongo-event-log";
 import { mongoSessionStore } from "@/framework/core/session/mongo-store";
@@ -7,7 +7,7 @@ import { createRelayModel, createRelayStreamFunction } from "@/lib/relay-agent-s
 import { buildExecSnapshot } from "@/lib/sandbox-snapshot";
 import { runSandboxCommandAndStream } from "@/lib/sandbox-execution";
 import { FrameworkSessionModel } from "@/framework/core/session/mongo-models";
-import { resolveAgentVersion } from "@/lib/agents";
+import { getWorkspace } from "@/lib/workspaces";
 
 /** Process-wide runner singleton assembled from the framework package + the
  *  product's Mongo/relay/OpenSandbox adapters (M5 §3). */
@@ -69,14 +69,22 @@ function getOrCreateRunner(): SessionRunner {
       return agents;
     },
     agentResolver: {
-      resolve: (session) => {
-        if (!session.agentVersionId) return Promise.resolve(null);
-        return resolveAgentVersion({
-          userId: session.userId,
-          workspaceId: session.workspaceId,
-          ...(session.agentId ? { agentId: session.agentId } : {}),
-          agentVersionId: session.agentVersionId,
-        });
+      // Workspace = 智能体：从 workspace 文档读 prompt/steps/permission，
+      // 返回 ResolvedAgent。不再走 AgentVersion（已废弃）。
+      resolve: async (session) => {
+        const ws = await getWorkspace(session.userId, session.workspaceId);
+        if (!ws) return null;
+        return {
+          agent: {
+            name: ws.name || "default",
+            description: ws.description || undefined,
+            mode: "primary",
+            model: { providerId: "relay", modelId: ws.defaultModel },
+            prompt: ws.prompt || undefined,
+            steps: ws.steps,
+            permission: ws.permission as Ruleset,
+          },
+        };
       },
     },
     subagentDepth: 1,

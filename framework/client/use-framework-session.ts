@@ -35,7 +35,7 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const fwApi = {
   listSessions: (workspaceId?: string) => requestJson<{ sessions: SessionInfo[] }>(`/api/fw/sessions${workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ""}`),
-  createSession: (input: { workspaceId: string; agentId?: string; model: { providerId: string; modelId: string }; prompt?: string }) =>
+  createSession: (input: { workspaceId: string; model: { providerId: string; modelId: string }; prompt?: string }) =>
     requestJson<{ session: SessionInfo }>("/api/fw/sessions", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -56,7 +56,6 @@ export const fwApi = {
       body: JSON.stringify({ reply, ...(feedback ? { feedback } : {}) }),
     }),
   listAgents: () => requestJson<{ agents: AgentSummary[] }>("/api/fw/agents"),
-  listWorkspaceAgents: (workspaceId: string) => requestJson<{ agents: AgentSummary[] }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/agents`),
 };
 
 export type LiveState = {
