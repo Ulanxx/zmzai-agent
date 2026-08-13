@@ -471,10 +471,12 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                 <p>读取、改文件、跑命令都在隔离沙箱中自动进行；文件改动生成可回滚版本，命令执行首次需要一次授权。左侧选择 Workspace，下方直接开始。</p>
               </div>
             )}
-            <TodoChecklist todos={live.todos} tools={taskTools} />
             {messages.map((entry, index) => (
               <MessageView key={Array.isArray(entry) ? `assistant-${index}-${entry[0]?.info.id}` : entry.info.id} entry={entry} hideTools={live.todos.length > 0} sessionIdle={live.status === "idle"} />
             ))}
+            {/* 执行计划放在对话流末尾：它属于 Agent 回复的产物，钉在顶部会
+                把用户消息压到下面（用户反馈"我的消息在 Agent 下面"）。 */}
+            <TodoChecklist todos={live.todos} tools={taskTools} />
             {live.pendingPermission && <PermissionCard request={live.pendingPermission} busy={replying} onReply={(reply, feedback) => void replyPermission(reply, feedback)} />}
             {live.error && <div className="run-note">{live.error}</div>}
             {!followScroll && (
