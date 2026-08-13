@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
 import { Icon } from "@/components/icon";
 import { Seal } from "@/components/seal";
@@ -50,12 +50,57 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   const [canvasTab, setCanvasTab] = useState<CanvasTab>("artifacts");
   const [preview, setPreview] = useState<ArtifactCard | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const [creatingWs, setCreatingWs] = useState(false);
+  // 窄屏下 sidebar 可收起（按钮仅在 48rem 以下显示）。
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [followScroll, setFollowScroll] = useState(true);
+  // 会话列表请求序号：快速切换 Workspace 时丢弃过期响应，避免旧列表覆盖新列表。
+  const sessionsReqSeq = useRef(0);
+  // Agent 列表同理。
+  const agentsReqSeq = useRef(0);
 
   const busy = live.status !== "idle";
   const queuedCount = snapshot?.session.queuedPrompts.length ?? 0;
+
+  // 当前登录用户（header 展示 + 退出）。
+  useEffect(() => {
+    void fetch("/api/fw/me", { cache: "no-store" })
+      .then((response) => (response.ok ? (response.json() as Promise<{ user: { name: string; email: string } }>) : null))
+      .then((body) => setUser(body?.user ?? null))
+      .catch(() => setUser(null));
+  }, []);
+
+  const logout = useCallback(async () => {
+    await fetch("/api/fw/logout", { method: "POST" }).catch(() => undefined);
+    router.push("/fw");
+    router.refresh();
+  }, [router]);
+
+  const createWorkspace = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const name = String(form.get("name") ?? "").trim();
+    if (!name || !model) return;
+    setCreatingWs(false);
+    try {
+      const response = await fetch("/api/workspaces", {
+        method: "POST",
+        headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
+        body: JSON.stringify({ name, description: "", defaultModel: model }),
+      });
+      const body = (await response.json()) as { workspace?: WorkspaceSummary; error?: string };
+      if (!response.ok) throw new Error(body.error ?? "创建失败");
+      if (body.workspace) {
+        setWorkspaces((current) => [body.workspace!, ...current]);
+        setWorkspaceId(body.workspace.id);
+      }
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "创建 Workspace 失败");
+    }
+  }, [model]);
 
   // Bootstrap: agents, models, workspaces, and this workspace's session list.
   useEffect(() => {
@@ -79,7 +124,9 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
 
   useEffect(() => {
     if (!workspaceId) return;
+    const seq = ++agentsReqSeq.current;
     void fwApi.listWorkspaceAgents(workspaceId).then((result) => {
+      if (seq !== agentsReqSeq.current) return; // 已切换 Workspace，丢弃过期响应
       const available = result.agents.filter((item) => item.publishedVersionId !== null);
       setAgents(available);
       setAgentId((current) => current && available.some((item) => item.id === current) ? current : available[0]?.id ?? null);
@@ -95,7 +142,13 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
 
   useEffect(() => {
     if (!workspaceId) return;
-    void fwApi.listSessions(workspaceId).then((result) => setSessions(result.sessions)).catch(() => undefined);
+    const seq = ++sessionsReqSeq.current;
+    void fwApi.listSessions(workspaceId)
+      .then((result) => {
+        if (seq !== sessionsReqSeq.current) return; // 已切换 Workspace，丢弃过期响应
+        setSessions(result.sessions);
+      })
+      .catch(() => undefined);
   }, [workspaceId, snapshot?.session.time.updated]);  
 
   // Initialize the model once models/workspace are known. Works for BOTH a new
@@ -199,10 +252,23 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
           <span className="font-mono text-sm font-bold tracking-[0.08em]">ZMZAI AGENT</span>
         </div>
         <nav className="workbench-nav" aria-label="主导航">
+          {sessionId && (
+            <a href="/fw" className="fw-back-link" title="返回工作台">
+              ← 返回
+            </a>
+          )}
           <a href="/fw">新任务</a>
           <a href="/audit">运行审计</a>
         </nav>
         <div className="workbench-status">
+          {user && (
+            <span className="fw-user" title={user.email}>
+              {user.name}
+            </span>
+          )}
+          <button type="button" className="icon-command" title="退出登录" onClick={() => void logout()}>
+            <Icon name="logout" size={14} />
+          </button>
           <span className="status-dot" />
           AGENT <span className="header-domain">a.zmzai.cloud</span>
         </div>
@@ -220,10 +286,28 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
       )}
 
       <div className="fw-grid">
-        <aside className="fw-sidebar">
+        <aside className={sidebarCollapsed ? "fw-sidebar collapsed" : "fw-sidebar"}>
           <div className="pane-heading">
+            <button type="button" className="icon-command fw-sidebar-toggle" title={sidebarCollapsed ? "展开侧栏" : "收起侧栏"} onClick={() => setSidebarCollapsed((value) => !value)}>
+              <Icon name={sidebarCollapsed ? "chevron-down" : "cross"} size={14} />
+            </button>
             <span>WORKSPACE</span>
+            <button type="button" className="icon-command" title="新建 Workspace" onClick={() => setCreatingWs((value) => !value)}>
+              <Icon name="plus" />
+            </button>
           </div>
+          {creatingWs && (
+            <form
+              className="workspace-create"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void createWorkspace(event);
+              }}
+            >
+              <input name="name" autoFocus maxLength={120} placeholder="Workspace 名称" />
+              <button type="submit">创建</button>
+            </form>
+          )}
           <nav className="workspace-list" aria-label="Workspace 列表">
             {workspaces.map((item) => (
               <button type="button" key={item.id} className={item.id === workspaceId ? "workspace-item active" : "workspace-item"} onClick={() => setWorkspaceId(item.id)}>
@@ -287,7 +371,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
             )}
             <TodoChecklist todos={live.todos} tools={taskTools} />
             {messages.map((entry, index) => (
-              <MessageView key={Array.isArray(entry) ? `assistant-${index}-${entry[0]?.info.id}` : entry.info.id} entry={entry} hideTools={live.todos.length > 0} />
+              <MessageView key={Array.isArray(entry) ? `assistant-${index}-${entry[0]?.info.id}` : entry.info.id} entry={entry} hideTools={live.todos.length > 0} sessionIdle={live.status === "idle"} />
             ))}
             {live.pendingPermission && <PermissionCard request={live.pendingPermission} busy={replying} onReply={(reply, feedback) => void replyPermission(reply, feedback)} />}
             {live.error && <div className="run-note">{live.error}</div>}

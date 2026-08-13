@@ -180,7 +180,20 @@ export function useFrameworkSession(sessionId: string | null) {
           const status = (frame as { status: SessionStatus }).status;
           // A session error belongs to one run. Once a new run starts, do not
           // keep rendering the previous run's failure under its new response.
-          return { ...current, status, ...(status === "running" || status === "waiting_permission" ? { error: null } : {}) };
+          const errorCleared = status === "running" || status === "waiting_permission" ? { error: null } : {};
+          // Leftover projection folding: while idle, no run is alive, so a
+          // pending permission card or in-flight todos are leftovers from an
+          // interrupted run — fold them instead of rendering them forever.
+          if (status === "idle") {
+            return {
+              ...current,
+              status,
+              ...errorCleared,
+              pendingPermission: null,
+              todos: current.todos.map((item) => (item.status === "pending" || item.status === "in_progress" ? { ...item, status: "cancelled" as const } : item)),
+            };
+          }
+          return { ...current, status, ...errorCleared };
         }
         if (type === "session.error") return { ...current, error: (frame as { message: string }).message, status: "idle" };
         if (type === "todo.updated") return { ...current, todos: (frame as { todos: TodoItem[] }).todos };

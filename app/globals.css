@@ -544,7 +544,11 @@
 @media (max-width: 680px) {
   .workbench-header { padding: 0 0.8rem; }
   .header-domain, .workbench-status { font-size: 0.56rem; }
-  .workbench-nav { display: none; }
+  /* 旧 workbench 窄屏隐藏导航；fw-workbench 保留（改为可横向滚动，见下） */
+  .workbench:not(.fw-workbench) .workbench-nav { display: none; }
+  .fw-workbench .workbench-nav { display: flex; gap: 0.5rem; overflow-x: auto; white-space: nowrap; }
+  .fw-workbench .workbench-status { gap: 0.35rem; }
+  .fw-workbench .fw-user { max-width: 6rem; }
   .workbench-grid { display: block; height: auto; overflow: visible; }
   .workspace-pane { overflow: visible; }
   .workspace-pane { border-right: 0; border-bottom: 1px solid var(--color-line); padding: 0.75rem; }
@@ -679,6 +683,11 @@
   .fw-grid { display: grid; grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr) minmax(16rem, 22rem); flex: 1 1 auto; height: auto; min-height: 0; overflow: hidden; }
   .fw-sidebar, .fw-canvas { background: color-mix(in oklab, var(--color-surface) 92%, var(--color-paper)); overflow: hidden; }
   .fw-sidebar { border-right: 1px solid var(--color-line); padding: 1rem 0.75rem; }
+  /* 收起/展开按钮：仅窄屏显示（见 48rem 断点），桌面常驻隐藏 */
+  .fw-sidebar-toggle { display: none; }
+  /* 标题栏左侧多了 toggle 按钮：改为左对齐 + 新建按钮仍靠右 */
+  .fw-sidebar .pane-heading { justify-content: flex-start; gap: 0.45rem; }
+  .fw-sidebar .pane-heading .icon-command:last-child { margin-left: auto; }
   .fw-canvas { border-left: 1px solid var(--color-line); padding: 1rem; display: flex; flex-direction: column; min-height: 0; }
   .fw-canvas-body { display: grid; gap: 0.6rem; align-content: start; margin-top: 0.75rem; }
   .fw-conversation { display: flex; min-height: 0; flex-direction: column; padding: 1rem 1.25rem; }
@@ -805,7 +814,70 @@
 }
 @media (max-width: 48rem) {
   .fw-grid { display: grid; grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) auto; }
-  .fw-sidebar { border-right: 0; border-bottom: 1px solid var(--color-line); max-height: 10rem; }
+  .fw-sidebar { border-right: 0; border-bottom: 1px solid var(--color-line); max-height: 10rem; overflow-y: auto; }
   .fw-conversation { grid-row: 2; }
   .fw-canvas { grid-row: 3; max-height: 12rem; }
+  /* 窄屏 sidebar 可收起：标题栏常驻，收起时只露标题 */
+  .fw-sidebar .fw-sidebar-toggle { display: inline-flex; }
+  .fw-sidebar.collapsed { max-height: 2.9rem; overflow: hidden; }
+  .fw-sidebar.collapsed .workspace-list,
+  .fw-sidebar.collapsed .run-history,
+  .fw-sidebar.collapsed .workspace-agent-link,
+  .fw-sidebar.collapsed .workspace-create { display: none; }
+}
+
+/* ---- P1 交互修复：返回导航 + 用户展示 ---- */
+@layer components {
+  .fw-back-link {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    color: var(--color-accent-strong);
+    margin-right: 0.25rem;
+  }
+  .fw-back-link:hover { text-decoration: underline; }
+  .fw-user {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-ink);
+    max-width: 10rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* ---- P1 配置页：能力区折叠 + 开发中徽标 ---- */
+@layer components {
+  .agent-skill-drawer > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .agent-skill-drawer > summary::-webkit-details-marker { display: none; }
+  .agent-skill-drawer > summary::before {
+    content: "▸";
+    font-size: 0.75rem;
+    color: var(--color-muted);
+    transition: transform var(--animate-dur-fast) var(--ease-out);
+  }
+  .agent-skill-drawer[open] > summary::before { transform: rotate(90deg); }
+  .agent-skill-drawer > summary .eyebrow { margin-left: 0.25rem; }
+  .agent-wip-badge {
+    display: inline-block;
+    font-style: normal;
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+    padding: 0.05rem 0.35rem;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+  }
 }

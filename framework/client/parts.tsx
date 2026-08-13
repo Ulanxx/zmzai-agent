@@ -36,13 +36,17 @@ function toolDuration(part: Extract<Part, { type: "tool" }>): string | null {
 
 type ToolPart = Extract<Part, { type: "tool" }>;
 
-function ToolPartCard({ part }: { part: ToolPart }) {
+function ToolPartCard({ part, sessionIdle = false }: { part: ToolPart; sessionIdle?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const state = part.state;
   const running = state.status === "running" || state.status === "pending";
+  // A tool stuck in a non-terminal state while the session is idle is a
+  // leftover from an interrupted run (crash/restart) — render it as such
+  // instead of "waiting" forever.
+  const interrupted = running && sessionIdle;
   const title = state.status === "completed" ? state.title : state.status === "running" ? (state.title ?? part.tool) : part.tool;
   const output = state.status === "completed" ? state.output : state.status === "error" ? state.error : null;
-  const statusClass = state.status === "completed" ? "completed" : state.status === "error" ? "failed" : "running";
+  const statusClass = state.status === "completed" ? "completed" : interrupted ? "failed" : state.status === "error" ? "failed" : "running";
 
   // Running tools are always open. Once a terminal state arrives, `expanded`
   // remains false unless the user explicitly opens the output.
@@ -51,7 +55,7 @@ function ToolPartCard({ part }: { part: ToolPart }) {
   return (
     <div className={`tool-card ${statusClass}`}>
       <button type="button" className="tool-card-trigger" aria-expanded={isOpen} onClick={() => setExpanded((value) => !value)}>
-        <span className="tool-card-glyph" aria-hidden><Icon name={state.status === "completed" ? "check" : state.status === "error" ? "cross" : "chevron-down"} size={12} /></span>
+        <span className="tool-card-glyph" aria-hidden><Icon name={state.status === "completed" ? "check" : interrupted || state.status === "error" ? "cross" : "chevron-down"} size={12} /></span>
         <span className="tool-card-label">{title}</span>
         {toolDuration(part) && <span className="tool-card-duration">{toolDuration(part)}</span>}
         <Icon name="chevron-down" size={12} className={isOpen ? "tool-card-chevron open" : "tool-card-chevron"} />
@@ -68,7 +72,7 @@ function ToolPartCard({ part }: { part: ToolPart }) {
               <pre>{output}</pre>
             </div>
           )}
-          {running && <span className="tool-card-live-note">正在等待工具返回结果…</span>}
+          {running && <span className="tool-card-live-note">{interrupted ? "运行已中断（服务重启），可在同一会话继续。" : "正在等待工具返回结果…"}</span>}
         </div>
       )}
     </div>
@@ -103,7 +107,7 @@ function SubtaskPart({ part }: { part: Extract<Part, { type: "subtask" }> }) {
   );
 }
 
-export function MessageView({ entry: source, hideTools = false }: { entry: MessageWithParts | MessageWithParts[]; hideTools?: boolean }) {
+export function MessageView({ entry: source, hideTools = false, sessionIdle = false }: { entry: MessageWithParts | MessageWithParts[]; hideTools?: boolean; sessionIdle?: boolean }) {
   const entries = Array.isArray(source) ? source : [source];
   const entry = entries[0];
   if (!entry) return null;
@@ -127,7 +131,7 @@ export function MessageView({ entry: source, hideTools = false }: { entry: Messa
       case "reasoning":
         return <ReasoningPart key={part.id} part={part} active={active} />;
       case "tool":
-        return hideTools ? null : <ToolPartCard key={`${part.id}:${part.state.status}`} part={part} />;
+        return hideTools ? null : <ToolPartCard key={`${part.id}:${part.state.status}`} part={part} sessionIdle={sessionIdle} />;
       case "subtask":
         return <SubtaskPart key={part.id} part={part} />;
       case "step-start":

@@ -8,6 +8,7 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const { startLeaseRecovery } = await import("@zmzai/agent-framework");
     const { mongoEventLog } = await import("@/framework/core/events/mongo-event-log");
+    const { mongoSessionStore } = await import("@/framework/core/session/mongo-store");
     startLeaseRecovery({
       store: {
         listExpiredLeases: async () => {
@@ -26,6 +27,8 @@ export async function register() {
         },
       },
       log: mongoEventLog,
+      // 中断终态化（P2-10）：pending 审批 / running 工具 / 进行中 todo 收敛为终态
+      finalizeStore: mongoSessionStore,
     });
   }
 }

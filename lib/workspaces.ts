@@ -57,7 +57,9 @@ export async function getWorkspace(userId: string, workspaceId: string): Promise
 }
 
 export async function listWorkspaces(userId: string): Promise<WorkspaceSummary[]> {
-  const workspaces = await WorkspaceModel.find({ userId }).sort({ updatedAt: -1 }).lean();
+  // 按创建时间降序（新的在前），不随会话/Agent 活动跳动——updatedAt 会被
+  // 运行中的 Agent 频繁刷新，按它排序会让列表顺序在浏览时乱跳。
+  const workspaces = await WorkspaceModel.find({ userId }).sort({ createdAt: -1 }).lean();
   return workspaces.map(toWorkspaceSummary);
 }
 
