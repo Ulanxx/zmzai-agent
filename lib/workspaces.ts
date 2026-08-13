@@ -79,10 +79,29 @@ export async function getWorkspace(userId: string, workspaceId: string): Promise
 }
 
 export async function listWorkspaces(userId: string): Promise<WorkspaceSummary[]> {
+  // 确保用户至少有一个「通用」智能体（首次访问自动创建）。
+  await ensureDefaultWorkspace(userId);
   // 按创建时间降序（新的在前），不随会话/Agent 活动跳动——updatedAt 会被
   // 运行中的 Agent 频繁刷新，按它排序会让列表顺序在浏览时乱跳。
   const workspaces = await WorkspaceModel.find({ userId }).sort({ createdAt: -1 }).lean();
   return workspaces.map(toWorkspaceSummary);
+}
+
+/** 确保用户至少有一个「通用」智能体。首次调用时创建，幂等。 */
+export async function ensureDefaultWorkspace(userId: string): Promise<void> {
+  const exists = await WorkspaceModel.exists({ userId, name: "通用" }).lean();
+  if (exists) return;
+  const { randomUUID } = await import("node:crypto");
+  await WorkspaceModel.create({
+    workspaceId: `ws_${randomUUID()}`,
+    userId,
+    name: "通用",
+    description: "默认通用智能体，直接描述任务即可开始。",
+    defaultModel: "gpt-5.6-luna",
+    approvalMode: "always",
+    prompt: "",
+    steps: 12,
+  });
 }
 
 /** 重命名/更新描述/更新智能体配置。 */
