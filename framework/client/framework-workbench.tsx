@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
@@ -282,7 +283,9 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
     [sourceMessages],
   );
 
-  if (loading) return <main className="workbench-loading">正在建立工作台…</main>;
+  // 仅首次加载（无快照）时显示全屏 loading；会话切换时保留旧内容直到新快照到达，
+  // 避免 /fw → /fw/s/:id 或会话间切换整页闪烁。
+  if (loading && !snapshot) return <main className="workbench-loading">正在建立工作台…</main>;
   if (loadError) return <main className="workbench-loading">{loadError}</main>;
 
   return (
@@ -294,12 +297,12 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
         </div>
         <nav className="workbench-nav" aria-label="主导航">
           {sessionId && (
-            <a href="/fw" className="fw-back-link" title="返回工作台">
+            <Link href="/fw" className="fw-back-link" title="返回工作台">
               ← 返回
-            </a>
+            </Link>
           )}
-          <a href="/fw" className={pathname === "/fw" ? "active" : ""}>新任务</a>
-          <a href="/audit" className={pathname === "/audit" ? "active" : ""}>运行审计</a>
+          <Link href="/fw" className={pathname === "/fw" ? "active" : ""}>新任务</Link>
+          <Link href="/audit" className={pathname === "/audit" ? "active" : ""}>运行审计</Link>
         </nav>
         <div className="workbench-status">
           {user && (
