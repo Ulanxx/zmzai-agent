@@ -89,6 +89,7 @@ export async function listWorkspaces(userId: string): Promise<WorkspaceSummary[]
 export async function updateWorkspace(userId: string, workspaceId: string, patch: {
   name?: string;
   description?: string;
+  defaultModel?: string;
   prompt?: string;
   steps?: number;
   tools?: string[];
@@ -100,6 +101,7 @@ export async function updateWorkspace(userId: string, workspaceId: string, patch
   const set: Record<string, unknown> = {};
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.description !== undefined) set.description = patch.description;
+  if (patch.defaultModel !== undefined) set.defaultModel = patch.defaultModel;
   if (patch.prompt !== undefined) set.prompt = patch.prompt;
   if (patch.steps !== undefined) set.steps = patch.steps;
   if (patch.tools !== undefined) set.tools = patch.tools;

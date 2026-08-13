@@ -11,6 +11,9 @@ export const dynamic = "force-dynamic";
 const updateSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
   description: z.string().trim().max(2_000).optional(),
+  prompt: z.string().max(64 * 1024).optional(),
+  steps: z.number().int().min(1).max(64).optional(),
+  defaultModel: z.string().trim().max(160).optional(),
 }).strict();
 
 export async function GET(_: Request, context: { params: Promise<{ workspaceId: string }> }) {
