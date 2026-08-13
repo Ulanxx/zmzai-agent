@@ -877,7 +877,15 @@
     border: 1px solid var(--color-line);
     border-radius: var(--radius-card);
     padding: 0.05rem 0.35rem;
-    margin-left: 0.4rem;
-    vertical-align: middle;
+    margin-left: 0.4rem;    vertical-align: middle;
+  }
+  /* 配置页保存/发布成功反馈 */
+  .agent-saved-hint {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-accent-strong);
+    align-self: center;
+    white-space: nowrap;
+    animation: fade-in var(--animate-dur-fast) var(--ease-out);
   }
 }

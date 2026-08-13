@@ -47,6 +47,7 @@ export function FrameworkAudit() {
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<AuditDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,7 +69,8 @@ export function FrameworkAudit() {
 
   useEffect(() => {
     if (!selected) return;
-    queueMicrotask(() => setDetail(null));
+    // 保留旧详情直到新详情到达，避免切换会话时右侧先闪空白。
+    queueMicrotask(() => setDetailLoading(true));
     void (async () => {
       try {
         const response = await fetch(`/api/audit/sessions/${encodeURIComponent(selected)}`, { cache: "no-store" });
@@ -77,6 +79,8 @@ export function FrameworkAudit() {
         setDetail(body);
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "无法读取会话详情");
+      } finally {
+        setDetailLoading(false);
       }
     })();
   }, [selected]);
@@ -125,7 +129,8 @@ export function FrameworkAudit() {
         </aside>
 
         <section className="audit-detail-pane">
-          {!detail && <div className="audit-detail-empty"><h2>选择一个会话</h2><p>查看工具调用时间线与事件流。</p></div>}
+          {detailLoading && !detail && <div className="audit-detail-empty"><h2>正在加载…</h2></div>}
+          {!detail && !detailLoading && <div className="audit-detail-empty"><h2>选择一个会话</h2><p>查看工具调用时间线与事件流。</p></div>}
           {detail && (
             <>
               <div className="audit-detail-head">

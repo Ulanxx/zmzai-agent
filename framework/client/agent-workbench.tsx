@@ -62,6 +62,14 @@ export function AgentWorkbench({ workspaceId, agentId }: { workspaceId: string; 
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 保存/发布成功的短暂反馈（"已保存 12:34"），3 秒后消失。
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashSaved = useCallback(() => {
+    setSavedAt(new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }));
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = setTimeout(() => setSavedAt(null), 3_000);
+  }, []);
 
   const applyDetail = useCallback((next: AgentDetail) => {
     setDetail(next);
@@ -119,6 +127,7 @@ export function AgentWorkbench({ workspaceId, agentId }: { workspaceId: string; 
       });
       applyDetail(next);
       setAgents((current) => current.map((agent) => agent.id === next.agent.id ? next.agent : agent));
+      flashSaved();
       return next;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "保存失败");
@@ -126,7 +135,7 @@ export function AgentWorkbench({ workspaceId, agentId }: { workspaceId: string; 
     } finally {
       setSaving(false);
     }
-  }, [detail, saving, workspaceId, agentId, name, description, prompt, model, steps, applyDetail]);
+  }, [detail, saving, workspaceId, agentId, name, description, prompt, model, steps, applyDetail, flashSaved]);
 
   const publish = useCallback(async () => {
     if (!detail || publishing) return;
@@ -137,12 +146,13 @@ export function AgentWorkbench({ workspaceId, agentId }: { workspaceId: string; 
       const next = await json<AgentDetail>(`/api/workspaces/${encodeURIComponent(workspaceId)}/agents/${encodeURIComponent(agentId)}/publish`, { method: "POST" });
       applyDetail(next);
       setAgents((current) => current.map((agent) => agent.id === next.agent.id ? next.agent : agent));
+      flashSaved();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "发布失败");
     } finally {
       setPublishing(false);
     }
-  }, [detail, publishing, workspaceId, agentId, save, applyDetail]);
+  }, [detail, publishing, workspaceId, agentId, save, applyDetail, flashSaved]);
 
   const toggleSkill = useCallback((skillId: string) => {
     const next = selectedSkillIdsRef.current.includes(skillId)
@@ -268,6 +278,7 @@ export function AgentWorkbench({ workspaceId, agentId }: { workspaceId: string; 
           <div className="agent-config-titlebar">
             <div><span className="eyebrow">WORKSPACE AGENT</span><h1>{detail?.agent.name ?? "加载中"}</h1></div>
             <div className="agent-config-actions">
+              {savedAt && <span className="agent-saved-hint">已保存 {savedAt}</span>}
               <button type="button" className="command-button quiet" onClick={() => void save()} disabled={!detail || saving}>{saving ? "保存中" : "保存草稿"}</button>
               <button type="button" className="command-button" onClick={() => void publish()} disabled={!detail || saving || publishing}>{publishing ? "发布中" : "发布版本"}</button>
             </div>
