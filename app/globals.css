@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@source "../app/**/*.{ts,tsx}";
+@source "../framework/**/*.{ts,tsx}";
+@source "../components/**/*.{ts,tsx}";
+@source "../node_modules/@zmzai/theme/src/**/*.{ts,tsx}";
 
 /* zmzai v2 — Monochrome Impact. 纯白底 + 纯黑字 + MiSans.
    Token source: @zmzai/theme. Inlined here because @tailwindcss/postcss
