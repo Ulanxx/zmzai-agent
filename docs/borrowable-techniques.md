@@ -21,7 +21,58 @@
 
 ## 1. Reasonix 可借鉴点（按 ROI 排序）
 
-### 🔴 P0-1：缓存稳定性 = 工具 schema 排序 + 前缀哈希诊断
+### ⚠️ 1.0 缓存优化的前提查证（关键，先读这节再读本章其余部分）
+
+> 2026-08-14 补充：本节是「Review 我的 Review」+ relay 源码查证后的硬结论。**它推翻了下文原 P0-1 的「省钱」收益定性。**
+
+**zmzai 是多模型平台**（DeepSeek 原生 + ChatGPT 中转，channel 动态路由）。前缀缓存不是统一机制，而是**每个上游 channel 的属性**。查证 relay 源码后发现两条 cache 收益链路是**断的**：
+
+**断点 A — relay 不按 cache 折扣计费。** `zmzai-relay/app/api/v1/chat/completions/route.ts:137-138`（非流式）与 `:163`（流式）计费只读两个字段：
+```js
+const prompt = tokens.prompt_tokens ?? 0;
+const completion = tokens.completion_tokens ?? 0;
+charged = chargeMicros(prompt, inputPrice) + chargeMicros(completion, outputPrice);
+```
+DeepSeek 的 `prompt_cache_hit_tokens` / dsh `translate.ts` 翻译的 `cacheReadTokens`——**relay 不读、不传、不存**。`UsageModel.settle` 也只存 `promptTokens/completionTokens`。结论：**即使上游缓存 100% 命中，zmzai 仍按全量 prompt_tokens 收费，zmzai 自己省不到钱**。
+
+**断点 B — zmzai-agent 不收 cache 字段。** `zmzai-agent/lib/relay-agent-stream.ts:33` 的 `emptyUsage()` 把 cacheRead/cacheWrite 全填 0，`usage` 压根没解析。结论：**zmzai 连「这次命中没有」都看不到**，PrefixShape 诊断永远输出空数据。
+
+**上游混合的额外影响：** zmzai-agent 在请求时不知道会落到有缓存的 DeepSeek channel 还是没缓存的 ChatGPT 中转（`ChannelModel.find().sort({priority:1})` 动态选）。所以即便修好断点，"缓存优化"也**只对支持缓存的 channel 有效**。
+
+**对原 P0-1（schema 排序 + PrefixShape）的影响：**
+- ❌ 「省钱」收益是**幻觉**（断点 A 未修，且 ChatGPT 中转无缓存）
+- 🟡 「降首 token 延迟」收益**真实但当前无法度量**（断点 B 未修，且仅对 DeepSeek channel 有效）
+- ⇒ **P0-1 从 P0 降为 P1**，且依赖下文断点 A/B 先修好
+
+**多模型平台决定了 cache 必须做成 channel 属性（不能写死 DeepSeek）：** 现有 channel schema（`zmzai-relay/providers/channels/schema.ts:4`）只有 baseUrl/models/priority/成本/enabled/timeoutMs，没有任何 cache 概念。正确抽象见 §1.1-A。
+
+### 🔴 1.1-A（断点 A）：relay channel 加 cache 属性 + 折扣计费 [真 P0]
+
+**zmzai 落地**（`zmzai-relay/providers/channels/schema.ts` + `app/api/v1/chat/completions/route.ts`）：
+
+1. channel schema 加属性（字段名待定，先表达意图）：
+```ts
+supportsPromptCache?: boolean   // DeepSeek=true，多数 ChatGPT 中转=false
+cacheDiscountRatio?: number     // DeepSeek≈0.1（命中部分按 10% 计价）
+```
+2. 计费逻辑（route.ts:137-138 / 163）改为命中部分折后计价：
+```ts
+const cacheHit = channel.supportsPromptCache ? (tokens.prompt_cache_hit_tokens ?? 0) : 0;
+const miss = Math.max(0, prompt - cacheHit);
+const inputCharge = chargeMicros(cacheHit, inputPrice) * (channel.cacheDiscountRatio ?? 1)
+                  + chargeMicros(miss, inputPrice);
+```
+3. DeepSeek channel 开 cache + 0.1 折扣；ChatGPT 中转 channel 关 cache、全价。**同一套代码、两种上游、零特殊判断**。
+
+### 🔴 1.1-B（断点 B）：zmzai-agent 解析 cache 字段 [真 P0]
+
+**zmzai 落地**（`zmzai-agent/lib/relay-agent-stream.ts`）：把 `emptyUsage()` 和 chunk 解析改成真实读取（relay 已透传 response body，只是自己不解析）。借鉴 dsh `llm-deepseek/translate.ts` 的 `mapUsage`：`inputTokens = prompt_tokens - cached_tokens`，`cacheReadTokens = cached_tokens`。这是 PrefixShape 诊断有数据的前提。
+
+**⚠️ 计费对账风险：** relay 流式计费本来就有脆弱点（route.ts:162「上游漏 usage 就不扣费」= unsettled）。再叠一层 cache 字段依赖后，若上游某版本字段名/时序错位，**折扣可能算错**（命中算成未命中 = 多收，反之 = 少收）。做断点 A 时必须配套扩展 `ChannelAttempt.costStatus` 校验 cache 字段是否解析成功，纳入对账。
+
+### 🟡 P1（原 P0-1）：缓存稳定性 = 工具 schema 排序 + 前缀哈希诊断
+
+> 依赖 §1.1-A/1.1-B 修好。收益：降首 token 延迟（仅支持缓存的 channel）；省钱收益归 §1.1-A，不归本项。
 
 **源码**：`internal/agent/cache_shape.go`
 
@@ -38,11 +89,11 @@ type PrefixShape struct {
 }
 ```
 
-**为什么这是 P0**：DeepSeek 前缀缓存命中的前提是 **system + tools 的字节完全稳定**。zmzai 现在 `adaptTool` 里 `z.toJSONSchema` 生成 schema，工具数组的顺序是 `builtinTools` 的声明顺序——**只要任何 workspace 的自定义 agent/tool 列表顺序变化，整段前缀缓存全 miss**。
+**为什么仍是 P1**：前缀缓存命中的前提是 system + tools 字节稳定。zmzai `adaptTool` 里 `z.toJSONSchema` 生成 schema，工具数组顺序是 `builtinTools` 声明顺序——workspace 自定义 agent/tool 顺序一变，前缀缓存全 miss。修好断点 B 后，schema 排序让命中稳定，PrefixShape 才能诊断出真实命中趋势。
 
 **zmzai 落地**（`packages/agent-framework/src/core/tools/adapter.ts`）：
-1. 在 `adaptTool` 生成 JSON schema 后，对工具数组做确定性排序（by name），再交给 PI
-2. 加一个 `PrefixShape` 等价物：hash system prompt + tools，每次请求前对比，记录 `PrefixChanged` 原因（system / tools / content）到 event log——这样 cache miss 可诊断，而不是瞎猜
+1. 在 `adaptTool` 生成 JSON schema 后，对工具数组做确定性排序（by name），再交给 PI（排序在 `runner.ts:295` 的 `.map(adaptTool)` 前加一次 `.sort`，权限匹配 `permissionForCall` 按 map 查找不依赖顺序，安全——但需跑 `npm test` 验证 PI 不对 tools 数组顺序敏感）
+2. 加 `PrefixShape` 等价物：hash system + tools，每次请求前对比，记录 `PrefixChanged` 原因到 event log
 
 ### 🔴 P0-2：调用风暴断路器（signature + streak 双检测）
 
@@ -176,7 +227,7 @@ const outputBudgetReserve = 8 * 1024
 // governor：探索期（无验证债、无本地执行、上轮思考昂贵）→ reasoning 降到 low
 ```
 
-**zmzai 落地**：`runner.ts` 目前只有 `shouldStopAfterTurn`（步数上限）。加 token/cost 预算轴，`run_budget` 式在每轮前检查；relay 层接 `usage.cacheRead/cacheWrite`（现在 `relay-agent-stream.ts:33` 全硬编码 0，缓存计量根本没接）。
+**zmzai 落地**：`runner.ts` 目前只有 `shouldStopAfterTurn`（步数上限）。加 token/cost 预算轴，`run_budget` 式在每轮前检查。**注意**：cost 预算依赖真实的 usage 数据，而 cache 字段解析归 §1.1-B（断点 B）——断点 B 没修好之前，这里的 cost 统计也是失真的。
 
 ### 🟡 P2-2：路径绑定的写权限（子代理写路径隔离）
 
@@ -236,7 +287,9 @@ canonicalize(args) = JSON.stringify(sortJsonValue(args))
 
 **zmzai 落地**：`compaction.ts` 的 `createCompactionTransform` 没有并发锁、没有稳定性检查、没有"更小才提交"保证。这些都是可直接抄的健壮性补强。
 
-### 🟠 P1：缓存计费（DeepSeek usage 翻译）
+### 🔴 P0：缓存计费（DeepSeek usage 翻译）—— 即 §1.1-B 断点 B
+
+> 此项已并入 §1.1-B（真 P0）。重复记录于此以保留 dsh 源码出处。
 
 **源码**：`packages/llm/llm-deepseek/src/translate.ts`
 
@@ -246,7 +299,7 @@ inputTokens = prompt_tokens - (prompt_tokens_details?.cached_tokens ?? prompt_ca
 cacheReadTokens = cached_tokens
 ```
 
-**zmzai 落地**：`relay-agent-stream.ts` 的 `emptyUsage()` 全 0，`usage` 解析完全没接。借鉴这段，把 DeepSeek 的 `cached_tokens` 正确翻译成 cacheRead/cacheWrite，这是 P0-2 缓存优化**能度量**的前提。
+**zmzai 落地**：`relay-agent-stream.ts` 的 `emptyUsage()` 全 0，`usage` 解析完全没接。借鉴这段把 `cached_tokens` 翻译成 cacheRead/cacheWrite。**注意**：这是多模型平台，翻译逻辑要按 channel 是否声明 `supportsPromptCache` 决定（见 §1.1-A），不能假设全是 DeepSeek。
 
 ### 🟡 P2：LLM 适配器分层（maxRetries:0 模式）
 
@@ -281,38 +334,51 @@ dsh 的 `packages/sdk/server` 是**可嵌入的 JSON-RPC 服务**（stdio 传输
 
 **dsh 和 Reasonix 各自独立收敛到了同一套机制**，这比任何单一实现都有说服力：
 
-| 机制 | Reasonix | dsh | 价值判断 |
+| 机制 | Reasonix | dsh | 价值判断（已按 §1.0 查证调整） |
 |---|---|---|---|
-| 工具结果裁剪 | `failure_snip.go` + `snipToolResult` | `compaction-tool-result-pruner` | ✅ 必做 |
-| 重复调用/风暴防护 | `storm_breaker.go`（拦截）+ `repeat_failure_guard.go` | `repeat-tool-reminder`（提醒） | ✅ 必做，两个都上 |
-| compaction 投影式 + 不切工具对 + 摘要更小 | `compact_projection.go` | `region.ts` | ✅ 必做 |
-| 前缀缓存稳定性 | `cache_shape.go`（schema 排序 + hash 诊断） | `summarizer.ts`（指令作 user 消息复用前缀） | ✅ 必做 |
-| 缓存计费 | `CompareShape`（miss/hit tokens） | `translate.ts`（subtract cached） | ✅ 必做（度量前提） |
-| 并行 + 顺序回写 | `execute_batch.go`（index 存结果） | `tool-calls.ts`（commitReady 按序） | 🟡 视 PI 能力 |
+| 工具结果裁剪 | `failure_snip.go` + `snipToolResult` | `compaction-tool-result-pruner` | ✅ 必做（P0） |
+| 重复调用/风暴防护 | `storm_breaker.go`（拦截）+ `repeat_failure_guard.go` | `repeat-tool-reminder`（提醒） | ✅ 必做（P0） |
+| compaction 投影式 + 不切工具对 + 摘要更小 | `compact_projection.go` | `region.ts` | ✅ 必做（P1） |
+| **缓存计费（断点 A+B）** | `CompareShape`（miss/hit tokens） | `translate.ts`（subtract cached） | 🔴 **真 P0**，多模型平台须做成 channel 属性（见 §1.1） |
+| 前缀缓存稳定性（schema 排序） | `cache_shape.go` | `summarizer.ts` | 🟡 P1，**依赖断点 A+B 修好**才有度量意义；省钱收益归断点 A 不归本项 |
+| 并行 + 顺序回写 | `execute_batch.go`（index 存结果） | `tool-calls.ts`（commitReady 按序） | 🟡 视 PI 能力（PI 默认 parallel，先查 zmzai 为何选 sequential） |
 
 **这条收敛意味着**：这些不是某个项目的怪癖，而是「AI coding agent 在 DeepSeek 类模型上」的**通用最佳实践**。zmzai 照抄不会错。
 
 ---
 
-## 4. 落地路线图（修订版）
+## 4. 落地路线图（修订版 v2，反映 §1.0 cache 前提查证）
+
+> 关键变化：cache 基础设施（断点 A+B）从「阶段二」提前到 **真 P0**；原 P0-1 schema 排序降到 P1（依赖断点修好）。两条 P0 并行轨道：① cache 基础设施（跨 relay+agent）② loop 防护（纯 agent 内）。
 
 ```
-阶段一（立即，1-2 天）—— 全在 zmzai 现有文件内，不碰 relay 协议
-  ├─ P0-1  工具 schema 确定性排序 + PrefixShape 诊断（adapter.ts）
-  ├─ P0-2  调用风暴断路器（runner.ts，signature+streak，阈值 3）
-  ├─ P0-3  重复失败守卫（editTool，语义签名，阈值 2）
-  └─ P0    dsh 工具结果 head+tail 确定性裁剪（adapter.ts）
+P0 轨道 ① — cache 基础设施（让 cache 可见 + 可计费，多模型平台的正确抽象）
+  ├─ 1.1-A  relay channel 加 supportsPromptCache + cacheDiscountRatio + 折扣计费
+  │        + ChannelAttempt costStatus 扩展校验 cache 解析（防断点 A 重蹈 unsettled 覆辙）
+  └─ 1.1-B  zmzai-agent 解析 cache 字段（emptyUsage→真解析，借鉴 dsh mapUsage）
 
-阶段二（1 周）—— 需 relay 配合
-  ├─ 缓存计费：relay 翻译 cached_tokens（translate.ts 逻辑）
+P0 轨道 ② — loop 防护（不依赖 cache，纯 agent 内，可立即并行）
+  ├─ P0-2  调用风暴断路器（runner afterToolCall，signature[按 name+error 非 args]+streak，阈值 3）
+  ├─ P0-3  重复失败守卫（runner afterToolCall，语义签名，阈值 2；block+复查走 beforeToolCall）
+  └─ P0    dsh 工具结果 head+tail 确定性裁剪（adapter.ts，只裁 output 文本不动 artifacts）
+
+P1 — 依赖 P0 ① 修好后才有度量意义
+  ├─ schema 确定性排序 + PrefixShape 诊断（adapter.ts，需 npm test 验 PI 顺序不敏感）
   ├─ compaction 投影式改造（compaction.ts，canonical 不动 + tail 预算 + 不切工具对）
-  └─ 重复"写成功"守卫 + 重复调用 advisory 提醒
+  ├─ compaction 事务补强（稳定性检查 + 摘要更小才提交 + 持久锁）
+  └─ 重复"写成功"守卫 + 重复调用 advisory 提醒（dsh thresholds [3,5,8] 深排序 args）
 
-阶段三（按需）
-  ├─ 成本预算轴 + reasoning 降档（runner.ts + relay）
+P2/P3 — 按需
+  ├─ 成本预算轴 + reasoning 降档（runner.ts）
+  ├─ LLM 适配器分层（relay 不重试 / agent recovery 层重试，maxRetries:0）
   ├─ 子代理写路径隔离（spawnSubagent + WritePathSet）
-  └─ Skill 分层注册、可嵌入 SDK/ACP（长期方向）
+  └─ Skill 分层注册、可嵌入 SDK/ACP、双模型 planner/fleet（长期方向）
 ```
+
+**⚠️ Review 中确认的落点细节**（写代码时务必遵守，避免返工）：
+- storm 断路器落点是 `agent.afterToolCall`（覆盖 result.content 注入"改变策略"），**不是** `beforeToolCall`（只能 block，无 content override）。且只处理「成功执行但死循环」，不碰 error/retry 路径，避免与 F6 `isRetryableError` 重试打架。
+- 重复失败守卫的「拦截+状态复查」走 `beforeToolCall`（能 block 能复查），「策略注入」走 `afterToolCall`——PI 的 before/after 语义决定了必须拆两段。
+- schema 排序的「安全」尚未真验证，须 `npm test`（PI 是否对 tools 数组顺序敏感未知）。
 
 ---
 

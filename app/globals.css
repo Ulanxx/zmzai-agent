@@ -503,7 +503,7 @@
   /* F3：当前页导航高亮（与 audit-nav-link.active 同风格） */
   .workbench-nav a.active { color: var(--color-accent); border-bottom: 1px solid var(--color-accent); padding-bottom: 0.15rem; }
 
-  .audit-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(22rem, 1fr) minmax(26rem, 1.15fr); overflow: hidden; }
+  .audit-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 3fr 7fr; overflow: hidden; }
   .audit-list-pane { min-width: 0; min-height: 0; overflow-y: auto; border-right: 1px solid var(--color-line); padding: 1rem 0.75rem; background: color-mix(in oklab, var(--color-surface) 92%, var(--color-paper)); }
   .audit-detail-pane { min-width: 0; min-height: 0; overflow-y: auto; padding: 1rem 1.25rem; }
 

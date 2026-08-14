@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 
 import { Icon } from "@/components/icon";
 import { Seal } from "@/components/seal";
+import { Select as ThemeSelect, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@zmzai/theme";
 import {
   fwApi,
   useFrameworkSession,
@@ -346,16 +347,24 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
             }}
           >
             <div className="mb-3 flex gap-2">
-              <select value={workspaceId ?? ""} onChange={(event) => setWorkspaceId(event.target.value || null)} aria-label="智能体" disabled={!workspaces.length}
-                className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium outline-none transition-colors hover:border-ink/40 disabled:opacity-50">
-                {workspaces.length ? workspaces.map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                )) : <option value="">请先创建智能体</option>}
-              </select>
-              <select value={model} onChange={(event) => setModel(event.target.value)} aria-label="模型" disabled={!models.length}
-                className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium outline-none transition-colors hover:border-ink/40 disabled:opacity-50">
-                {models.length ? models.map((item) => <option key={item.model} value={item.model}>{item.model}</option>) : <option>模型目录不可用</option>}
-              </select>
+              <ThemeSelect value={workspaceId ?? undefined} onValueChange={(v: string) => setWorkspaceId(v || null)}>
+                <SelectTrigger className="w-auto" aria-label="智能体">
+                  <SelectValue placeholder="选择智能体" />
+                </SelectTrigger>
+                <SelectContent>
+                  {workspaces.length ? workspaces.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+                  )) : <SelectItem value="">请先创建智能体</SelectItem>}
+                </SelectContent>
+              </ThemeSelect>
+              <ThemeSelect value={model || undefined} onValueChange={setModel}>
+                <SelectTrigger className="w-auto" aria-label="模型">
+                  <SelectValue placeholder="选择模型" />
+                </SelectTrigger>
+                <SelectContent>
+                  {models.length ? models.map((item) => <SelectItem key={item.model} value={item.model}>{item.model}</SelectItem>) : <SelectItem value="">模型目录不可用</SelectItem>}
+                </SelectContent>
+              </ThemeSelect>
             </div>
             <textarea
               ref={textareaRef}
@@ -557,10 +566,14 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
             }}
           >
             <div className="mb-2 flex gap-2">
-              <select value={model} onChange={(event) => setModel(event.target.value)} aria-label="模型" disabled={!models.length}
-                className="rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium outline-none transition-colors hover:border-ink/40 disabled:opacity-50">
-                {models.length ? models.map((item) => <option key={item.model} value={item.model}>{item.model}</option>) : <option>模型目录不可用</option>}
-              </select>
+              <ThemeSelect value={model || undefined} onValueChange={setModel}>
+                <SelectTrigger className="h-8 w-auto text-xs" aria-label="模型">
+                  <SelectValue placeholder="选择模型" />
+                </SelectTrigger>
+                <SelectContent>
+                  {models.length ? models.map((item) => <SelectItem key={item.model} value={item.model}>{item.model}</SelectItem>) : <SelectItem value="">模型目录不可用</SelectItem>}
+                </SelectContent>
+              </ThemeSelect>
             </div>
             <textarea
               ref={textareaRef}
