@@ -283,30 +283,29 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   return (
     <main className="workbench fw-workbench">
       <header className="workbench-header">
-        <div className="flex items-center gap-3">
-          <Seal size={26} className="agent-seal" />
-          <span className="font-mono text-sm font-bold tracking-[0.08em]">ZMZAI AGENT</span>
+        <div className="flex items-center gap-2.5">
+          <Seal size={24} className="agent-seal" />
+          <span className="font-sans text-sm font-semibold tracking-tight">ZMZAI</span>
+          <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>
         </div>
-        <nav className="workbench-nav" aria-label="主导航">
+        <nav className="flex items-center gap-1" aria-label="主导航">
           {sessionId && (
-            <Link href="/fw" className="fw-back-link" title="返回工作台">
+            <Link href="/fw" className="rounded-full px-3 py-1.5 text-sm font-medium text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink" title="返回工作台">
               ← 返回
             </Link>
           )}
-          <Link href="/fw" className={pathname === "/fw" ? "active" : ""}>新任务</Link>
-          <Link href="/audit" className={pathname === "/audit" ? "active" : ""}>运行审计</Link>
+          <Link href="/fw" className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${pathname === "/fw" ? "bg-ink text-white" : "text-ink-2 hover:bg-surface-2 hover:text-ink"}`}>新任务</Link>
+          <Link href="/audit" className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${pathname === "/audit" ? "bg-ink text-white" : "text-ink-2 hover:bg-surface-2 hover:text-ink"}`}>运行审计</Link>
         </nav>
-        <div className="workbench-status">
+        <div className="flex items-center gap-2.5">
           {user && (
-            <span className="fw-user" title={user.email}>
+            <span className="max-w-[8rem] truncate text-sm text-ink-2" title={user.email}>
               {user.name}
             </span>
           )}
-          <button type="button" className="icon-command" title="退出登录" onClick={() => void logout()}>
+          <button type="button" className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-line transition-colors hover:border-ink hover:bg-surface-2" title="退出登录" onClick={() => void logout()}>
             <Icon name="logout" size={14} />
           </button>
-          <span className="status-dot" />
-          AGENT <span className="header-domain">a.zmzai.cloud</span>
         </div>
       </header>
       {actionError && (
@@ -325,34 +324,36 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
       {!snapshot && !loading && (
         <div className="fw-home">
           <div className="fw-home-hero">
-            <h1>今天想做些什么？</h1>
-            <div className="fw-quick-tasks" aria-label="快捷任务">
+            <h1 className="text-3xl font-semibold tracking-tight">今天想做些什么？</h1>
+            <div className="flex flex-wrap justify-center gap-2" aria-label="快捷任务">
               {[
                 { label: "生成 PPT", prompt: "帮我生成一份 10 页的季度汇报 PPT，包含封面、目录、核心数据、总结" },
                 { label: "写文档", prompt: "帮我写一份产品需求文档（PRD），包含背景、目标、功能点、验收标准" },
                 { label: "数据分析", prompt: "分析当前 Workspace 里的数据文件，给出关键指标和趋势总结" },
                 { label: "深度研究", prompt: "深度研究一个主题：先列出大纲，再逐节展开，最后给出参考资料" },
               ].map((task) => (
-                <button key={task.label} type="button" className="fw-quick-task" onClick={() => setPrompt(task.prompt)}>
+                <button key={task.label} type="button" className="cursor-pointer rounded-full border border-line bg-surface px-4 py-2 text-sm font-medium transition-all hover:border-ink hover:bg-bg" onClick={() => setPrompt(task.prompt)}>
                   {task.label}
                 </button>
               ))}
             </div>
           </div>
           <form
-            className="fw-home-composer"
+            className="w-full max-w-3xl rounded-xl border border-line bg-bg p-6 shadow-sm"
             onSubmit={(event) => {
               event.preventDefault();
               void send();
             }}
           >
-            <div className="composer-controls">
-              <select value={workspaceId ?? ""} onChange={(event) => setWorkspaceId(event.target.value || null)} aria-label="智能体" disabled={!workspaces.length}>
+            <div className="mb-3 flex gap-2">
+              <select value={workspaceId ?? ""} onChange={(event) => setWorkspaceId(event.target.value || null)} aria-label="智能体" disabled={!workspaces.length}
+                className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium outline-none transition-colors hover:border-ink/40 disabled:opacity-50">
                 {workspaces.length ? workspaces.map((item) => (
                   <option key={item.id} value={item.id}>{item.name}</option>
                 )) : <option value="">请先创建智能体</option>}
               </select>
-              <select value={model} onChange={(event) => setModel(event.target.value)} aria-label="模型" disabled={!models.length}>
+              <select value={model} onChange={(event) => setModel(event.target.value)} aria-label="模型" disabled={!models.length}
+                className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium outline-none transition-colors hover:border-ink/40 disabled:opacity-50">
                 {models.length ? models.map((item) => <option key={item.model} value={item.model}>{item.model}</option>) : <option>模型目录不可用</option>}
               </select>
             </div>
@@ -362,23 +363,28 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               onChange={(event) => setPrompt(event.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="描述要完成的任务…（Enter 发送）"
-              rows={3}
+              rows={5}
+              className="w-full resize-none rounded-lg border border-line bg-bg p-4 text-base outline-none transition-colors focus:border-ink"
             />
-            <div className="composer-actions">
-              <span>{workspaces.find((w) => w.id === workspaceId)?.name ?? "选择智能体"}</span>
-              <button type="submit" className="command-button" disabled={!prompt.trim() || sending || (!workspaceId)}>
-                {sending ? "发送中" : "开始任务"}
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-sm text-ink-3">{workspaces.find((w) => w.id === workspaceId)?.name ?? "选择智能体"}</span>
+              <button type="submit"
+                className="cursor-pointer rounded-full bg-ink px-6 py-2.5 text-sm font-semibold text-white transition-all hover:scale-105 hover:shadow-md disabled:scale-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+                disabled={!prompt.trim() || sending || (!workspaceId)}>
+                {sending ? "发送中…" : "开始任务 →"}
               </button>
             </div>
           </form>
           {recentSessions.length > 0 && (
-            <div className="fw-home-recent">
-              <span className="eyebrow">最近任务</span>
-              <div className="fw-task-cards">
+            <div className="w-full max-w-2xl">
+              <span className="mb-3 block text-xs font-semibold uppercase tracking-wide text-ink-3">最近任务</span>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fill,minmax(12rem,1fr))]">
                 {recentSessions.map((item) => (
-                  <button type="button" key={item.id} className="fw-task-card" onClick={() => router.push(`/fw/s/${item.id}`)}>
-                    <strong>{item.title}</strong>
-                    <small>{item.agent}</small>
+                  <button type="button" key={item.id}
+                    className="cursor-pointer rounded-xl border border-line bg-bg p-3 text-left transition-all hover:border-ink hover:shadow-md"
+                    onClick={() => router.push(`/fw/s/${item.id}`)}>
+                    <strong className="block truncate text-sm font-semibold">{item.title}</strong>
+                    <small className="font-mono text-xs text-ink-3">{item.agent}</small>
                   </button>
                 ))}
               </div>
@@ -391,137 +397,119 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
       {snapshot && (
       <div className="fw-grid">
         <aside className={sidebarCollapsed ? "fw-sidebar collapsed" : "fw-sidebar"}>
-          <div className="pane-heading">
-            <button type="button" className="icon-command fw-sidebar-toggle" title={sidebarCollapsed ? "展开侧栏" : "收起侧栏"} onClick={() => setSidebarCollapsed((value) => !value)}>
+          <div className="flex items-center justify-between px-1 pb-2">
+            <button type="button" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-line transition-colors hover:border-ink hover:bg-surface-2" title={sidebarCollapsed ? "展开侧栏" : "收起侧栏"} onClick={() => setSidebarCollapsed((value) => !value)}>
               <Icon name={sidebarCollapsed ? "chevron-down" : "cross"} size={14} />
             </button>
-            <span>智能体</span>
-            <button type="button" className="icon-command" title="新建 Workspace" onClick={() => setCreatingWs((value) => !value)}>
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-3">智能体</span>
+            <button type="button" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-line transition-colors hover:border-ink hover:bg-surface-2" title="新建 Workspace" onClick={() => setCreatingWs((value) => !value)}>
               <Icon name="plus" />
             </button>
           </div>
           {creatingWs && (
             <form
-              className="workspace-create"
+              className="mt-1 flex gap-1.5 px-1"
               onSubmit={(event) => {
                 event.preventDefault();
                 void createWorkspace(event);
               }}
             >
-              <input name="name" autoFocus maxLength={120} placeholder="智能体名称" />
-              <button type="submit">创建</button>
+              <input name="name" autoFocus maxLength={120} placeholder="智能体名称"
+                className="min-w-0 flex-1 rounded-lg border border-line bg-bg px-2.5 py-1.5 text-sm outline-none focus:border-ink" />
+              <button type="submit" className="cursor-pointer rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-white">创建</button>
             </form>
           )}
-          <nav className="workspace-list" aria-label="Workspace 列表">
+          <nav className="mt-1 flex flex-col gap-0.5" aria-label="Workspace 列表">
             {workspaces.map((item) => (
-              <div key={item.id} className={item.id === workspaceId ? "workspace-item-wrap active" : "workspace-item-wrap"}>
+              <div key={item.id} className={`group rounded-lg border border-transparent transition-colors ${item.id === workspaceId ? "border-line bg-surface" : "hover:bg-surface"}`}>
                 {renamingWs === item.id ? (
                   <form
-                    className="workspace-rename"
+                    className="flex items-center gap-1.5 px-1.5 py-1"
                     onSubmit={(event) => {
                       event.preventDefault();
                       void renameWorkspace(item.id);
                     }}
                   >
-                    <input value={renamingName} onChange={(event) => setRenamingName(event.target.value)} autoFocus maxLength={120} aria-label="智能体名称" />
-                    <button type="submit" className="icon-command" title="保存">
+                    <input value={renamingName} onChange={(event) => setRenamingName(event.target.value)} autoFocus maxLength={120} aria-label="智能体名称"
+                      className="min-w-0 flex-1 rounded-md border border-ink bg-bg px-2 py-1 text-sm outline-none" />
+                    <button type="submit" className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md hover:bg-surface-2" title="保存">
                       <Icon name="check" />
                     </button>
                   </form>
                 ) : (
-                  <button type="button" className="workspace-item" onClick={() => setWorkspaceId(item.id)}>
-                    <span>{item.name}</span>
+                  <button type="button" className="w-full cursor-pointer rounded-lg px-2.5 py-2 text-left text-sm font-medium transition-colors" onClick={() => setWorkspaceId(item.id)}>
+                    <span className="block truncate">{item.name}</span>
                   </button>
                 )}
-                <div className="workspace-item-actions">
-                  <button
-                    type="button"
-                    className="icon-command"
-                    title="配置智能体"
-                    onClick={() => router.push(`/fw/w/${item.id}`)}
-                  >
+                <div className="flex gap-0.5 px-1.5 pb-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button type="button" className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-ink-3 hover:bg-surface-2 hover:text-ink" title="配置智能体" onClick={() => router.push(`/fw/w/${item.id}`)}>
                     <Icon name="settings" size={12} />
                   </button>
-                  <button
-                    type="button"
-                    className="icon-command"
-                    title="重命名"
-                    onClick={() => {
-                      setRenamingWs(item.id);
-                      setRenamingName(item.name);
-                      setConfirmDeleteWs(null);
-                    }}
-                  >
+                  <button type="button" className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-ink-3 hover:bg-surface-2 hover:text-ink" title="重命名" onClick={() => { setRenamingWs(item.id); setRenamingName(item.name); setConfirmDeleteWs(null); }}>
                     <Icon name="edit" size={12} />
                   </button>
-                  <button
-                    type="button"
-                    className="icon-command danger"
-                    title={confirmDeleteWs === item.id ? "确认删除" : "删除"}
-                    onClick={() => setConfirmDeleteWs(confirmDeleteWs === item.id ? null : item.id)}
-                  >
+                  <button type="button" className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-ink-3 hover:bg-danger/10 hover:text-danger" title={confirmDeleteWs === item.id ? "确认删除" : "删除"} onClick={() => setConfirmDeleteWs(confirmDeleteWs === item.id ? null : item.id)}>
                     <Icon name="trash" size={12} />
                   </button>
                 </div>
                 {confirmDeleteWs === item.id && (
-                  <div className="workspace-delete-confirm">
+                  <div className="mx-1.5 mb-1 rounded-lg border border-line bg-surface p-2 text-xs text-ink-2">
                     <span>删除后会话、产物、文件版本全部清除，不可恢复。</span>
-                    <div>
-                      <button type="button" onClick={() => void removeWorkspace(item.id)}>
-                        确认删除
-                      </button>
-                      <button type="button" onClick={() => setConfirmDeleteWs(null)}>
-                        取消
-                      </button>
+                    <div className="mt-1.5 flex justify-end gap-1.5">
+                      <button type="button" className="cursor-pointer rounded-md border border-danger px-2 py-1 text-xs text-danger" onClick={() => void removeWorkspace(item.id)}>确认删除</button>
+                      <button type="button" className="cursor-pointer rounded-md border border-line px-2 py-1 text-xs" onClick={() => setConfirmDeleteWs(null)}>取消</button>
                     </div>
                   </div>
                 )}
               </div>
             ))}
           </nav>
-          <section className="run-history">
-            <div className="pane-heading">
-              <span>任务</span>
-              <small>{sessions.length}</small>
+          <section className="mt-4">
+            <div className="flex items-center justify-between px-1 pb-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-ink-3">任务</span>
+              <small className="rounded-full bg-surface-2 px-1.5 text-xs text-ink-3">{sessions.length}</small>
             </div>
             {sessions.length > 5 && (
               <input
-                className="fw-session-search"
+                className="mb-2 w-full rounded-lg border border-line bg-bg px-2.5 py-1.5 text-sm outline-none focus:border-ink"
                 value={sessionQuery}
                 onChange={(event) => setSessionQuery(event.target.value)}
                 placeholder="搜索会话"
                 aria-label="搜索会话"
               />
             )}
-            <nav className="run-history-list" aria-label="会话列表">
+            <nav className="flex flex-col gap-0.5" aria-label="会话列表">
               {sessions
                 .filter((item) => !sessionQuery.trim() || item.title.toLowerCase().includes(sessionQuery.trim().toLowerCase()) || item.agent.toLowerCase().includes(sessionQuery.trim().toLowerCase()))
                 .map((item) => (
-                <button type="button" key={item.id} className={item.id === sessionId ? "run-history-item active" : "run-history-item"} onClick={() => router.push(`/fw/s/${item.id}`)}>
-                  <strong>{item.title}</strong>
-                  <small>{item.agent}</small>
+                <button type="button" key={item.id}
+                  className={`w-full cursor-pointer rounded-lg border border-transparent px-2.5 py-1.5 text-left transition-colors ${item.id === sessionId ? "border-line bg-surface" : "hover:bg-surface"}`}
+                  onClick={() => router.push(`/fw/s/${item.id}`)}>
+                  <strong className="block truncate text-sm font-medium">{item.title}</strong>
+                  <small className="font-mono text-xs text-ink-3">{item.agent}</small>
                 </button>
               ))}
-              {!sessions.length && <p className="empty-state">此智能体还没有任务。</p>}
-              {sessions.length > 0 && sessions.filter((item) => !sessionQuery.trim() || item.title.toLowerCase().includes(sessionQuery.trim().toLowerCase())).length === 0 && <p className="empty-state">没有匹配的会话。</p>}
+              {!sessions.length && <p className="px-2.5 py-2 text-sm text-ink-3">此智能体还没有任务。</p>}
+              {sessions.length > 0 && sessions.filter((item) => !sessionQuery.trim() || item.title.toLowerCase().includes(sessionQuery.trim().toLowerCase())).length === 0 && <p className="px-2.5 py-2 text-sm text-ink-3">没有匹配的会话。</p>}
             </nav>
           </section>
         </aside>
 
         <section className="fw-conversation">
-          <div className="run-toolbar">
-            <div>
-              <span className="eyebrow">会话</span>
-              <h1>{snapshot?.session.title ?? "新任务"}</h1>
+          <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-3">
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-semibold tracking-tight">{snapshot?.session.title ?? "新任务"}</h1>
             </div>
-            <div className="run-toolbar-meta">
-              <span className={`run-phase ${live.status === "idle" ? "succeeded" : "running"}`}>{live.status === "idle" ? "空闲" : live.status === "waiting_permission" ? "等待审批" : "进行中"}</span>
-              {live.streamState === "live" && busy && <span className="stream-state live">实时</span>}
-              {live.streamState === "reconnecting" && <span className="stream-state reconnecting">连接恢复中</span>}
-              {queuedCount > 0 && <span className="stream-state">排队 {queuedCount}</span>}
-              <span>{snapshot?.session.model.modelId || model}</span>
+            <div className="flex flex-shrink-0 items-center gap-2">
+              <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${live.status === "idle" ? "bg-success/10 text-success" : "bg-accent/10 text-accent"}`}>
+                {live.status === "idle" ? "空闲" : live.status === "waiting_permission" ? "等待审批" : "进行中"}
+              </span>
+              {live.streamState === "live" && busy && <span className="rounded-full border border-success px-2 py-0.5 text-xs text-success">实时</span>}
+              {live.streamState === "reconnecting" && <span className="rounded-full border border-accent px-2 py-0.5 text-xs text-accent">连接恢复中</span>}
+              {queuedCount > 0 && <span className="rounded-full border border-line px-2 py-0.5 text-xs text-ink-3">排队 {queuedCount}</span>}
+              <span className="font-mono text-xs text-ink-3">{snapshot?.session.model.modelId || model}</span>
               {busy && (
-                <button type="button" className="icon-command" title="停止" onClick={() => void stop()}>
+                <button type="button" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-line transition-colors hover:border-ink hover:bg-surface-2" title="停止" onClick={() => void stop()}>
                   <Icon name="stop" />
                 </button>
               )}
@@ -540,15 +528,13 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
             {messages.map((entry, index) => (
               <MessageView key={Array.isArray(entry) ? `assistant-${index}-${entry[0]?.info.id}` : entry.info.id} entry={entry} hideTools={live.todos.length > 0} sessionIdle={live.status === "idle"} />
             ))}
-            {/* 执行计划放在对话流末尾：它属于 Agent 回复的产物，钉在顶部会
-                把用户消息压到下面（用户反馈"我的消息在 Agent 下面"）。 */}
             <TodoChecklist todos={live.todos} tools={taskTools} />
             {live.pendingPermission && <PermissionCard request={live.pendingPermission} busy={replying} onReply={(reply, feedback) => void replyPermission(reply, feedback)} />}
-            {live.error && <div className="run-note">{live.error}</div>}
+            {live.error && <div className="mx-auto my-2 max-w-2xl rounded-lg border border-accent bg-accent/5 px-3 py-2 text-sm text-accent">{live.error}</div>}
             {!followScroll && (
               <button
                 type="button"
-                className="jump-to-latest"
+                className="sticky bottom-4 float-right mr-2 flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-bg px-3 py-1.5 text-xs font-medium shadow-md transition-colors hover:border-ink"
                 onClick={() => {
                   const element = scrollRef.current;
                   if (element) {
@@ -564,14 +550,15 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
           </div>
 
           <form
-            className="prompt-composer"
+            className="border-t border-line bg-bg px-5 py-3"
             onSubmit={(event) => {
               event.preventDefault();
               void send();
             }}
           >
-            <div className="composer-controls">
-              <select value={model} onChange={(event) => setModel(event.target.value)} aria-label="模型" disabled={!models.length}>
+            <div className="mb-2 flex gap-2">
+              <select value={model} onChange={(event) => setModel(event.target.value)} aria-label="模型" disabled={!models.length}
+                className="rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium outline-none transition-colors hover:border-ink/40 disabled:opacity-50">
                 {models.length ? models.map((item) => <option key={item.model} value={item.model}>{item.model}</option>) : <option>模型目录不可用</option>}
               </select>
             </div>
@@ -582,16 +569,17 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               onKeyDown={handleKeyDown}
               placeholder={snapshot ? (busy ? "智能体正在执行，发送将排队…" : "继续这条对话…（Enter 发送，Shift+Enter 换行）") : "描述要完成的任务…"}
               rows={3}
+              className="w-full resize-none rounded-xl border border-line bg-bg p-3 text-sm outline-none transition-colors focus:border-ink"
             />
-            <div className="composer-actions">
-              <span>{busy ? (queuedCount > 0 ? `执行中 · ${queuedCount} 条排队` : "执行中") : "就绪"}</span>
+            <div className="mt-2 flex items-center justify-between">
+              <span className="text-xs text-ink-3">{busy ? (queuedCount > 0 ? `执行中 · ${queuedCount} 条排队` : "执行中") : "就绪"}</span>
               {busy ? (
-                <button type="button" className="command-button quiet" onClick={() => void stop()}>
+                <button type="button" className="cursor-pointer rounded-full border border-line bg-transparent px-4 py-1.5 text-sm font-medium transition-colors hover:border-ink hover:bg-surface-2" onClick={() => void stop()}>
                   停止
                 </button>
               ) : (
-                <button type="submit" className="command-button" disabled={!prompt.trim() || sending || (!snapshot && !workspaceId)}>
-                  {sending ? "发送中" : busy ? "排队" : "发送"}
+                <button type="submit" className="cursor-pointer rounded-full bg-ink px-5 py-1.5 text-sm font-semibold text-white transition-all hover:scale-105 hover:shadow-md disabled:scale-100 disabled:cursor-not-allowed disabled:opacity-40" disabled={!prompt.trim() || sending || (!snapshot && !workspaceId)}>
+                  {sending ? "发送中…" : busy ? "排队" : "发送 →"}
                 </button>
               )}
             </div>
@@ -599,37 +587,37 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
         </section>
 
         <aside className="fw-canvas">
-          <div className="canvas-tabs">
-            <button type="button" className={canvasTab === "artifacts" ? "active" : ""} onClick={() => setCanvasTab("artifacts")}>
-              产物 <span>{live.artifacts.length}</span>
+          <div className="flex gap-0 border-b border-line px-4">
+            <button type="button" className={`cursor-pointer border-b-2 px-3 py-2.5 text-xs font-medium transition-colors ${canvasTab === "artifacts" ? "border-ink text-ink" : "border-transparent text-ink-3 hover:text-ink-2"}`} onClick={() => setCanvasTab("artifacts")}>
+              产物 <span className="ml-1 rounded-full bg-surface-2 px-1.5 text-[10px]">{live.artifacts.length}</span>
             </button>
-            <button type="button" className={canvasTab === "edits" ? "active" : ""} onClick={() => setCanvasTab("edits")}>
-              改动 <span>{live.edits.length}</span>
+            <button type="button" className={`cursor-pointer border-b-2 px-3 py-2.5 text-xs font-medium transition-colors ${canvasTab === "edits" ? "border-ink text-ink" : "border-transparent text-ink-3 hover:text-ink-2"}`} onClick={() => setCanvasTab("edits")}>
+              改动 <span className="ml-1 rounded-full bg-surface-2 px-1.5 text-[10px]">{live.edits.length}</span>
             </button>
           </div>
           {canvasTab === "artifacts" && (
-            <div className="fw-canvas-body">
+            <div className="fw-canvas-body flex flex-col gap-2 p-3">
               {preview?.previewUrl ? (
-                <div className="fw-preview-wrap">
-                  <div className="fw-preview-head">
-                    <span>{preview.path}</span>
-                    <button type="button" className="icon-command" title="关闭预览" onClick={() => setPreview(null)}>
+                <div className="overflow-hidden rounded-xl border border-line">
+                  <div className="flex items-center justify-between border-b border-line px-3 py-1.5">
+                    <span className="font-mono text-xs">{preview.path}</span>
+                    <button type="button" className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-ink-3 hover:bg-surface-2 hover:text-ink" title="关闭预览" onClick={() => setPreview(null)}>
                       <Icon name="cross" />
                     </button>
                   </div>
-                  <iframe className="fw-preview-frame" src={preview.previewUrl} title={preview.path} sandbox="allow-scripts allow-same-origin" />
+                  <iframe className="h-80 w-full border-0 bg-white" src={preview.previewUrl} title={preview.path} sandbox="allow-scripts allow-same-origin" />
                 </div>
               ) : null}
               {live.artifacts.length ? (
                 live.artifacts.map((artifact) => <ArtifactPreviewCard key={artifact.artifactId} artifact={artifact} onOpen={openArtifact} />)
               ) : (
-                <p className="empty-state">沙箱生成的文件会出现在这里，可预览或下载。</p>
+                <p className="px-2 py-4 text-center text-sm text-ink-3">沙箱生成的文件会出现在这里，可预览或下载。</p>
               )}
             </div>
           )}
           {canvasTab === "edits" && (
-            <div className="fw-canvas-body">
-              {live.edits.length ? live.edits.map((edit) => <EditCard key={`${edit.revisionId}-${edit.path}`} edit={edit} />) : <p className="empty-state">Agent 的文件改动（含差异）会出现在这里。</p>}
+            <div className="flex flex-col gap-2 p-3">
+              {live.edits.length ? live.edits.map((edit) => <EditCard key={`${edit.revisionId}-${edit.path}`} edit={edit} />) : <p className="px-2 py-4 text-center text-sm text-ink-3">Agent 的文件改动（含差异）会出现在这里。</p>}
             </div>
           )}
         </aside>

@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "Agent 编排与工作流 · zmzai cloud 子产品",
 };
 
-export const viewport: Viewport = { themeColor: "#F4EFE6" };
+export const viewport: Viewport = { themeColor: "#FFFFFF" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

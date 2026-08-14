@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@zmzai/db"],
+  transpilePackages: ["@zmzai/db", "@zmzai/theme"],
   webpack: (config) => {
     // The framework package's ESM source imports use .js extensions (NodeNext
     // style); map them back to .ts so webpack resolves the source directly.
