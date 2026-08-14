@@ -198,7 +198,16 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
 
       const consume = (payload: string) => {
         if (!payload || payload === "[DONE]") return;
-        const chunk = JSON.parse(payload) as OpenAiChunk;
+        const chunk = JSON.parse(payload) as OpenAiChunk & { error?: { code?: string; message?: string } };
+        // relay 会把上游中途断流（如 upstream_http2_stream_error）作为
+        // error 事件转发。没有 choices 字段，不能静默忽略——必须抛错让
+        // runner 的重试逻辑接管，否则半截回复会被当成正常结束。
+        if (chunk.error) {
+          throw new RelayAgentError(
+            typeof chunk.error.code === "string" ? chunk.error.code : "UPSTREAM_STREAM_ERROR",
+            typeof chunk.error.message === "string" ? chunk.error.message : "上游流中断",
+          );
+        }
         const choice = chunk.choices?.[0];
         if (!choice) return;
         if (choice.delta?.content) {
