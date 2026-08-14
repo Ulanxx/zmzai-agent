@@ -2,7 +2,7 @@ import { AgentRegistry, SessionRunner, type SessionInfo, type ModelRef, type Too
 import { loadCustomAgents } from "@zmzai/agent-framework";
 import { mongoEventLog } from "@/framework/core/events/mongo-event-log";
 import { mongoSessionStore } from "@/framework/core/session/mongo-store";
-import { createMongoWorkspaceFiles } from "@/framework/core/tools/mongo-workspace";
+import { createMongoWorkspaceFiles, createWorkspaceAggregateFiles } from "@/framework/core/tools/mongo-workspace";
 import { createRelayModel, createRelayStreamFunction } from "@/lib/relay-agent-stream";
 import { buildExecSnapshot } from "@/lib/sandbox-snapshot";
 import { runSandboxCommandAndStream } from "@/lib/sandbox-execution";
@@ -23,7 +23,7 @@ function getOrCreateRunner(): SessionRunner {
     eventLog: mongoEventLog,
     streamFnFor: (session) => createRelayStreamFunction({ userId: session.userId, taskRunId: session.id }),
     modelFor: (ref: ModelRef) => createRelayModel(ref.modelId),
-    workspaceFor: (session) => createMongoWorkspaceFiles({ userId: session.userId, workspaceId: session.workspaceId }),
+    workspaceFor: (session) => createMongoWorkspaceFiles({ userId: session.userId, workspaceId: session.workspaceId, sessionId: session.id }),
     sandbox: {
       buildSnapshot: async (input) => (await buildExecSnapshot({ userId: input.userId, workspaceId: input.workspaceId, runId: input.runId })).snapshot,
       run: async (input) => {
@@ -64,7 +64,8 @@ function getOrCreateRunner(): SessionRunner {
       },
     },
     loadWorkspaceAgents: async (session: SessionInfo) => {
-      const workspace = createMongoWorkspaceFiles({ userId: session.userId, workspaceId: session.workspaceId });
+      // .zmzai/agents/*.md 是 workspace 级资产（跨会话共享），走聚合视图而非会话隔离视图
+      const workspace = createWorkspaceAggregateFiles(session.workspaceId);
       const { agents } = await loadCustomAgents(workspace);
       return agents;
     },

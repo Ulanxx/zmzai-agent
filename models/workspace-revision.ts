@@ -14,6 +14,8 @@ const workspaceRevisionSchema = new Schema(
   {
     revisionId: { type: String, required: true, unique: true, immutable: true },
     workspaceId: { type: String, required: true, immutable: true },
+    // 会话级隔离：revision 链同样按会话划分（见 workspace-file.ts）。
+    sessionId: { type: String, required: true, immutable: true },
     userId: { type: String, required: true, immutable: true },
     parentRevisionId: { type: String, default: null, immutable: true },
     author: { type: String, enum: ["user", "agent"], required: true, immutable: true },

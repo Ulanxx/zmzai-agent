@@ -176,8 +176,9 @@ export async function deleteWorkspace(userId: string, workspaceId: string): Prom
 
 export async function listWorkspaceFiles(userId: string, workspaceId: string) {
   if (!(await WorkspaceModel.exists({ userId, workspaceId }))) return null;
+  // 聚合视图：跨会话列出该 workspace 全部文件（配置页用），sessionId 标注归属。
   const files = await WorkspaceFileModel.find({ workspaceId }).sort({ path: 1 }).lean();
-  return files.map((file) => ({ path: file.path, content: file.content, revisionId: file.revisionId, updatedAt: file.updatedAt.toISOString() }));
+  return files.map((file) => ({ path: file.path, sessionId: file.sessionId, content: file.content, revisionId: file.revisionId, updatedAt: file.updatedAt.toISOString() }));
 }
 
 export async function listWorkspaceRevisions(userId: string, workspaceId: string) {
