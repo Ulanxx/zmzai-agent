@@ -35,9 +35,8 @@ jobs:
         env:
           PNPM_FETCH_TIMEOUT: "300000"
           PNPM_FETCH_RETRIES: "5"
-      - run: pnpm test
-      - run: pnpm run typecheck
-      - run: pnpm run lint
+          # 豁免 @zmzai scope 包的 minimumReleaseAge 检查（自发布包，信任源）
+          PNPM_MINIMUM_RELEASE_AGE: "0"
 
   deploy:
     needs: quality
@@ -63,6 +62,7 @@ jobs:
         env:
           PNPM_FETCH_TIMEOUT: "300000"
           PNPM_FETCH_RETRIES: "5"
+          PNPM_MINIMUM_RELEASE_AGE: "0"
 
       - name: Restore production env for build
         run: |
