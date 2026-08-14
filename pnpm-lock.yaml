@@ -15,10 +15,10 @@ importers:
         specifier: 0.84.1
         version: 0.84.1(ws@8.21.3)(zod@4.4.3)
       '@zmzai/db':
-        specifier: github:Ulanxx/zmzai-db#main
+        specifier: https://github.com/Ulanxx/zmzai-db.git#main
         version: git+ssh://git@github.com/Ulanxx/zmzai-db.git#84b8ae9f990bc828d6e67ebadee5bb1ad73a5dc7(mongoose@9.9.1)
       '@zmzai/theme':
-        specifier: github:zmzai-cloud/zmzai-theme
+        specifier: https://github.com/zmzai-cloud/zmzai-theme.git
         version: https://codeload.github.com/zmzai-cloud/zmzai-theme/tar.gz/6d37be8988e723b1b26851bd7fb10b42bbce2cba(framer-motion@11.18.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(tailwindcss@4.3.3)
       class-variance-authority:
         specifier: ^0.7.0
@@ -1202,7 +1202,7 @@ packages:
       mongoose: ^8.24.0
 
   '@zmzai/theme@https://codeload.github.com/zmzai-cloud/zmzai-theme/tar.gz/6d37be8988e723b1b26851bd7fb10b42bbce2cba':
-    resolution: {gitHosted: true, integrity: sha512-Yr63PqNvpzLjpI6Hoxm6nwPbpn40Wl3dBi87ug25oTByzwpkoXlMRM5y6jqTh0l34VEcj1CrKcsw8mbdG31eRw==, tarball: https://codeload.github.com/zmzai-cloud/zmzai-theme/tar.gz/6d37be8988e723b1b26851bd7fb10b42bbce2cba}
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/zmzai-cloud/zmzai-theme/tar.gz/6d37be8988e723b1b26851bd7fb10b42bbce2cba}
     version: 0.1.0
     peerDependencies:
       framer-motion: ^11.0.0

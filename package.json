@@ -15,8 +15,8 @@
   "dependencies": {
     "@earendil-works/pi-agent-core": "0.84.1",
     "@earendil-works/pi-ai": "0.84.1",
-    "@zmzai/db": "github:Ulanxx/zmzai-db#main",
-    "@zmzai/theme": "github:zmzai-cloud/zmzai-theme",
+    "@zmzai/db": "https://github.com/Ulanxx/zmzai-db.git#main",
+    "@zmzai/theme": "https://github.com/zmzai-cloud/zmzai-theme.git",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "framer-motion": "^11.0.0",
@@ -44,5 +44,6 @@
   },
   "optionalDependencies": {
     "@next/swc-linux-x64-gnu": "15.5.21"
-  }
+  },
+  "packageManager": "pnpm@10.34.5+sha512.a4ee05f2f73658255bd6a89859c065a45c28a57daefae2c893a168ee2b73168c37b91e83e57ea67654ad03f03031746430e8bce38e362e042605fb8abc80192e"
 }
