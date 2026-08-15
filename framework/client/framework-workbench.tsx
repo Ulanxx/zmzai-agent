@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 
 import { Icon } from "@/components/icon";
 import { Seal } from "@/components/seal";
-import { Select as ThemeSelect, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@zmzai/theme";
+import { Button, Input, Select as ThemeSelect, SelectTrigger, SelectValue, SelectContent, SelectItem, Textarea } from "@zmzai/theme";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
   fwApi,
@@ -334,9 +334,9 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                 { label: "数据分析", prompt: "分析当前 Workspace 里的数据文件，给出关键指标和趋势总结" },
                 { label: "深度研究", prompt: "深度研究一个主题：先列出大纲，再逐节展开，最后给出参考资料" },
               ].map((task) => (
-                <button key={task.label} type="button" className="cursor-pointer rounded-full border border-line bg-surface px-4 py-2 text-sm font-medium transition-all hover:border-ink hover:bg-bg" onClick={() => setPrompt(task.prompt)}>
+                <Button key={task.label} type="button" variant="secondary" size="sm" onClick={() => setPrompt(task.prompt)}>
                   {task.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -367,22 +367,20 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                 </SelectContent>
               </ThemeSelect>
             </div>
-            <textarea
+            <Textarea
               ref={textareaRef}
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="描述要完成的任务…（Enter 发送）"
               rows={5}
-              className="w-full resize-none rounded-lg border border-line bg-bg p-4 text-base outline-none transition-colors focus:border-ink"
+              className="w-full resize-none text-base"
             />
             <div className="mt-3 flex items-center justify-between">
               <span className="text-sm text-ink-3">{workspaces.find((w) => w.id === workspaceId)?.name ?? "选择智能体"}</span>
-              <button type="submit"
-                className="cursor-pointer rounded-full bg-ink px-6 py-2.5 text-sm font-semibold text-white transition-all hover:scale-105 hover:shadow-md disabled:scale-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
-                disabled={!prompt.trim() || sending || (!workspaceId)}>
+              <Button type="submit" disabled={!prompt.trim() || sending || !workspaceId}>
                 {sending ? "发送中…" : "开始任务 →"}
-              </button>
+              </Button>
             </div>
           </form>
           {recentSessions.length > 0 && (
@@ -424,9 +422,8 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                 void createWorkspace(event);
               }}
             >
-              <input name="name" autoFocus maxLength={120} placeholder="智能体名称"
-                className="min-w-0 flex-1 rounded-lg border border-line bg-bg px-2.5 py-1.5 text-sm outline-none focus:border-ink" />
-              <button type="submit" className="cursor-pointer rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-white">创建</button>
+              <Input name="name" autoFocus maxLength={120} placeholder="智能体名称" className="min-w-0 flex-1" />
+              <Button type="submit" size="sm">创建</Button>
             </form>
           )}
           <nav className="mt-1 flex flex-col gap-0.5" aria-label="Workspace 列表">
@@ -440,11 +437,10 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                       void renameWorkspace(item.id);
                     }}
                   >
-                    <input value={renamingName} onChange={(event) => setRenamingName(event.target.value)} autoFocus maxLength={120} aria-label="智能体名称"
-                      className="min-w-0 flex-1 rounded-md border border-ink bg-bg px-2 py-1 text-sm outline-none" />
-                    <button type="submit" className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md hover:bg-surface-2" title="保存">
-                      <Icon name="check" />
-                    </button>
+                    <Input value={renamingName} onChange={(event) => setRenamingName(event.target.value)} autoFocus maxLength={120} aria-label="智能体名称" className="min-w-0 flex-1" />
+                    <Button type="submit" size="icon" variant="ghost" className="h-6 w-6" title="保存">
+                      <Icon name="check" size={12} />
+                    </Button>
                   </form>
                 ) : (
                   <button type="button" className="w-full cursor-pointer rounded-lg px-2.5 py-2 text-left text-sm font-medium transition-colors" onClick={() => setWorkspaceId(item.id)}>
@@ -466,8 +462,8 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                   <div className="mx-1.5 mb-1 rounded-lg border border-line bg-surface p-2 text-xs text-ink-2">
                     <span>删除后会话、产物、文件版本全部清除，不可恢复。</span>
                     <div className="mt-1.5 flex justify-end gap-1.5">
-                      <button type="button" className="cursor-pointer rounded-md border border-danger px-2 py-1 text-xs text-danger" onClick={() => void removeWorkspace(item.id)}>确认删除</button>
-                      <button type="button" className="cursor-pointer rounded-md border border-line px-2 py-1 text-xs" onClick={() => setConfirmDeleteWs(null)}>取消</button>
+                      <Button type="button" variant="danger" size="sm" onClick={() => void removeWorkspace(item.id)}>确认删除</Button>
+                      <Button type="button" variant="secondary" size="sm" onClick={() => setConfirmDeleteWs(null)}>取消</Button>
                     </div>
                   </div>
                 )}
@@ -480,8 +476,8 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               <small className="rounded-full bg-surface-2 px-1.5 text-xs text-ink-3">{sessions.length}</small>
             </div>
             {sessions.length > 5 && (
-              <input
-                className="mb-2 w-full rounded-lg border border-line bg-bg px-2.5 py-1.5 text-sm outline-none focus:border-ink"
+              <Input
+                className="mb-2 w-full"
                 value={sessionQuery}
                 onChange={(event) => setSessionQuery(event.target.value)}
                 placeholder="搜索会话"
@@ -587,25 +583,25 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                 </SelectContent>
               </ThemeSelect>
             </div>
-            <textarea
+            <Textarea
               ref={textareaRef}
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={snapshot ? (busy ? "智能体正在执行，发送将排队…" : "继续这条对话…（Enter 发送，Shift+Enter 换行）") : "描述要完成的任务…"}
               rows={3}
-              className="w-full resize-none rounded-xl border border-line bg-bg p-3 text-sm outline-none transition-colors focus:border-ink"
+              className="w-full resize-none"
             />
             <div className="mt-2 flex items-center justify-between">
               <span className="text-xs text-ink-3">{busy ? (queuedCount > 0 ? `执行中 · ${queuedCount} 条排队` : "执行中") : "就绪"}</span>
               {busy ? (
-                <button type="button" className="cursor-pointer rounded-full border border-line bg-transparent px-4 py-1.5 text-sm font-medium transition-colors hover:border-ink hover:bg-surface-2" onClick={() => void stop()}>
+                <Button type="button" variant="secondary" size="sm" onClick={() => void stop()}>
                   停止
-                </button>
+                </Button>
               ) : (
-                <button type="submit" className="cursor-pointer rounded-full bg-ink px-5 py-1.5 text-sm font-semibold text-white transition-all hover:scale-105 hover:shadow-md disabled:scale-100 disabled:cursor-not-allowed disabled:opacity-40" disabled={!prompt.trim() || sending || (!snapshot && !workspaceId)}>
+                <Button type="submit" size="sm" disabled={!prompt.trim() || sending || (!snapshot && !workspaceId)}>
                   {sending ? "发送中…" : busy ? "排队" : "发送 →"}
-                </button>
+                </Button>
               )}
             </div>
           </form>
