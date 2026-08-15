@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { DiffView } from "@/components/diff-view";
 import { Icon } from "@/components/icon";
@@ -11,6 +11,38 @@ import type { MessageWithParts, Part } from "@/framework/core/session/types";
 /** Part renderers (spec §10.2): the conversation stream renders directly from
  *  the part list — text/reasoning/tool/step parts inline, approvals as inline
  *  cards, todos as a pinned checklist, artifacts as preview cards. */
+
+/** Canvas 内的 pptx 预览：fetch previewUrl 原始字节，用 pptx-preview 渲染
+ *  成可翻页的幻灯片（pptx 无法像 html/pdf 那样 iframe 内嵌）。 */
+export function PptxPreview({ previewUrl }: { previewUrl: string }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let destroyed = false;
+    let previewer: { preview: (buffer: ArrayBuffer) => Promise<unknown>; destroy: () => void } | null = null;
+    (async () => {
+      try {
+        const response = await fetch(previewUrl, { cache: "no-store" });
+        if (!response.ok) throw new Error(`预览加载失败（HTTP ${response.status}）`);
+        const buffer = await response.arrayBuffer();
+        if (destroyed || !containerRef.current) return;
+        const { init } = await import("pptx-preview");
+        previewer = init(containerRef.current, { width: 860, height: 484 });
+        await previewer.preview(buffer);
+      } catch (cause) {
+        if (!destroyed) setError(cause instanceof Error ? cause.message : "PPT 预览失败");
+      }
+    })();
+    return () => {
+      destroyed = true;
+      previewer?.destroy();
+    };
+  }, [previewUrl]);
+
+  if (error) return <p className="p-4 text-center text-sm text-ink-3">{error}，可改用下载按钮。</p>;
+  return <div ref={containerRef} className="pptx-preview-host p-3" />;
+}
 
 function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;

@@ -42,7 +42,7 @@ function getOrCreateRunner(): SessionRunner {
           durationMs: result.durationMs,
           ...(result.errorMessage ? { errorMessage: result.errorMessage } : {}),
           artifacts: result.artifacts.map((artifact) => {
-            const previewable = /^(text\/html|image\/(png|jpeg|gif|svg\+xml|webp)|application\/pdf|text\/(plain|markdown|css))/.test(artifact.contentType.toLowerCase());
+            const previewable = /^(text\/html|image\/(png|jpeg|gif|svg\+xml|webp)|application\/pdf|text\/(plain|markdown|css)|application\/vnd\.openxmlformats-officedocument\.presentationml\.presentation)/.test(artifact.contentType.toLowerCase());
             const base = artifact.artifactId ? `/api/fw/sessions/${input.runId}/artifacts/${artifact.artifactId}` : null;
             return {
               path: artifact.path,

@@ -9,7 +9,20 @@ import { SandboxArtifactModel } from "@/models/sandbox-artifact";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const previewableTypes = new Set(["text/html", "image/png", "image/jpeg", "image/gif", "image/svg+xml", "image/webp", "application/pdf", "text/plain", "text/markdown", "text/css"]);
+const previewableTypes = new Set([
+  "text/html",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/svg+xml",
+  "image/webp",
+  "application/pdf",
+  "text/plain",
+  "text/markdown",
+  "text/css",
+  // pptx：返回原始字节，前端 Canvas 用 pptx 渲染器展示（非 iframe 内嵌）
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+]);
 
 /** Inline preview (spec §10.2 step 2): serves previewable types with their
  *  real Content-Type and NO attachment disposition, so the workbench can

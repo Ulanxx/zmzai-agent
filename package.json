@@ -28,6 +28,7 @@
     "mongodb": "^7.5.0",
     "mongoose": "^9.9.1",
     "next": "15.5.21",
+    "pptx-preview": "^1.0.7",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-markdown": "^10.1.0",

@@ -14,7 +14,7 @@ import {
   type Reply,
   type SessionInfo,
 } from "@/framework/client/use-framework-session";
-import { ArtifactPreviewCard, EditCard, groupAssistantMessages, MessageView, PermissionCard, TodoChecklist } from "@/framework/client/parts";
+import { ArtifactPreviewCard, EditCard, groupAssistantMessages, MessageView, PermissionCard, PptxPreview, TodoChecklist } from "@/framework/client/parts";
 
 type Model = { model: string; maxOutputTokens: number };
 type Workspace = { id: string; name: string; defaultModel: string };
@@ -618,7 +618,13 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                       <Icon name="cross" />
                     </button>
                   </div>
-                  <iframe className="h-80 w-full border-0 bg-white" src={preview.previewUrl} title={preview.path} sandbox="allow-scripts allow-same-origin" />
+                  {preview.contentType.includes("presentationml.presentation") ? (
+                    <div className="max-h-[32rem] overflow-auto bg-white">
+                      <PptxPreview previewUrl={preview.previewUrl} />
+                    </div>
+                  ) : (
+                    <iframe className="h-80 w-full border-0 bg-white" src={preview.previewUrl} title={preview.path} sandbox="allow-scripts allow-same-origin" />
+                  )}
                 </div>
               ) : null}
               {live.artifacts.length ? (
