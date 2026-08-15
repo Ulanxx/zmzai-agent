@@ -109,6 +109,16 @@ export function FrameworkAudit() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [openEvents, setOpenEvents] = useState<Set<number>>(new Set());
+
+  const toggleEvent = (seq: number) => {
+    setOpenEvents((current) => {
+      const next = new Set(current);
+      if (next.has(seq)) next.delete(seq);
+      else next.add(seq);
+      return next;
+    });
+  };
 
   useEffect(() => {
     void (async () => {
@@ -229,17 +239,24 @@ export function FrameworkAudit() {
                 <div className="audit-tool-timeline">
                   {detail.events.map((event) => {
                     const summary = eventSummary(event.type, event.data);
+                    const open = openEvents.has(event.seq);
                     return (
-                      <div key={event.seq} className="audit-tool-node">
-                        <div className="audit-tool-node-head">
+                      <div key={event.seq} className={`audit-tool-node ${open ? "open" : ""}`}>
+                        <button type="button" className="audit-event-toggle" onClick={() => toggleEvent(event.seq)} aria-expanded={open}>
                           <span className="audit-tool-name">#{event.seq}</span>
                           <span className="audit-tool-args">{event.type}</span>
                           <span className="audit-tool-state">{timeLabel(event.at)}</span>
-                        </div>
-                        {summary && (
+                          <span className="audit-event-json-hint">JSON</span>
+                        </button>
+                        {summary && !open && (
                           <div className="audit-event-summary">
                             <span className="audit-event-main">{summary.main}</span>
                             {summary.sub && <span className="audit-event-sub">{summary.sub}</span>}
+                          </div>
+                        )}
+                        {open && (
+                          <div className="audit-tool-body">
+                            <pre>{JSON.stringify(event.data, null, 2)}</pre>
                           </div>
                         )}
                       </div>
