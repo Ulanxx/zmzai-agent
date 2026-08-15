@@ -374,7 +374,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               onKeyDown={handleKeyDown}
               placeholder="描述要完成的任务…（Enter 发送）"
               rows={5}
-              className="w-full resize-none text-base"
+              className="w-full resize-none px-5 py-4 text-base leading-relaxed"
             />
             <div className="mt-3 flex items-center justify-between">
               <span className="text-sm text-ink-3">{workspaces.find((w) => w.id === workspaceId)?.name ?? "选择智能体"}</span>
@@ -387,11 +387,11 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
             <div className="w-full max-w-2xl">
               <span className="mb-3 block text-xs font-semibold uppercase tracking-wide text-ink-3">最近任务</span>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fill,minmax(12rem,1fr))]">
-                {recentSessions.map((item) => (
+                {recentSessions.slice(0, 6).map((item) => (
                   <Button type="button" key={item.id} variant="ghost"
-                    className="w-full justify-start rounded-xl border border-line bg-bg p-3 hover:border-ink hover:shadow-md"
+                    className="w-full min-w-0 justify-start rounded-xl border border-line bg-bg p-3 text-left hover:border-ink hover:shadow-md"
                     onClick={() => router.push(`/fw/s/${item.id}`)}>
-                    <span className="flex w-full flex-col items-start gap-0.5">
+                    <span className="flex w-full min-w-0 flex-col items-start gap-0.5">
                       <strong className="block truncate text-sm font-semibold">{item.title}</strong>
                       <small className="font-mono text-xs text-ink-3">{item.agent}</small>
                     </span>
@@ -588,7 +588,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               onKeyDown={handleKeyDown}
               placeholder={snapshot ? (busy ? "智能体正在执行，发送将排队…" : "继续这条对话…（Enter 发送，Shift+Enter 换行）") : "描述要完成的任务…"}
               rows={3}
-              className="w-full resize-none"
+              className="w-full resize-none px-4 py-3"
             />
             <div className="mt-2 flex items-center justify-between">
               <span className="text-xs text-ink-3">{busy ? (queuedCount > 0 ? `执行中 · ${queuedCount} 条排队` : "执行中") : "就绪"}</span>
