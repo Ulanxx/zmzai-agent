@@ -904,9 +904,12 @@
   /* 产物卡 */
   .fw-artifact-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.15rem 0.6rem; align-items: center; text-align: left; border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-bg); padding: 0.6rem 0.75rem; cursor: pointer; font: inherit; color: inherit; transition: all 0.15s var(--ease-out); }
   .fw-artifact-card:hover { border-color: var(--color-line-strong); box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
-  .fw-artifact-name { font-family: var(--font-mono); font-size: 0.75rem; overflow-wrap: anywhere; }
-  .fw-artifact-meta { font-size: 0.6875rem; color: var(--color-muted); }
-  .fw-artifact-actions { grid-row: span 2; display: flex; align-items: center; gap: 0.5rem; }
+  /* 显式 grid 定位：name/meta 固定在左列（1fr），actions 固定右列跨两行。
+     自动放置曾把超长 MIME 文本（无空格、无断行）排进右列 auto 轨道，
+     撑爆布局把名字列压成 0 → 文件名竖排逐字折行。 */
+  .fw-artifact-name { grid-column: 1; grid-row: 1; font-family: var(--font-mono); font-size: 0.75rem; overflow-wrap: anywhere; }
+  .fw-artifact-meta { grid-column: 1; grid-row: 2; font-size: 0.6875rem; color: var(--color-muted); overflow-wrap: anywhere; }
+  .fw-artifact-actions { grid-column: 2; grid-row: 1 / span 2; display: flex; align-items: center; gap: 0.5rem; }
   .fw-artifact-preview-hint { font-family: var(--font-mono); font-size: 0.625rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-accent-strong); }
   .fw-artifact-download { display: inline-flex; color: var(--color-muted); }
   .fw-artifact-download:hover { color: var(--color-accent); }

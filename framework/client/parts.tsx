@@ -367,12 +367,36 @@ export function TodoChecklist({ todos, tools }: { todos: TodoItem[]; tools: Tool
   );
 }
 
+/** MIME → 卡片用的短类型名。完整 MIME（如 OOXML 的超长串）会撑坏
+ *  卡片布局也不可读，映射为扩展名风格；未知长类型取 subtype 末段。 */
+function shortContentType(contentType: string): string {
+  const type = contentType.split(";")[0]!.trim().toLowerCase();
+  const known: Record<string, string> = {
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+    "application/vnd.openxmlformats-officedocument.presentationml.slideshow": "ppsx",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "application/pdf": "pdf",
+    "application/json": "json",
+    "application/zip": "zip",
+    "text/html": "html",
+    "text/markdown": "md",
+    "text/plain": "txt",
+    "text/css": "css",
+  };
+  if (known[type]) return known[type]!;
+  const sub = type.split("/").pop() ?? "file";
+  if (sub.length <= 14) return sub;
+  const tail = sub.split(".").pop() ?? sub;
+  return tail.length <= 14 ? tail : "file";
+}
+
 export function ArtifactPreviewCard({ artifact, onOpen }: { artifact: ArtifactCard; onOpen: (artifact: ArtifactCard) => void }) {
   return (
     <button type="button" className="fw-artifact-card" onClick={() => onOpen(artifact)}>
       <span className="fw-artifact-name">{artifact.path}</span>
       <span className="fw-artifact-meta">
-        {artifact.contentType.split("/").pop()} · {formatBytes(artifact.bytes)}
+        {shortContentType(artifact.contentType)} · {formatBytes(artifact.bytes)}
       </span>
       <span className="fw-artifact-actions">
         {artifact.previewUrl && <span className="fw-artifact-preview-hint">预览</span>}
