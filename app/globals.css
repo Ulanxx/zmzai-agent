@@ -789,14 +789,17 @@
 
   .fw-grid { display: grid; grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr) minmax(16rem, 22rem); flex: 1 1 auto; height: auto; min-height: 0; overflow: hidden; }
   .fw-sidebar, .fw-canvas { background: color-mix(in oklab, var(--color-surface) 92%, var(--color-paper)); overflow: hidden; }
-  .fw-sidebar { border-right: 1px solid var(--color-line); padding: 1rem 0.75rem; }
+  /* 侧栏任务列表超长必须可滚（原先 hidden 直接裁掉看不到底部的会话） */
+  .fw-sidebar { border-right: 1px solid var(--color-line); padding: 1rem 0.75rem; overflow-y: auto; }
   /* 收起/展开按钮：仅窄屏显示（见 48rem 断点），桌面常驻隐藏 */
   .fw-sidebar-toggle { display: none; }
   /* 标题栏左侧多了 toggle 按钮：改为左对齐 + 新建按钮仍靠右 */
   .fw-sidebar .pane-heading { justify-content: flex-start; gap: 0.45rem; }
   .fw-sidebar .pane-heading .icon-command:last-child { margin-left: auto; }
   .fw-canvas { border-left: 1px solid var(--color-line); padding: 1rem; display: flex; flex-direction: column; min-height: 0; }
-  .fw-canvas-body { display: grid; gap: 0.6rem; align-content: start; margin-top: 0.75rem; }
+  /* 产物/改动列表可滚：flex 子项需 min-height:0 允许收缩，否则内容把
+     .fw-canvas 撑爆被外壳 hidden 裁掉（预览 + 多卡片时滚不动） */
+  .fw-canvas-body { display: grid; gap: 0.6rem; align-content: start; margin-top: 0.75rem; overflow-y: auto; min-height: 0; }
   .fw-conversation { display: flex; min-height: 0; flex-direction: column; padding: 1rem 1.25rem; }
 
   .fw-assistant-turn { display: grid; gap: 0.5rem; margin-bottom: 1rem; }
