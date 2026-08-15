@@ -540,15 +540,18 @@
   .audit-tool-node.running { border-left: 3px solid var(--color-ink); }
   .audit-tool-node.completed { border-left: 3px solid var(--color-success); }
   .audit-tool-node.failed { border-left: 3px solid #b03a28; }
-  .audit-tool-node-head { display: flex; align-items: baseline; gap: 0.6rem; padding: 0.5rem 0.65rem; }
-  .audit-tool-node-head + .audit-tool-body, .audit-event-summary { border-top: 1px solid var(--color-line); }
-  .audit-event-summary { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.4rem 0.65rem 0.5rem; min-width: 0; }
-  .audit-event-main { color: var(--color-ink); font-size: 0.75rem; line-height: 1.5; overflow-wrap: anywhere; }
-  .audit-event-sub { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.656rem; line-height: 1.55; overflow-wrap: anywhere; }
+  .audit-tool-node-head { display: flex; align-items: baseline; gap: 0.6rem; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--color-line); }
+  .audit-tool-node-head + .audit-tool-body { border-top: 0; }
   .audit-event-toggle { display: flex; align-items: baseline; gap: 0.6rem; width: 100%; padding: 0.5rem 0.65rem; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; }
   .audit-event-toggle:hover { background: var(--color-surface); }
   .audit-event-json-hint { flex: 0 0 auto; margin-left: auto; color: var(--color-accent-strong); font-family: var(--font-mono); font-size: 0.5625rem; letter-spacing: 0.06em; border: 1px solid var(--color-line); border-radius: var(--radius-sm); padding: 0.05rem 0.3rem; }
   .audit-tool-node.open .audit-event-json-hint { background: var(--color-ink); color: var(--color-paper); border-color: var(--color-ink); }
+  /* 事件 JSON：默认露两行（底部渐隐提示可展开），点击 item 展开全部（限高内滚） */
+  .audit-event-json { position: relative; max-height: 3.1em; overflow: hidden; border-top: 1px solid var(--color-line); }
+  .audit-event-json pre { max-height: none; margin: 0; padding: 0.45rem 0.65rem; font-family: var(--font-mono); font-size: 0.656rem; line-height: 1.55; white-space: pre; }
+  .audit-event-json::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1.5em; background: linear-gradient(transparent, color-mix(in oklab, var(--color-surface) 93%, var(--color-bg))); pointer-events: none; }
+  .audit-tool-node.open .audit-event-json { max-height: 24rem; overflow: auto; }
+  .audit-tool-node.open .audit-event-json::after { display: none; }
   .audit-tool-name { color: var(--color-accent-strong); font-family: var(--font-mono); font-size: 0.625rem; font-weight: 700; letter-spacing: 0.045em; text-transform: uppercase; white-space: nowrap; }
   .audit-tool-args { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6875rem; }
   .audit-tool-state, .audit-tool-duration { flex: 0 0 auto; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.625rem; white-space: nowrap; }
