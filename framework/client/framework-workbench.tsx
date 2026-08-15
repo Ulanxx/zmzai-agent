@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import { Icon } from "@/components/icon";
 import { Seal } from "@/components/seal";
 import { Select as ThemeSelect, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@zmzai/theme";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
   fwApi,
   useFrameworkSession,
@@ -396,9 +397,9 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
         </div>
       )}
 
-      {/* 任务态：三栏工作台。 */}
+      {/* 任务态：三栏工作台——侧栏可收起，对话区/画布用 PanelGroup 拖动分栏。 */}
       {snapshot && (
-      <div className="fw-grid">
+      <div className={sidebarCollapsed ? "fw-grid sidebar-hidden" : "fw-grid"}>
         <aside className={sidebarCollapsed ? "fw-sidebar collapsed" : "fw-sidebar"}>
           <div className="flex items-center justify-between px-1 pb-2">
             <button type="button" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-line transition-colors hover:border-ink hover:bg-surface-2" title={sidebarCollapsed ? "展开侧栏" : "收起侧栏"} onClick={() => setSidebarCollapsed((value) => !value)}>
@@ -498,10 +499,21 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
           </section>
         </aside>
 
+        <div className="fw-main">
+        <PanelGroup direction="horizontal" autoSaveId="fw-conv-canvas-split">
+          <Panel defaultSize={50} minSize={20} className="fw-panel">
+
         <section className="fw-conversation">
           <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-3">
-            <div className="min-w-0">
-              <h1 className="truncate text-lg font-semibold tracking-tight">{snapshot?.session.title ?? "新任务"}</h1>
+            <div className="flex min-w-0 items-center gap-2">
+              {sidebarCollapsed && (
+                <button type="button" className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-line transition-colors hover:border-ink hover:bg-surface-2" title="展开侧栏" onClick={() => setSidebarCollapsed(false)}>
+                  <Icon name="chevron-down" size={14} className="-rotate-90" />
+                </button>
+              )}
+              <div className="min-w-0">
+                <h1 className="truncate text-lg font-semibold tracking-tight">{snapshot?.session.title ?? "新任务"}</h1>
+              </div>
             </div>
             <div className="flex flex-shrink-0 items-center gap-2">
               <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${live.status === "idle" ? "bg-success/10 text-success" : "bg-accent/10 text-accent"}`}>
@@ -593,6 +605,9 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
           </form>
         </section>
 
+          </Panel>
+          <PanelResizeHandle className="fw-resizer" />
+          <Panel defaultSize={50} minSize={20} collapsible collapsedSize={0} className="fw-panel">
         <aside className="fw-canvas">
           <div className="flex gap-0 border-b border-line px-4">
             <button type="button" className={`cursor-pointer border-b-2 px-3 py-2.5 text-xs font-medium transition-colors ${canvasTab === "artifacts" ? "border-ink text-ink" : "border-transparent text-ink-3 hover:text-ink-2"}`} onClick={() => setCanvasTab("artifacts")}>
@@ -613,6 +628,9 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
             </div>
           )}
         </aside>
+          </Panel>
+        </PanelGroup>
+        </div>
       </div>
       )}
     </main>
