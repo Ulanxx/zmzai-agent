@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 
 import { Icon } from "@/components/icon";
 import { Seal } from "@/components/seal";
-import { Button, Input, Select as ThemeSelect, SelectTrigger, SelectValue, SelectContent, SelectItem, Textarea } from "@zmzai/theme";
+import { Button, IconButton, Input, Select as ThemeSelect, SelectTrigger, SelectValue, SelectContent, SelectItem, Tabs, Textarea } from "@zmzai/theme";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
   fwApi,
@@ -305,9 +305,9 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               {user.name}
             </span>
           )}
-          <button type="button" className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-line transition-colors hover:border-ink hover:bg-surface-2" title="退出登录" onClick={() => void logout()}>
+          <IconButton size="lg" label="退出登录" onClick={() => void logout()}>
             <Icon name="logout" size={14} />
-          </button>
+          </IconButton>
         </div>
       </header>
       {actionError && (
@@ -388,12 +388,14 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               <span className="mb-3 block text-xs font-semibold uppercase tracking-wide text-ink-3">最近任务</span>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fill,minmax(12rem,1fr))]">
                 {recentSessions.map((item) => (
-                  <button type="button" key={item.id}
-                    className="cursor-pointer rounded-xl border border-line bg-bg p-3 text-left transition-all hover:border-ink hover:shadow-md"
+                  <Button type="button" key={item.id} variant="ghost"
+                    className="w-full justify-start rounded-xl border border-line bg-bg p-3 hover:border-ink hover:shadow-md"
                     onClick={() => router.push(`/fw/s/${item.id}`)}>
-                    <strong className="block truncate text-sm font-semibold">{item.title}</strong>
-                    <small className="font-mono text-xs text-ink-3">{item.agent}</small>
-                  </button>
+                    <span className="flex w-full flex-col items-start gap-0.5">
+                      <strong className="block truncate text-sm font-semibold">{item.title}</strong>
+                      <small className="font-mono text-xs text-ink-3">{item.agent}</small>
+                    </span>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -406,13 +408,13 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
       <div className={sidebarCollapsed ? "fw-grid sidebar-hidden" : "fw-grid"}>
         <aside className={sidebarCollapsed ? "fw-sidebar collapsed" : "fw-sidebar"}>
           <div className="flex items-center justify-between px-1 pb-2">
-            <button type="button" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-line transition-colors hover:border-ink hover:bg-surface-2" title={sidebarCollapsed ? "展开侧栏" : "收起侧栏"} onClick={() => setSidebarCollapsed((value) => !value)}>
+            <IconButton size="md" label={sidebarCollapsed ? "展开侧栏" : "收起侧栏"} onClick={() => setSidebarCollapsed((value) => !value)}>
               <Icon name={sidebarCollapsed ? "chevron-down" : "cross"} size={14} />
-            </button>
+            </IconButton>
             <span className="text-xs font-semibold uppercase tracking-wide text-ink-3">智能体</span>
-            <button type="button" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-line transition-colors hover:border-ink hover:bg-surface-2" title="新建 Workspace" onClick={() => setCreatingWs((value) => !value)}>
-              <Icon name="plus" />
-            </button>
+            <IconButton size="md" label="新建 Workspace" onClick={() => setCreatingWs((value) => !value)}>
+              <Icon name="plus" size={14} />
+            </IconButton>
           </div>
           {creatingWs && (
             <form
@@ -443,20 +445,14 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                     </Button>
                   </form>
                 ) : (
-                  <button type="button" className="w-full cursor-pointer rounded-lg px-2.5 py-2 text-left text-sm font-medium transition-colors" onClick={() => setWorkspaceId(item.id)}>
+                  <Button type="button" variant="ghost" className="w-full justify-start px-2.5 py-2" onClick={() => setWorkspaceId(item.id)}>
                     <span className="block truncate">{item.name}</span>
-                  </button>
+                  </Button>
                 )}
                 <div className="flex gap-0.5 px-1.5 pb-1 opacity-0 transition-opacity group-hover:opacity-100">
-                  <button type="button" className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-ink-3 hover:bg-surface-2 hover:text-ink" title="配置智能体" onClick={() => router.push(`/fw/w/${item.id}`)}>
-                    <Icon name="settings" size={12} />
-                  </button>
-                  <button type="button" className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-ink-3 hover:bg-surface-2 hover:text-ink" title="重命名" onClick={() => { setRenamingWs(item.id); setRenamingName(item.name); setConfirmDeleteWs(null); }}>
-                    <Icon name="edit" size={12} />
-                  </button>
-                  <button type="button" className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-ink-3 hover:bg-danger/10 hover:text-danger" title={confirmDeleteWs === item.id ? "确认删除" : "删除"} onClick={() => setConfirmDeleteWs(confirmDeleteWs === item.id ? null : item.id)}>
-                    <Icon name="trash" size={12} />
-                  </button>
+                  <IconButton size="sm" label="配置智能体" onClick={() => router.push(`/fw/w/${item.id}`)}><Icon name="settings" size={12} /></IconButton>
+                  <IconButton size="sm" label="重命名" onClick={() => { setRenamingWs(item.id); setRenamingName(item.name); setConfirmDeleteWs(null); }}><Icon name="edit" size={12} /></IconButton>
+                  <IconButton size="sm" tone="quiet" label={confirmDeleteWs === item.id ? "确认删除" : "删除"} onClick={() => setConfirmDeleteWs(confirmDeleteWs === item.id ? null : item.id)}><Icon name="trash" size={12} /></IconButton>
                 </div>
                 {confirmDeleteWs === item.id && (
                   <div className="mx-1.5 mb-1 rounded-lg border border-line bg-surface p-2 text-xs text-ink-2">
@@ -489,7 +485,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                 .filter((item) => !sessionQuery.trim() || item.title.toLowerCase().includes(sessionQuery.trim().toLowerCase()) || item.agent.toLowerCase().includes(sessionQuery.trim().toLowerCase()))
                 .map((item) => (
                 <button type="button" key={item.id}
-                  className={`w-full cursor-pointer rounded-lg border border-transparent px-2.5 py-1.5 text-left transition-colors ${item.id === sessionId ? "border-line bg-surface" : "hover:bg-surface"}`}
+                  className={`w-full justify-start rounded-sm border border-transparent px-2.5 py-1.5 ${item.id === sessionId ? "border-line bg-surface" : "hover:bg-surface-2"}`}
                   onClick={() => router.push(`/fw/s/${item.id}`)}>
                   <strong className="block truncate text-sm font-medium">{item.title}</strong>
                   <small className="font-mono text-xs text-ink-3">{item.agent}</small>
@@ -509,9 +505,9 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
           <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-3">
             <div className="flex min-w-0 items-center gap-2">
               {sidebarCollapsed && (
-                <button type="button" className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-line transition-colors hover:border-ink hover:bg-surface-2" title="展开侧栏" onClick={() => setSidebarCollapsed(false)}>
+                <IconButton size="md" label="展开侧栏" onClick={() => setSidebarCollapsed(false)}>
                   <Icon name="chevron-down" size={14} className="-rotate-90" />
-                </button>
+                </IconButton>
               )}
               <div className="min-w-0">
                 <h1 className="truncate text-lg font-semibold tracking-tight">{snapshot?.session.title ?? "新任务"}</h1>
@@ -526,9 +522,9 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               {queuedCount > 0 && <span className="rounded-full border border-line px-2 py-0.5 text-xs text-ink-3">排队 {queuedCount}</span>}
               <span className="font-mono text-xs text-ink-3">{snapshot?.session.model.modelId || model}</span>
               {busy && (
-                <button type="button" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-line transition-colors hover:border-ink hover:bg-surface-2" title="停止" onClick={() => void stop()}>
-                  <Icon name="stop" />
-                </button>
+                <IconButton size="md" label="停止" onClick={() => void stop()}>
+                  <Icon name="stop" size={14} />
+                </IconButton>
               )}
             </div>
           </div>
@@ -549,9 +545,11 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
             {live.pendingPermission && <PermissionCard request={live.pendingPermission} busy={replying} onReply={(reply, feedback) => void replyPermission(reply, feedback)} />}
             {live.error && <div className="mx-auto my-2 max-w-2xl rounded-lg border border-accent bg-accent/5 px-3 py-2 text-sm text-accent">{live.error}</div>}
             {!followScroll && (
-              <button
+              <Button
                 type="button"
-                className="sticky bottom-4 float-right mr-2 flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-bg px-3 py-1.5 text-xs font-medium shadow-md transition-colors hover:border-ink"
+                variant="secondary"
+                size="sm"
+                className="sticky bottom-4 float-right mr-2 shadow-md"
                 onClick={() => {
                   const element = scrollRef.current;
                   if (element) {
@@ -562,7 +560,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               >
                 <Icon name="arrow-down" size={12} />
                 跳至最新
-              </button>
+              </Button>
             )}
           </div>
 
@@ -611,23 +609,22 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
           <PanelResizeHandle className="fw-resizer" />
           <Panel defaultSize={50} minSize={20} collapsible collapsedSize={0} className="fw-panel">
         <aside className="fw-canvas">
-          <div className="flex gap-0 border-b border-line px-4">
-            <button type="button" className={`cursor-pointer border-b-2 px-3 py-2.5 text-xs font-medium transition-colors ${canvasTab === "artifacts" ? "border-ink text-ink" : "border-transparent text-ink-3 hover:text-ink-2"}`} onClick={() => setCanvasTab("artifacts")}>
-              产物 <span className="ml-1 rounded-full bg-surface-2 px-1.5 text-[10px]">{live.artifacts.length}</span>
-            </button>
-            <button type="button" className={`cursor-pointer border-b-2 px-3 py-2.5 text-xs font-medium transition-colors ${canvasTab === "edits" ? "border-ink text-ink" : "border-transparent text-ink-3 hover:text-ink-2"}`} onClick={() => setCanvasTab("edits")}>
-              改动 <span className="ml-1 rounded-full bg-surface-2 px-1.5 text-[10px]">{live.edits.length}</span>
-            </button>
-          </div>
+          <Tabs
+            className="px-4"
+            items={[
+              { value: "artifacts", label: "产物", count: live.artifacts.length },
+              { value: "edits", label: "改动", count: live.edits.length },
+            ]}
+            value={canvasTab}
+            onValueChange={(value) => setCanvasTab(value as CanvasTab)}
+          />
           {canvasTab === "artifacts" && (
             <div className="fw-canvas-body flex flex-col gap-2 p-3">
               {preview ? (
                 <div className="overflow-hidden rounded-xl border border-line">
                   <div className="flex items-center justify-between border-b border-line px-3 py-1.5">
                     <span className="font-mono text-xs">{preview.path}</span>
-                    <button type="button" className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-ink-3 hover:bg-surface-2 hover:text-ink" title="关闭预览" onClick={() => setPreview(null)}>
-                      <Icon name="cross" />
-                    </button>
+                    <IconButton size="sm" label="关闭预览" onClick={() => setPreview(null)}><Icon name="cross" size={12} /></IconButton>
                   </div>
                   {preview.contentType.includes("presentationml.presentation") ? (
                     <div className="max-h-[32rem] overflow-auto bg-white">
