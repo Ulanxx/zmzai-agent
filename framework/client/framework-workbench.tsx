@@ -389,7 +389,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fill,minmax(12rem,1fr))]">
                 {recentSessions.slice(0, 6).map((item) => (
                   <Button type="button" key={item.id} variant="ghost"
-                    className="w-full min-w-0 justify-start rounded-xl border border-line bg-bg p-3 text-left hover:border-ink hover:shadow-md"
+                    className="h-auto w-full min-w-0 justify-start rounded-xl border border-line bg-bg p-3 text-left hover:border-ink hover:shadow-md"
                     onClick={() => router.push(`/fw/s/${item.id}`)}>
                     <span className="flex w-full min-w-0 flex-col items-start gap-0.5">
                       <strong className="block truncate text-sm font-semibold">{item.title}</strong>
