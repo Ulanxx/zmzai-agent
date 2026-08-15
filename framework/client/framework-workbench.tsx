@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 
 import { Icon } from "@/components/icon";
 import { Seal } from "@/components/seal";
-import { Button, IconButton, Input, Select as ThemeSelect, SelectTrigger, SelectValue, SelectContent, SelectItem, Tabs, Textarea } from "@zmzai/theme";
+import { Button, IconButton, Input, MovingBorder, Select as ThemeSelect, SelectTrigger, SelectValue, SelectContent, SelectItem, Tabs, Textarea } from "@zmzai/theme";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
   fwApi,
@@ -340,8 +340,15 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               ))}
             </div>
           </div>
+          <MovingBorder
+            className="w-full max-w-3xl"
+            duration={6}
+            borderColor="var(--color-accent)"
+            backgroundColor="var(--color-bg)"
+            borderRadius="var(--radius-xl)"
+          >
           <form
-            className="w-full max-w-3xl rounded-xl border border-line bg-bg p-6 shadow-sm"
+            className="w-full rounded-xl bg-bg p-6 shadow-sm"
             onSubmit={(event) => {
               event.preventDefault();
               void send();
@@ -383,6 +390,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               </Button>
             </div>
           </form>
+          </MovingBorder>
           {recentSessions.length > 0 && (
             <div className="w-full max-w-2xl">
               <span className="mb-3 block text-xs font-semibold uppercase tracking-wide text-ink-3">最近任务</span>
