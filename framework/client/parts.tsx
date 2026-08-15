@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { Select as ThemeSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@zmzai/theme";
+
 import { DiffView } from "@/components/diff-view";
 import { Icon } from "@/components/icon";
 import { Markdown } from "@/components/markdown";
@@ -42,6 +44,73 @@ export function PptxPreview({ previewUrl }: { previewUrl: string }) {
 
   if (error) return <p className="p-4 text-center text-sm text-ink-3">{error}，可改用下载按钮。</p>;
   return <div ref={containerRef} className="pptx-preview-host p-3" />;
+}
+
+/** Canvas 产物视图（Manus 式实时画布）：当前产物直接动态渲染，多产物时
+ *  顶部 FileSelect 切换。未手动选择时自动跟随最新生成的产物。 */
+export function ArtifactsCanvas({ artifacts }: { artifacts: ArtifactCard[] }) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const current = artifacts.find((item) => item.artifactId === selectedId) ?? artifacts[artifacts.length - 1];
+
+  if (!artifacts.length || !current) {
+    return <p className="px-2 py-4 text-center text-sm text-ink-3">沙箱生成的文件会实时渲染在这里。</p>;
+  }
+
+  const isPptx = current.contentType.includes("presentationml.presentation");
+  const isImage = current.contentType.startsWith("image/");
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <div className="flex shrink-0 items-center gap-2">
+        <ThemeSelect value={current.artifactId} onValueChange={(value: string) => setSelectedId(value)}>
+          <SelectTrigger className="min-w-0 flex-1" aria-label="选择产物">
+            <SelectValue placeholder="产物" />
+          </SelectTrigger>
+          <SelectContent>
+            {artifacts.map((item) => (
+              <SelectItem key={item.artifactId} value={item.artifactId}>
+                {item.path} · {formatBytes(item.bytes)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </ThemeSelect>
+        {current.downloadUrl && (
+          <a
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
+            href={current.downloadUrl}
+            title={`下载 ${current.path}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <Icon name="download" size={13} />
+          </a>
+        )}
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-line bg-white">
+        {current.previewUrl ? (
+          isPptx ? (
+            <PptxPreview previewUrl={current.previewUrl} />
+          ) : isImage ? (
+            // eslint-disable-next-line @next/next/no-img-element -- 预览接口按 Content-Type 返回原始字节，走原生 img
+            <img src={current.previewUrl} alt={current.path} className="block max-w-full" />
+          ) : (
+            <iframe className="h-full min-h-24 w-full border-0 bg-white" src={current.previewUrl} title={current.path} sandbox="allow-scripts allow-same-origin" />
+          )
+        ) : (
+          <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 p-6 text-center">
+            <span className="font-mono text-xs text-ink-2">{current.path}</span>
+            <span className="text-xs text-ink-3">
+              {shortContentType(current.contentType)} · {formatBytes(current.bytes)} · 该类型暂不支持在线预览
+            </span>
+            {current.downloadUrl && (
+              <a className="mt-1 rounded-md border border-line px-3 py-1.5 text-xs text-ink-2 transition-colors hover:bg-surface-2" href={current.downloadUrl}>
+                下载文件
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function formatBytes(value: number): string {
