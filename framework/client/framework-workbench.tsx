@@ -15,7 +15,7 @@ import {
   type Reply,
   type SessionInfo,
 } from "@/framework/client/use-framework-session";
-import { ArtifactsCanvas, EditCard, groupAssistantMessages, MessageView, PermissionCard, TodoChecklist } from "@/framework/client/parts";
+import { ArtifactPreviewCard, EditCard, groupAssistantMessages, MessageView, PermissionCard, PptxPreview, TodoChecklist } from "@/framework/client/parts";
 
 type Model = { model: string; maxOutputTokens: number };
 type Workspace = { id: string; name: string; defaultModel: string };
@@ -49,6 +49,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   const [sending, setSending] = useState(false);
   const [replying, setReplying] = useState(false);
   const [canvasTab, setCanvasTab] = useState<CanvasTab>("artifacts");
+  const [preview, setPreview] = useState<ArtifactCard | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [user, setUser] = useState<{ name: string; email: string } | null>(null);
   const [creatingWs, setCreatingWs] = useState(false);
@@ -263,6 +264,11 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
       void send();
     }
   };
+
+  const openArtifact = useCallback((artifact: ArtifactCard) => {
+    setPreview(artifact);
+    setCanvasTab("artifacts");
+  }, []);
 
   const sourceMessages = snapshot?.messages;
   const messages = useMemo(() => groupAssistantMessages(sourceMessages ?? []), [sourceMessages]);
@@ -618,8 +624,34 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
             </button>
           </div>
           {canvasTab === "artifacts" && (
-            <div className="fw-canvas-body flex flex-col p-3">
-              <ArtifactsCanvas artifacts={live.artifacts} />
+            <div className="fw-canvas-body flex flex-col gap-2 p-3">
+              {preview ? (
+                <div className="overflow-hidden rounded-xl border border-line">
+                  <div className="flex items-center justify-between border-b border-line px-3 py-1.5">
+                    <span className="font-mono text-xs">{preview.path}</span>
+                    <button type="button" className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-ink-3 hover:bg-surface-2 hover:text-ink" title="关闭预览" onClick={() => setPreview(null)}>
+                      <Icon name="cross" />
+                    </button>
+                  </div>
+                  {preview.contentType.includes("presentationml.presentation") ? (
+                    <div className="max-h-[32rem] overflow-auto bg-white">
+                      <PptxPreview previewUrl={preview.previewUrl ?? preview.downloadUrl.replace(/\/download$/, "/preview")} />
+                    </div>
+                  ) : preview.previewUrl ? (
+                    <iframe className="h-80 w-full border-0 bg-white" src={preview.previewUrl} title={preview.path} sandbox="allow-scripts allow-same-origin" />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 bg-white p-6 text-center">
+                      <span className="text-xs text-ink-3">该类型暂不支持在线预览，可下载查看</span>
+                      <a className="rounded-md border border-line px-3 py-1.5 text-xs text-ink-2 hover:bg-surface-2" href={preview.downloadUrl}>下载文件</a>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+              {live.artifacts.length ? (
+                live.artifacts.map((artifact) => <ArtifactPreviewCard key={artifact.artifactId} artifact={artifact} onOpen={openArtifact} />)
+              ) : (
+                <p className="px-2 py-4 text-center text-sm text-ink-3">沙箱生成的文件会出现在这里，可预览或下载。</p>
+              )}
             </div>
           )}
           {canvasTab === "edits" && (
