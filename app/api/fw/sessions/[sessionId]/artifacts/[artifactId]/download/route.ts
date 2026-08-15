@@ -25,11 +25,15 @@ export async function GET(_: Request, context: { params: Promise<{ sessionId: st
   const filename = artifact.sandboxPath.split("/").pop() ?? "artifact";
   const stream = openArtifactStream(artifact.gridFsFileId);
   const webStream = Readable.toWeb(stream) as unknown as ReadableStream<Uint8Array>;
+  // RFC 5987：filename* 保留中文原名（此前非 ASCII 全替换成下划线，
+  // 「季度汇报PPT_10页.pptx」下载成了「____PPT_10_.pptx」）；
+  // filename 留 ASCII 兜底给不支持 filename* 的老客户端。
+  const asciiFallback = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
   return new Response(webStream, {
     headers: {
       "Content-Type": artifact.contentType,
       "Content-Length": String(artifact.sizeBytes),
-      "Content-Disposition": `attachment; filename="${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}"`,
+      "Content-Disposition": `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
       "Cache-Control": "no-store",
       "ETag": `"${artifact.sha256}"`,
     },

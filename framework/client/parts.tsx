@@ -2,8 +2,6 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { Select as ThemeSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@zmzai/theme";
-
 import { DiffView } from "@/components/diff-view";
 import { Icon } from "@/components/icon";
 import { Markdown } from "@/components/markdown";
@@ -58,42 +56,33 @@ export function ArtifactsCanvas({ artifacts }: { artifacts: ArtifactCard[] }) {
 
   const isPptx = current.contentType.includes("presentationml.presentation");
   const isImage = current.contentType.startsWith("image/");
+  // 旧事件数据没有 previewUrl（pptx 放行预览前生成）——pptx 的预览端点
+  // 已存在，从 downloadUrl 推导即可展示，不必落入"仅下载"分支。
+  const previewUrl = current.previewUrl ?? (isPptx && current.downloadUrl ? current.downloadUrl.replace(/\/download$/, "/preview") : undefined);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex shrink-0 items-center gap-2">
-        <ThemeSelect value={current.artifactId} onValueChange={(value: string) => setSelectedId(value)}>
-          <SelectTrigger className="min-w-0 flex-1" aria-label="选择产物">
-            <SelectValue placeholder="产物" />
-          </SelectTrigger>
-          <SelectContent>
-            {artifacts.map((item) => (
-              <SelectItem key={item.artifactId} value={item.artifactId}>
-                {item.path} · {formatBytes(item.bytes)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </ThemeSelect>
+        <ArtifactFileSelect artifacts={artifacts} current={current} onSelect={setSelectedId} />
         {current.downloadUrl && (
           <a
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
             href={current.downloadUrl}
             title={`下载 ${current.path}`}
-            onClick={(event) => event.stopPropagation()}
           >
             <Icon name="download" size={13} />
           </a>
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-line bg-white">
-        {current.previewUrl ? (
+        {previewUrl ? (
           isPptx ? (
-            <PptxPreview previewUrl={current.previewUrl} />
+            <PptxPreview previewUrl={previewUrl} />
           ) : isImage ? (
             // eslint-disable-next-line @next/next/no-img-element -- 预览接口按 Content-Type 返回原始字节，走原生 img
-            <img src={current.previewUrl} alt={current.path} className="block max-w-full" />
+            <img src={previewUrl} alt={current.path} className="block max-w-full" />
           ) : (
-            <iframe className="h-full min-h-24 w-full border-0 bg-white" src={current.previewUrl} title={current.path} sandbox="allow-scripts allow-same-origin" />
+            <iframe className="h-full min-h-24 w-full border-0 bg-white" src={previewUrl} title={current.path} sandbox="allow-scripts allow-same-origin" />
           )
         ) : (
           <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 p-6 text-center">
@@ -109,6 +98,60 @@ export function ArtifactsCanvas({ artifacts }: { artifacts: ArtifactCard[] }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** 轻量产物切换器：单产物时仅显示文件名，多产物时点击展开下拉列表。 */
+function ArtifactFileSelect({ artifacts, current, onSelect }: { artifacts: ArtifactCard[]; current: ArtifactCard; onSelect: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [open]);
+
+  const multiple = artifacts.length > 1;
+
+  return (
+    <div ref={rootRef} className="relative min-w-0 flex-1">
+      <button
+        type="button"
+        className={`fw-fileselect-trigger ${multiple ? "" : "cursor-default"}`}
+        onClick={() => multiple && setOpen((value) => !value)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="fw-fileselect-name">{current.path}</span>
+        <span className="fw-fileselect-meta">{formatBytes(current.bytes)}</span>
+        {multiple && <Icon name="chevron-down" size={11} className={open ? "fw-fileselect-caret open" : "fw-fileselect-caret"} />}
+      </button>
+      {open && (
+        <div className="fw-fileselect-menu" role="listbox">
+          {artifacts.map((item) => (
+            <button
+              key={item.artifactId}
+              type="button"
+              role="option"
+              aria-selected={item.artifactId === current.artifactId}
+              className="fw-fileselect-item"
+              data-active={item.artifactId === current.artifactId}
+              onClick={() => {
+                onSelect(item.artifactId);
+                setOpen(false);
+              }}
+            >
+              <span className="fw-fileselect-name">{item.path}</span>
+              <span className="fw-fileselect-meta">{formatBytes(item.bytes)}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

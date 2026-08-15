@@ -800,6 +800,20 @@
   /* 产物/改动列表可滚 + 撑满画布：flex 子项需 min-height:0 允许收缩，
      否则内容把 .fw-canvas 撑爆被外壳 hidden 裁掉（预览 + 多卡片时滚不动） */
   .fw-canvas-body { display: flex; flex: 1 1 auto; flex-direction: column; gap: 0.6rem; margin-top: 0.75rem; overflow-y: auto; min-height: 0; }
+
+  /* 轻量产物切换器（FileSelect）：紧凑行内样式，mono 文件名 */
+  .fw-fileselect-trigger { display: flex; width: 100%; min-width: 0; align-items: center; gap: 0.45rem; border: 0; border-bottom: 1px solid var(--color-line); background: transparent; padding: 0.35rem 0.15rem; font: inherit; text-align: left; }
+  .fw-fileselect-trigger:not(.cursor-default) { cursor: pointer; }
+  .fw-fileselect-trigger:not(.cursor-default):hover { border-bottom-color: var(--color-line-strong); }
+  .fw-fileselect-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 0.75rem; color: var(--color-ink); }
+  .fw-fileselect-meta { margin-left: auto; flex-shrink: 0; font-size: 0.65rem; color: var(--color-muted); }
+  .fw-fileselect-caret { flex-shrink: 0; color: var(--color-muted); transition: transform 0.15s var(--ease-out); }
+  .fw-fileselect-caret.open { transform: rotate(180deg); }
+  .fw-fileselect-menu { position: absolute; top: calc(100% + 0.3rem); left: 0; right: 0; z-index: 30; max-height: 15rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.125rem; border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-paper); box-shadow: 0 8px 24px rgba(0,0,0,0.12); padding: 0.3rem; }
+  .fw-fileselect-item { display: flex; align-items: center; gap: 0.45rem; border: 0; background: transparent; padding: 0.3rem 0.5rem; border-radius: calc(var(--radius) - 2px); font: inherit; text-align: left; cursor: pointer; }
+  .fw-fileselect-item:hover { background: var(--color-surface-2); }
+  .fw-fileselect-item[data-active=true] { background: var(--color-surface-2); }
+  .fw-fileselect-item .fw-fileselect-meta { margin-left: auto; }
   .fw-conversation { display: flex; min-height: 0; flex-direction: column; padding: 1rem 1.25rem; }
 
   .fw-assistant-turn { display: grid; gap: 0.5rem; margin-bottom: 1rem; }
