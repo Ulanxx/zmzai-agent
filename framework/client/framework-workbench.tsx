@@ -394,13 +394,13 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
           {recentSessions.length > 0 && (
             <div className="w-full max-w-2xl">
               <span className="mb-3 block text-xs font-semibold uppercase tracking-wide text-ink-3">最近任务</span>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fill,minmax(12rem,1fr))]">
+              <div className="flex w-full flex-col gap-0.5">
                 {recentSessions.slice(0, 6).map((item) => (
                   <Button type="button" key={item.id} variant="ghost"
-                    className="h-auto w-full min-w-0 justify-start rounded-xl border border-line bg-bg p-3 text-left hover:border-ink hover:shadow-md"
+                    className="h-auto w-full min-w-0 justify-start rounded-md px-3 py-2.5 text-left hover:bg-surface-2"
                     onClick={() => router.push(`/fw/s/${item.id}`)}>
                     <span className="flex w-full min-w-0 flex-col items-start gap-0.5">
-                      <strong className="block truncate text-sm font-semibold">{item.title}</strong>
+                      <strong className="block w-full truncate text-sm font-medium text-ink">{item.title}</strong>
                       <small className="font-mono text-xs text-ink-3">{item.agent}</small>
                     </span>
                   </Button>
