@@ -8,3 +8,4 @@ out
 .vercel
 .superpowers/
 *.tsbuildinfo
+.gstack/
