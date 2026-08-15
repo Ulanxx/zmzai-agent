@@ -43,6 +43,65 @@ function timeLabel(value: string | null): string {
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+function clip(value: string, max = 160): string {
+  const clean = value.replace(/\s+/g, " ").trim();
+  return clean.length > max ? `${clean.slice(0, max)}…` : clean;
+}
+
+/** 事件 → 人类可读摘要（事件流 format 渲染）：每类事件提取关键字段，
+ *  长文本截断，避免裸 JSON 堆砌。 */
+function eventSummary(type: string, data: unknown): { main: string; sub?: string } | null {
+  const d = (data ?? {}) as Record<string, unknown>;
+  switch (type) {
+    case "session.status":
+      return { main: String(d.status ?? "") };
+    case "session.error": {
+      const name = typeof d.name === "string" ? d.name : "错误";
+      const message = typeof d.message === "string" ? d.message : "";
+      return { main: name, sub: message ? clip(message) : undefined };
+    }
+    case "message.updated": {
+      const message = d.message as { role?: string; content?: Array<{ type: string; text?: string; thinking?: string }> } | undefined;
+      if (!message) return null;
+      const text = (message.content ?? []).filter((p) => p.type === "text").map((p) => p.text ?? "").join(" ");
+      return { main: message.role ?? "", sub: text ? clip(text) : undefined };
+    }
+    case "message.part.updated": {
+      const part = d.part as Record<string, unknown> | undefined;
+      if (!part) return null;
+      const partType = String(part.type ?? "");
+      if (partType === "tool") {
+        const state = (part.state ?? {}) as { status?: string; input?: unknown; output?: string; error?: string };
+        const input = typeof state.input === "object" && state.input ? JSON.stringify(state.input) : String(state.input ?? "");
+        return { main: `${String(part.name ?? "tool")} · ${state.status ?? ""}`, sub: clip(state.error || state.output || input, 200) || undefined };
+      }
+      if (partType === "text" && typeof part.text === "string") return { main: "文本", sub: clip(part.text) };
+      if (partType === "thinking" && typeof part.thinking === "string") return { main: "思考", sub: clip(part.thinking) };
+      if (partType === "compaction" && typeof part.summary === "string") return { main: "上下文压缩", sub: clip(part.summary) };
+      return { main: partType };
+    }
+    case "todo.updated": {
+      const todos = (d.todos ?? []) as Array<{ content?: string; status?: string }>;
+      const done = todos.filter((t) => t.status === "completed").length;
+      return { main: `${done}/${todos.length} 完成`, sub: clip(todos.map((t) => `${t.status === "completed" ? "✓" : t.status === "in_progress" ? "▶" : "·"} ${t.content ?? ""}`).join("  ")) || undefined };
+    }
+    case "file.edited":
+      return { main: String(d.path ?? ""), sub: typeof d.revisionId === "string" ? `revision ${d.revisionId}` : undefined };
+    case "artifact.created": {
+      const bytes = typeof d.bytes === "number" ? ` · ${d.bytes} B` : "";
+      return { main: String(d.path ?? "") + bytes, sub: typeof d.contentType === "string" ? d.contentType : undefined };
+    }
+    case "permission.asked": {
+      const request = (d.request ?? {}) as { permission?: string; patterns?: string[]; metadata?: { command?: string } };
+      return { main: `${request.permission ?? "权限"} · ${clip((request.patterns ?? []).join(" "), 100)}`, sub: request.metadata?.command ? clip(request.metadata.command, 120) : undefined };
+    }
+    case "permission.replied":
+      return { main: `回复：${String(d.reply ?? "")}` };
+    default:
+      return null;
+  }
+}
+
 export function FrameworkAudit() {
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -168,15 +227,24 @@ export function FrameworkAudit() {
                   <small>{detail.events.length}</small>
                 </div>
                 <div className="audit-tool-timeline">
-                  {detail.events.map((event) => (
-                    <div key={event.seq} className="audit-tool-node">
-                      <div className="audit-tool-node-head">
-                        <span className="audit-tool-name">#{event.seq}</span>
-                        <span className="audit-tool-args">{event.type}</span>
-                        <span className="audit-tool-state">{timeLabel(event.at)}</span>
+                  {detail.events.map((event) => {
+                    const summary = eventSummary(event.type, event.data);
+                    return (
+                      <div key={event.seq} className="audit-tool-node">
+                        <div className="audit-tool-node-head">
+                          <span className="audit-tool-name">#{event.seq}</span>
+                          <span className="audit-tool-args">{event.type}</span>
+                          <span className="audit-tool-state">{timeLabel(event.at)}</span>
+                        </div>
+                        {summary && (
+                          <div className="audit-event-summary">
+                            <span className="audit-event-main">{summary.main}</span>
+                            {summary.sub && <span className="audit-event-sub">{summary.sub}</span>}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             </>

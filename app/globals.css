@@ -507,7 +507,7 @@
   /* F3：当前页导航高亮（与 audit-nav-link.active 同风格） */
   .workbench-nav a.active { color: var(--color-accent); border-bottom: 1px solid var(--color-accent); padding-bottom: 0.15rem; }
 
-  .audit-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 3fr 7fr; overflow: hidden; }
+  .audit-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 7fr); overflow: hidden; }
   .audit-list-pane { min-width: 0; min-height: 0; overflow-y: auto; border-right: 1px solid var(--color-line); padding: 1rem 0.75rem; background: color-mix(in oklab, var(--color-surface) 92%, var(--color-paper)); }
   .audit-detail-pane { min-width: 0; min-height: 0; overflow-y: auto; padding: 1rem 1.25rem; }
 
@@ -519,7 +519,7 @@
   .audit-run-row:hover, .audit-run-row.active { border-color: var(--color-line); background: var(--color-surface); }
   .audit-run-row.active { box-shadow: inset 3px 0 var(--color-ink); }
   .audit-run-row strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; line-height: 1.35; }
-  .audit-run-row-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.4rem; align-items: baseline; }
+  .audit-run-row-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.4rem; align-items: baseline; }
   .audit-run-row-top small { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.5625rem; white-space: nowrap; }
   .audit-run-workspace { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-accent-strong); font-family: var(--font-mono); font-size: 0.625rem; }
   .audit-run-row > small { grid-column: 1 / -1; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.5625rem; }
@@ -540,7 +540,11 @@
   .audit-tool-node.running { border-left: 3px solid var(--color-ink); }
   .audit-tool-node.completed { border-left: 3px solid var(--color-success); }
   .audit-tool-node.failed { border-left: 3px solid #b03a28; }
-  .audit-tool-node-head { display: flex; align-items: baseline; gap: 0.6rem; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--color-line); }
+  .audit-tool-node-head { display: flex; align-items: baseline; gap: 0.6rem; padding: 0.5rem 0.65rem; }
+  .audit-tool-node-head + .audit-tool-body, .audit-event-summary { border-top: 1px solid var(--color-line); }
+  .audit-event-summary { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.4rem 0.65rem 0.5rem; min-width: 0; }
+  .audit-event-main { color: var(--color-ink); font-size: 0.75rem; line-height: 1.5; overflow-wrap: anywhere; }
+  .audit-event-sub { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.656rem; line-height: 1.55; overflow-wrap: anywhere; }
   .audit-tool-name { color: var(--color-accent-strong); font-family: var(--font-mono); font-size: 0.625rem; font-weight: 700; letter-spacing: 0.045em; text-transform: uppercase; white-space: nowrap; }
   .audit-tool-args { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6875rem; }
   .audit-tool-state, .audit-tool-duration { flex: 0 0 auto; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.625rem; white-space: nowrap; }
