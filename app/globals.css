@@ -787,9 +787,26 @@
 /* ---- Framework 工作台（FW 协议页 /fw）---- */
 @layer components {
   /* 首页态（Manus 式居中入口）：无任务时隐藏三栏 */
-  .fw-home { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2rem; padding: 4vh 2rem 6vh; overflow-y: auto; }
+  /* 顶部对齐而非垂直居中：内容超高时居中布局会把顶部标题推出视口
+     （flex 居中 + overflow 时上下都溢出、滚动不到顶部）；改 flex-start +
+     顶部留白，内容长时从头显示、可滚动。 */
+  .fw-home { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 1.75rem; padding: 6vh 2rem 6vh; overflow-y: auto; }
   .fw-home-hero { text-align: center; max-width: 40rem; }
   .fw-home-hero h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); line-height: 1.2; margin: 0 0 1.5rem; }
+  /* 标题光影：从左到右扫过的印章红高光（background-clip:text 方案） */
+  @supports (background-clip: text) or (-webkit-background-clip: text) {
+    .fw-home-hero h1 {
+      background: linear-gradient(110deg, var(--color-ink) 38%, var(--color-accent) 46%, var(--color-ink) 54%);
+      background-size: 220% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: fw-title-shimmer 5s linear infinite;
+    }
+  }
+  @keyframes fw-title-shimmer {
+    to { background-position: -220% 0; }
+  }
   .fw-home-composer { width: 100%; max-width: 42rem; display: grid; gap: 0.6rem; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
   .fw-home-recent { width: 100%; max-width: 42rem; }
   .fw-home-recent .eyebrow { display: block; margin-bottom: 0.75rem; }

@@ -395,7 +395,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
             <div className="w-full max-w-2xl">
               <span className="mb-3 block text-xs font-semibold uppercase tracking-wide text-ink-3">最近任务</span>
               <div className="flex w-full flex-col gap-0.5">
-                {recentSessions.slice(0, 6).map((item) => (
+                {recentSessions.slice(0, 4).map((item) => (
                   <Button type="button" key={item.id} variant="ghost"
                     className="h-auto w-full min-w-0 justify-start rounded-md px-3 py-2.5 text-left hover:bg-surface-2"
                     onClick={() => router.push(`/fw/s/${item.id}`)}>
