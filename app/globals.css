@@ -805,7 +805,9 @@
   /* 标题栏左侧多了 toggle 按钮：改为左对齐 + 新建按钮仍靠右 */
   .fw-sidebar .pane-heading { justify-content: flex-start; gap: 0.45rem; }
   .fw-sidebar .pane-heading .icon-command:last-child { margin-left: auto; }
-  .fw-canvas { padding: 1rem; display: flex; flex-direction: column; min-height: 0; }
+  /* height:100% 撑满 Panel——旧三栏 grid 下靠 grid item stretch 天然等高，
+     移入 Panel 后是普通子块，高度跟随内容把文档撑出垂直滚动条 */
+  .fw-canvas { height: 100%; padding: 1rem; display: flex; flex-direction: column; min-height: 0; }
   /* 产物/改动列表可滚 + 撑满画布：flex 子项需 min-height:0 允许收缩，
      否则内容把 .fw-canvas 撑爆被外壳 hidden 裁掉（预览 + 多卡片时滚不动） */
   .fw-canvas-body { display: flex; flex: 1 1 auto; flex-direction: column; gap: 0.6rem; margin-top: 0.75rem; overflow-y: auto; min-height: 0; }
@@ -823,7 +825,7 @@
   .fw-fileselect-item:hover { background: var(--color-surface-2); }
   .fw-fileselect-item[data-active=true] { background: var(--color-surface-2); }
   .fw-fileselect-item .fw-fileselect-meta { margin-left: auto; }
-  .fw-conversation { display: flex; min-height: 0; flex-direction: column; padding: 1rem 1.25rem; }
+  .fw-conversation { display: flex; height: 100%; min-height: 0; flex-direction: column; padding: 1rem 1.25rem; }
 
   .fw-assistant-turn { display: grid; gap: 0.5rem; margin-bottom: 1rem; }
 
