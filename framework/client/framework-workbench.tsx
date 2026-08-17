@@ -4,9 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
-import { Icon } from "@/components/icon";
-import { Seal } from "@/components/seal";
-import { Button, IconButton, Input, MovingBorder, Select as ThemeSelect, SelectTrigger, SelectValue, SelectContent, SelectItem, Tabs, Textarea } from "@zmzai/theme";
+import { Icon } from "@zmzai/theme";
+import { Button, IconButton, Input, MovingBorder, Navbar, navItemClass, Select as ThemeSelect, SelectTrigger, SelectValue, SelectContent, SelectItem, Tabs, Textarea } from "@zmzai/theme";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
   fwApi,
@@ -284,32 +283,30 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
 
   return (
     <main className="workbench fw-workbench">
-      <header className="workbench-header">
-        <div className="flex items-center gap-2.5">
-          <Seal size={24} className="agent-seal" />
-          <span className="font-sans text-sm font-semibold tracking-tight">ZMZAI</span>
-          <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>
-        </div>
-        <nav className="flex items-center gap-1" aria-label="主导航">
-          {sessionId && (
-            <Link href="/fw" className="rounded-full px-3 py-1.5 text-sm font-medium text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink" title="返回工作台">
-              ← 返回
-            </Link>
-          )}
-          <Link href="/fw" className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${pathname === "/fw" ? "bg-ink text-white" : "text-ink-2 hover:bg-surface-2 hover:text-ink"}`}>新任务</Link>
-          <Link href="/audit" className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${pathname === "/audit" ? "bg-ink text-white" : "text-ink-2 hover:bg-surface-2 hover:text-ink"}`}>运行审计</Link>
-        </nav>
-        <div className="flex items-center gap-2.5">
-          {user && (
-            <span className="max-w-[8rem] truncate text-sm text-ink-2" title={user.email}>
-              {user.name}
-            </span>
-          )}
-          <IconButton size="lg" label="退出登录" onClick={() => void logout()}>
-            <Icon name="logout" size={14} />
-          </IconButton>
-        </div>
-      </header>
+      <Navbar
+        sublabel="agent"
+        badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>}
+        actions={
+          <>
+            {user && (
+              <span className="max-w-[8rem] truncate text-sm text-ink-2" title={user.email}>
+                {user.name}
+              </span>
+            )}
+            <IconButton size="lg" label="退出登录" onClick={() => void logout()}>
+              <Icon name="logout" size={14} />
+            </IconButton>
+          </>
+        }
+      >
+        {sessionId && (
+          <Link href="/fw" className={navItemClass(false)} title="返回工作台">
+            <Icon name="chevron-left" size={12} />返回
+          </Link>
+        )}
+        <Link href="/fw" className={navItemClass(pathname === "/fw")}>新任务</Link>
+        <Link href="/audit" className={navItemClass(pathname === "/audit")}>运行审计</Link>
+      </Navbar>
       {actionError && (
         <div className="workbench-alert">
           {actionError}

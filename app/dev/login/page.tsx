@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 
-import { Seal } from "@/components/seal";
+import { Logo } from "@zmzai/theme";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isLocalDevLoginEnabled } from "@/lib/auth/local-dev-login";
 
@@ -14,7 +14,7 @@ export default async function LocalDevLoginPage() {
     <main className="dev-login-shell">
       <section className="dev-login-panel" aria-labelledby="dev-login-title">
         <div className="dev-login-mark">
-          <Seal size={34} />
+          <Logo size={34} />
           <span>LOCAL DEVELOPMENT</span>
         </div>
         <div className="dev-login-copy">

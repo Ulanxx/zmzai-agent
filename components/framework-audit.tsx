@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { Seal } from "@/components/seal";
+import { Navbar, navItemClass } from "@zmzai/theme";
 
 /** FW 会话审计：左列会话清单，右列工具时间线 + 事件流。数据源是
  *  fw_sessions + fw_events（framework/core/events/bus.readFrameworkEvents），
@@ -45,6 +46,7 @@ function timeLabel(value: string | null): string {
 
 
 export function FrameworkAudit() {
+  const pathname = usePathname() ?? "/";
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<AuditDetail | null>(null);
@@ -100,20 +102,13 @@ export function FrameworkAudit() {
 
   return (
     <main className="audit-page">
-      <header className="audit-header">
-        <div className="audit-brand">
-          <Seal size={24} className="agent-seal" />
-          <span className="font-mono text-sm font-bold tracking-[0.08em]">ZMZAI AGENT</span>
-        </div>
-        <nav className="audit-header-nav">
-          <Link href="/fw" className="audit-nav-link">
-            工作台
-          </Link>
-          <Link href="/audit" className="audit-nav-link active">
-            运行审计
-          </Link>
-        </nav>
-      </header>
+      <Navbar
+        sublabel="agent"
+        badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>}
+      >
+        <Link href="/fw" className={navItemClass(pathname === "/fw")}>工作台</Link>
+        <Link href="/audit" className={navItemClass(pathname === "/audit")}>运行审计</Link>
+      </Navbar>
       {error && <div className="workbench-alert">{error}</div>}
 
       <div className="audit-grid">

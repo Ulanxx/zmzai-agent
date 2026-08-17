@@ -5,8 +5,7 @@ import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-import { Icon } from "@/components/icon";
-import { Seal } from "@/components/seal";
+import { Icon, Navbar, navItemClass } from "@zmzai/theme";
 
 type Model = { model: string };
 type WorkspaceDetail = {
@@ -80,14 +79,14 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
 
   return (
     <main className="agent-workbench">
-      <header className="workbench-header">
-        <Link href="/fw" className="agent-brand"><Seal size={26} className="agent-seal" /><span>ZMZAI AGENT</span></Link>
-        <nav className="workbench-nav" aria-label="主导航">
-          <Link href="/fw" className={pathname === "/fw" ? "active" : ""}>任务</Link>
-          <Link href="/audit" className={pathname === "/audit" ? "active" : ""}>运行审计</Link>
-        </nav>
-        <span className="workbench-status"><span className="status-dot" />智能体配置</span>
-      </header>
+      <Navbar
+        sublabel="agent"
+        badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>}
+        actions={<span className="flex items-center gap-2 text-sm text-ink-2"><span className="status-dot" />智能体配置</span>}
+      >
+        <Link href="/fw" className={navItemClass(pathname === "/fw")}>任务</Link>
+        <Link href="/audit" className={navItemClass(pathname === "/audit")}>运行审计</Link>
+      </Navbar>
       {error && <div className="workbench-alert">{error}</div>}
 
       <div className="agent-config-grid">

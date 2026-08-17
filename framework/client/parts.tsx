@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, Input } from "@zmzai/theme";
 
 import { DiffView } from "@/components/diff-view";
-import { Icon } from "@/components/icon";
+import { Icon } from "@zmzai/theme";
 import { Markdown } from "@/components/markdown";
 import type { ArtifactCard, FileEdit, PermissionRequest, Reply, TodoItem } from "@/framework/client/use-framework-session";
 import type { MessageWithParts, Part } from "@/framework/core/session/types";
