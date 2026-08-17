@@ -4,8 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
-import { Icon } from "@zmzai/theme";
-import { Button, IconButton, Input, MovingBorder, Navbar, navItemClass, Select as ThemeSelect, SelectTrigger, SelectValue, SelectContent, SelectItem, Tabs, Textarea } from "@zmzai/theme";
+import { Badge, Button, IconButton, Icon, Input, MovingBorder, Navbar, navItemClass, Select as ThemeSelect, SelectTrigger, SelectValue, SelectContent, SelectItem, Tabs, Textarea } from "@zmzai/theme";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
   fwApi,
@@ -383,12 +382,12 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               </div>
             </div>
             <div className="flex flex-shrink-0 items-center gap-2">
-              <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${live.status === "idle" ? "bg-success/10 text-success" : "bg-accent/10 text-accent"}`}>
+              <Badge variant={live.status === "idle" ? "success" : live.status === "waiting_permission" ? "warning" : "accent"} size="sm">
                 {live.status === "idle" ? "空闲" : live.status === "waiting_permission" ? "等待审批" : "进行中"}
-              </span>
-              {live.streamState === "live" && busy && <span className="rounded-full border border-success px-2 py-0.5 text-xs text-success">实时</span>}
-              {live.streamState === "reconnecting" && <span className="rounded-full border border-accent px-2 py-0.5 text-xs text-accent">连接恢复中</span>}
-              {queuedCount > 0 && <span className="rounded-full border border-line px-2 py-0.5 text-xs text-ink-3">排队 {queuedCount}</span>}
+              </Badge>
+              {live.streamState === "live" && busy && <Badge variant="success" size="sm">实时</Badge>}
+              {live.streamState === "reconnecting" && <Badge variant="accent" size="sm">连接恢复中</Badge>}
+              {queuedCount > 0 && <Badge variant="outline" size="sm">排队 {queuedCount}</Badge>}
               <span className="font-mono text-xs text-ink-3">{snapshot?.session.model.modelId || model}</span>
               {busy && (
                 <IconButton size="md" label="停止" onClick={() => void stop()}>

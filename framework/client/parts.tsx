@@ -2,10 +2,9 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { Button, Input } from "@zmzai/theme";
+import { Badge, Button, Icon, Input } from "@zmzai/theme";
 
 import { DiffView } from "@/components/diff-view";
-import { Icon } from "@zmzai/theme";
 import { Markdown } from "@/components/markdown";
 import type { ArtifactCard, FileEdit, PermissionRequest, Reply, TodoItem } from "@/framework/client/use-framework-session";
 import type { MessageWithParts, Part } from "@/framework/core/session/types";
@@ -125,6 +124,8 @@ function ToolPartCard({ part, sessionIdle = false }: { part: ToolPart; sessionId
       <button type="button" className="tool-card-trigger" aria-expanded={isOpen} onClick={() => setExpanded((value) => !value)}>
         <span className="tool-card-glyph" aria-hidden><Icon name={state.status === "completed" ? "check" : interrupted || state.status === "error" ? "cross" : "chevron-down"} size={12} /></span>
         <span className="tool-card-label">{title}</span>
+        {(state.status === "error" || interrupted) && <Badge variant="danger" size="sm">失败</Badge>}
+        {running && !interrupted && <Badge variant="warning" size="sm">运行中</Badge>}
         {toolDuration(part) && <span className="tool-card-duration">{toolDuration(part)}</span>}
         <Icon name="chevron-down" size={12} className={isOpen ? "tool-card-chevron open" : "tool-card-chevron"} />
       </button>
@@ -170,7 +171,7 @@ function SubtaskPart({ part }: { part: Extract<Part, { type: "subtask" }> }) {
     <div className="fw-subtask-row">
       <span className="fw-subtask-icon" aria-hidden><Icon name="chevron-down" size={12} /></span>
       <span className="fw-subtask-copy"><strong>{part.description || part.agent}</strong><small>{part.prompt}</small></span>
-      <span className="fw-subtask-state">子任务</span>
+      <Badge variant="outline" size="sm">子任务</Badge>
     </div>
   );
 }
@@ -246,7 +247,7 @@ export function MessageView({ entry: source, hideTools = false, sessionIdle = fa
     <div className="fw-message assistant">
       <span className="fw-message-avatar assistant">使</span>
       <div className="fw-message-column">
-      <div className="fw-message-meta"><strong>ZMZAI Agent</strong><span>{active ? "执行中" : "已完成"}</span>{timeLabel && <span className="fw-message-time">{timeLabel}</span>}</div>
+      <div className="fw-message-meta"><strong>ZMZAI Agent</strong><Badge variant={active ? "accent" : "success"} size="sm">{active ? "执行中" : "已完成"}</Badge>{timeLabel && <span className="fw-message-time">{timeLabel}</span>}</div>
       <div className="fw-execution-tree">{rendered}</div>
       {error && <div className="run-note">出错了：{error.message}</div>}
       </div>
@@ -281,7 +282,7 @@ export function PermissionCard({ request, busy, onReply }: { request: Permission
   return (
     <article className="fw-permission-card">
       <div className="fw-permission-head">
-        <span className="fw-permission-badge">{request.permission}</span>
+        <Badge variant="solid" size="sm">{request.permission}</Badge>
         <strong>{command ?? request.patterns.join("、")}</strong>
       </div>
       <p className="fw-permission-note">
@@ -334,12 +335,13 @@ function TaskPlanNode({ todo, index, tools }: { todo: TodoItem; index: number; t
   const canExpand = tools.length > 0;
   const open = canExpand && (active || expanded);
   const state = active ? "当前执行" : todo.status === "completed" ? "已完成" : todo.status === "cancelled" ? "已跳过" : "待执行";
+  const stateVariant = active ? "accent" : todo.status === "completed" ? "success" : todo.status === "cancelled" ? "danger" : "outline";
   return (
     <li className={`fw-task-node ${todo.status}`}>
       <button type="button" className="fw-task-node-trigger" aria-expanded={open} disabled={!canExpand} onClick={() => setExpanded((value) => !value)}>
         <span className="fw-task-node-marker" aria-hidden>{todo.status === "completed" ? <Icon name="check" size={10} /> : active ? <span className="fw-todo-spinner" /> : null}</span>
         <span className="fw-task-node-copy"><span className="fw-task-node-index">{String(index + 1).padStart(2, "0")}</span><strong>{todo.content}</strong></span>
-        <span className="fw-task-node-state">{canExpand ? `${tools.length} 次执行` : state}</span>
+        {canExpand ? <Badge variant="outline" size="sm">{tools.length} 次执行</Badge> : <Badge variant={stateVariant} size="sm">{state}</Badge>}
         {canExpand && <Icon name="chevron-down" size={12} className={open ? "fw-chevron open" : "fw-chevron"} />}
       </button>
       {open && tools.length > 0 && <div className="fw-task-executions">{tools.map((tool) => <ToolPartCard key={`${tool.id}:${tool.state.status}`} part={tool} />)}</div>}
@@ -356,7 +358,7 @@ export function TodoChecklist({ todos, tools }: { todos: TodoItem[]; tools: Tool
   return (
     <section className="fw-todo">
       <div className="fw-todo-head">
-        <div className="fw-todo-heading"><span className="fw-todo-kicker">Task Plan</span><strong>{current ? "执行中" : done === todos.length ? "已完成" : "待执行"}</strong></div>
+        <div className="fw-todo-heading"><span className="fw-todo-kicker">Task Plan</span><Badge variant={current ? "accent" : done === todos.length ? "success" : "outline"} size="sm">{current ? "执行中" : done === todos.length ? "已完成" : "待执行"}</Badge></div>
         <span className="fw-todo-progress"><b>{done}</b>/{todos.length}</span>
       </div>
       <div className="fw-todo-summary"><span>{current?.content ?? (done === todos.length ? "所有步骤已完成" : "等待 Agent 开始执行")}</span><span>{progress}%</span></div>
