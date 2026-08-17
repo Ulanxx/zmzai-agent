@@ -10,22 +10,22 @@
 
 @theme {
   /* zmzai.cloud 主应用主题（hub tokens.css 同源，Hallmark Study 锁定）：
-     暖纸张 + 暖墨 + 印章红，衬线正文字体 + 等宽系统字体，锐利编辑风圆角。 */
-  --color-bg:            oklch(0.95 0.012 85);
-  --color-surface:       oklch(0.97 0.008 85);
-  --color-surface-2:     oklch(0.92 0.014 80);
-  --color-ink:           oklch(0.18 0.011 40);
-  --color-ink-2:         oklch(0.47 0.013 55);
+     纯白 + 荧光绿（与 hub 统一），衬线正文字体 + 等宽系统字体，锐利编辑风圆角。 */
+  --color-bg:            oklch(0.995 0.002 90);
+  --color-surface:       oklch(0.98 0.004 90);
+  --color-surface-2:     oklch(0.95 0.006 88);
+  --color-ink:           oklch(0.15 0.010 30);
+  --color-ink-2:         oklch(0.50 0.012 55);
   --color-ink-3:         oklch(0.55 0.012 55);
-  --color-line:          oklch(0.86 0.012 80);
-  --color-line-strong:   oklch(0.18 0.011 40);
-  --color-accent:        oklch(0.46 0.150 27);
-  --color-accent-ink:    oklch(0.97 0.008 85);
-  --color-success:       oklch(0.52 0.090 160);
-  --color-danger:        oklch(0.42 0.155 27);
-  --color-warning:       oklch(0.65 0.10 80);
+  --color-line:          oklch(0.90 0.005 88);
+  --color-line-strong:   oklch(0.15 0.010 30);
+  --color-accent:        oklch(0.78 0.220 142);
+  --color-accent-ink:    oklch(0.15 0.010 30);
+  --color-success:       oklch(0.72 0.180 145);
+  --color-danger:        oklch(0.55 0.200 25);
+  --color-warning:       oklch(0.80 0.150 90);
   --color-dark-bg:       #0A0A0A;
-  --color-dark-surface:  #171717;
+  --color-dark-surface:  #141414;
   --color-dark-ink:      #FAFAFA;
   --color-dark-line:     #27272A;
 
@@ -43,11 +43,11 @@
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
   /* Backward-compat aliases (v1 → v2) */
-  --color-paper:          var(--color-bg);
-  --color-muted:          var(--color-ink-2);
-  --color-rule:           var(--color-ink);
-  --color-surface-strong: var(--color-surface-2);
-  --color-accent-strong:  oklch(0.39 0.150 27);
+  --color-paper:          oklch(0.995 0.002 90);
+  --color-muted:          oklch(0.50 0.012 55);
+  --color-rule:           oklch(0.15 0.010 30);
+  --color-surface-strong: oklch(0.95 0.006 88);
+  --color-accent-strong:  oklch(0.68 0.220 142);
   --animate-dur-fast:     150ms;
   --animate-dur-base:     250ms;
   --animate-dur-slow:     500ms;
