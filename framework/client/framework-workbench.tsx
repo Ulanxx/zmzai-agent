@@ -315,11 +315,9 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               <IconButton size="md" label="新建智能体" onClick={() => setCreatingWs((value) => !value)}>
                 <Icon name="plus" size={14} />
               </IconButton>
-              {workspaceId && (
-                <IconButton size="md" label="配置当前智能体" onClick={() => router.push(`/fw/w/${workspaceId}`)}>
-                  <Icon name="settings" size={14} />
-                </IconButton>
-              )}
+              <IconButton size="md" label="配置当前智能体" disabled={!workspaceId} onClick={() => workspaceId && router.push(`/fw/w/${workspaceId}`)}>
+                <Icon name="settings" size={14} />
+              </IconButton>
             </div>
             {creatingWs && (
               <form
