@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-import { Icon, Navbar, navItemClass } from "@zmzai/theme";
+import { Button, Icon, Navbar, navItemClass } from "@zmzai/theme";
 
 type Model = { model: string };
 type WorkspaceDetail = {
@@ -37,6 +37,20 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const remove = useCallback(async () => {
+    if (!detail || deleting) return;
+    setDeleting(true);
+    try {
+      await json(`/api/workspaces/${encodeURIComponent(detail.id)}`, { method: "DELETE" });
+      router.push("/fw");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "删除失败");
+      setDeleting(false);
+    }
+  }, [detail, deleting, router]);
 
   const applyDetail = useCallback((ws: WorkspaceDetail) => {
     setDetail(ws);
@@ -116,6 +130,21 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
             <small>创建于 {new Date(detail.id ? "" : "").toLocaleDateString("zh-CN") || "—"}</small>
           </section>
           <button type="button" className="agent-back-button" onClick={() => router.push("/fw")}><Icon name="arrow-down" size={12} />返回任务</button>
+          <div className="mt-6 border-t border-line pt-4">
+            {confirmDelete ? (
+              <div className="flex flex-col gap-2 text-sm text-ink-2">
+                <span>删除后会话、产物、文件版本全部清除，不可恢复。</span>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="danger" size="sm" disabled={deleting} onClick={() => void remove()}>{deleting ? "删除中…" : "确认删除"}</Button>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => setConfirmDelete(false)}>取消</Button>
+                </div>
+              </div>
+            ) : (
+              <Button type="button" variant="ghost" size="sm" className="font-mono text-xs text-danger underline" onClick={() => setConfirmDelete(true)}>
+                <Icon name="trash" size={12} />删除此智能体
+              </Button>
+            )}
+          </div>
         </aside>
       </div>
     </main>

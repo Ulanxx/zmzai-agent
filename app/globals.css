@@ -817,23 +817,18 @@
   .fw-task-card small { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.625rem; }
 
   /* 三栏改两栏：sidebar + main（main 内是 conversation/canvas 的 PanelGroup 拖动分栏） */
-  .fw-grid { display: grid; grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr); flex: 1 1 auto; height: auto; min-height: 0; overflow: hidden; }
-  .fw-grid.sidebar-hidden { grid-template-columns: 0 minmax(0, 1fr); }
-  .fw-grid.sidebar-hidden .fw-sidebar { display: none; }
+  /* 双栏工作台：无侧栏，main 全宽（内是 conversation/canvas 的 PanelGroup 拖动分栏） */
+  .fw-grid { display: grid; grid-template-columns: minmax(0, 1fr); flex: 1 1 auto; height: auto; min-height: 0; overflow: hidden; }
   .fw-main { display: flex; min-width: 0; min-height: 0; }
   .fw-panel { min-width: 0; min-height: 0; }
   .fw-resizer { position: relative; width: 0.45rem; flex-shrink: 0; cursor: col-resize; background: transparent; transition: background 0.15s var(--ease-out); }
   .fw-resizer::after { content: ""; position: absolute; inset: 0.75rem 0.125rem; border-radius: 999px; background: var(--color-line); opacity: 0.6; transition: background 0.15s var(--ease-out), opacity 0.15s var(--ease-out); }
   .fw-resizer:hover, .fw-resizer[data-resize-handle-active] { background: color-mix(in oklab, var(--color-accent) 8%, transparent); }
   .fw-resizer:hover::after, .fw-resizer[data-resize-handle-active]::after { background: var(--color-accent); opacity: 0.9; }
-  .fw-sidebar, .fw-canvas { background: color-mix(in oklab, var(--color-surface) 92%, var(--color-paper)); overflow: hidden; }
+  .fw-canvas { background: color-mix(in oklab, var(--color-surface) 92%, var(--color-paper)); overflow: hidden; }
   /* 侧栏任务列表超长必须可滚（原先 hidden 直接裁掉看不到底部的会话） */
-  .fw-sidebar { border-right: 1px solid var(--color-line); padding: 1rem 0.75rem; overflow-y: auto; }
   /* 收起/展开按钮：仅窄屏显示（见 48rem 断点），桌面常驻隐藏 */
-  .fw-sidebar-toggle { display: none; }
   /* 标题栏左侧多了 toggle 按钮：改为左对齐 + 新建按钮仍靠右 */
-  .fw-sidebar .pane-heading { justify-content: flex-start; gap: 0.45rem; }
-  .fw-sidebar .pane-heading .icon-command:last-child { margin-left: auto; }
   /* height:100% 撑满 Panel——旧三栏 grid 下靠 grid item stretch 天然等高，
      移入 Panel 后是普通子块，高度跟随内容把文档撑出垂直滚动条 */
   .fw-canvas { height: 100%; padding: 1rem; display: flex; flex-direction: column; min-height: 0; }
@@ -973,18 +968,11 @@
 /* 断点：canvas 已进 PanelGroup（不再是 fw-grid 直接子元素），旧的
    grid-column/grid-row 换行规则失效，仅保留 sidebar 宽度/堆叠调整。 */
 @media (max-width: 72rem) {
-  .fw-grid { grid-template-columns: minmax(10rem, 13rem) minmax(0, 1fr); }
+  .fw-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 48rem) {
-  .fw-grid { display: grid; grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
-  .fw-sidebar { border-right: 0; border-bottom: 1px solid var(--color-line); max-height: 10rem; overflow-y: auto; }
+  .fw-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
   /* 窄屏 sidebar 可收起：标题栏常驻，收起时只露标题 */
-  .fw-sidebar .fw-sidebar-toggle { display: inline-flex; }
-  .fw-sidebar.collapsed { max-height: 2.9rem; overflow: hidden; }
-  .fw-sidebar.collapsed .workspace-list,
-  .fw-sidebar.collapsed .run-history,
-  .fw-sidebar.collapsed .workspace-agent-link,
-  .fw-sidebar.collapsed .workspace-create { display: none; }
 }
 
 /* ---- P1 交互修复：返回导航 + 用户展示 ---- */

@@ -51,12 +51,6 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   const [actionError, setActionError] = useState<string | null>(null);
   const [user, setUser] = useState<{ name: string; email: string } | null>(null);
   const [creatingWs, setCreatingWs] = useState(false);
-  // 窄屏下 sidebar 可收起（按钮仅在 48rem 以下显示）。
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  // Workspace 重命名/删除（F2）：重命名内联编辑，删除需二次确认。
-  const [renamingWs, setRenamingWs] = useState<string | null>(null);
-  const [renamingName, setRenamingName] = useState("");
-  const [confirmDeleteWs, setConfirmDeleteWs] = useState<string | null>(null);
   // 首页最近任务（跨 workspace）。
   const [recentSessions, setRecentSessions] = useState<SessionInfo[]>([]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -102,41 +96,6 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
       setActionError(cause instanceof Error ? cause.message : "创建 Workspace 失败");
     }
   }, [model]);
-
-  const renameWorkspace = useCallback(async (id: string) => {
-    const name = renamingName.trim();
-    if (!name) {
-      setRenamingWs(null);
-      return;
-    }
-    try {
-      const response = await fetch(`/api/workspaces/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      const body = (await response.json()) as { workspace?: WorkspaceSummary; error?: string };
-      if (!response.ok) throw new Error(body.error ?? "重命名失败");
-      if (body.workspace) setWorkspaces((current) => current.map((item) => (item.id === id ? body.workspace! : item)));
-    } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : "重命名失败");
-    } finally {
-      setRenamingWs(null);
-    }
-  }, [renamingName]);
-
-  const removeWorkspace = useCallback(async (id: string) => {
-    try {
-      const response = await fetch(`/api/workspaces/${encodeURIComponent(id)}`, { method: "DELETE" });
-      if (!response.ok) throw new Error("删除失败");
-      setWorkspaces((current) => current.filter((item) => item.id !== id));
-      setWorkspaceId((current) => (current === id ? null : current));
-    } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : "删除失败");
-    } finally {
-      setConfirmDeleteWs(null);
-    }
-  }, []);
 
   // Bootstrap: agents, models, workspaces, and this workspace's session list.
   useEffect(() => {
@@ -334,7 +293,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               void send();
             }}
           >
-            <div className="mb-3 flex gap-2">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
               <ThemeSelect value={workspaceId ?? undefined} onValueChange={(v: string) => setWorkspaceId(v || null)}>
                 <SelectTrigger className="w-auto" aria-label="智能体">
                   <SelectValue placeholder="选择智能体" />
@@ -353,7 +312,27 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                   {models.length ? models.map((item) => <SelectItem key={item.model} value={item.model}>{item.model}</SelectItem>) : <SelectItem value="">模型目录不可用</SelectItem>}
                 </SelectContent>
               </ThemeSelect>
+              <IconButton size="md" label="新建智能体" onClick={() => setCreatingWs((value) => !value)}>
+                <Icon name="plus" size={14} />
+              </IconButton>
+              {workspaceId && (
+                <IconButton size="md" label="配置当前智能体" onClick={() => router.push(`/fw/w/${workspaceId}`)}>
+                  <Icon name="settings" size={14} />
+                </IconButton>
+              )}
             </div>
+            {creatingWs && (
+              <form
+                className="mb-3 flex gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void createWorkspace(event);
+                }}
+              >
+                <Input name="name" autoFocus maxLength={120} placeholder="智能体名称" className="min-w-0 flex-1" />
+                <Button type="submit" size="sm">创建</Button>
+              </form>
+            )}
             <Textarea
               ref={textareaRef}
               value={prompt}
@@ -391,71 +370,9 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
         </div>
       )}
 
-      {/* 任务态：三栏工作台——侧栏可收起，对话区/画布用 PanelGroup 拖动分栏。 */}
+      {/* 任务态：双栏工作台——无侧栏，对话区/画布 PanelGroup 拖动分栏；返回/切任务走顶部导航。 */}
       {snapshot && (
-      <div className={sidebarCollapsed ? "fw-grid sidebar-hidden" : "fw-grid"}>
-        <aside className={sidebarCollapsed ? "fw-sidebar collapsed" : "fw-sidebar"}>
-          <div className="flex items-center justify-between px-1 pb-2">
-            <IconButton size="md" label={sidebarCollapsed ? "展开侧栏" : "收起侧栏"} onClick={() => setSidebarCollapsed((value) => !value)}>
-              <Icon name={sidebarCollapsed ? "chevron-down" : "cross"} size={14} />
-            </IconButton>
-            <span className="text-xs font-semibold uppercase tracking-wide text-ink-3">智能体</span>
-            <IconButton size="md" label="新建 Workspace" onClick={() => setCreatingWs((value) => !value)}>
-              <Icon name="plus" size={14} />
-            </IconButton>
-          </div>
-          {creatingWs && (
-            <form
-              className="mt-1 flex gap-1.5 px-1"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void createWorkspace(event);
-              }}
-            >
-              <Input name="name" autoFocus maxLength={120} placeholder="智能体名称" className="min-w-0 flex-1" />
-              <Button type="submit" size="sm">创建</Button>
-            </form>
-          )}
-          <nav className="mt-1 flex flex-col gap-0.5" aria-label="Workspace 列表">
-            {workspaces.map((item) => (
-              <div key={item.id} className={`group rounded-lg border border-transparent transition-colors ${item.id === workspaceId ? "border-line bg-surface" : "hover:bg-surface"}`}>
-                {renamingWs === item.id ? (
-                  <form
-                    className="flex items-center gap-1.5 px-1.5 py-1"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void renameWorkspace(item.id);
-                    }}
-                  >
-                    <Input value={renamingName} onChange={(event) => setRenamingName(event.target.value)} autoFocus maxLength={120} aria-label="智能体名称" className="min-w-0 flex-1" />
-                    <Button type="submit" size="icon" variant="ghost" className="h-6 w-6" title="保存">
-                      <Icon name="check" size={12} />
-                    </Button>
-                  </form>
-                ) : (
-                  <Button type="button" variant="ghost" className="w-full justify-start px-2.5 py-2" onClick={() => setWorkspaceId(item.id)}>
-                    <span className="block truncate">{item.name}</span>
-                  </Button>
-                )}
-                <div className="flex gap-0.5 px-1.5 pb-1 opacity-0 transition-opacity group-hover:opacity-100">
-                  <IconButton size="sm" label="配置智能体" onClick={() => router.push(`/fw/w/${item.id}`)}><Icon name="settings" size={12} /></IconButton>
-                  <IconButton size="sm" label="重命名" onClick={() => { setRenamingWs(item.id); setRenamingName(item.name); setConfirmDeleteWs(null); }}><Icon name="edit" size={12} /></IconButton>
-                  <IconButton size="sm" tone="quiet" label={confirmDeleteWs === item.id ? "确认删除" : "删除"} onClick={() => setConfirmDeleteWs(confirmDeleteWs === item.id ? null : item.id)}><Icon name="trash" size={12} /></IconButton>
-                </div>
-                {confirmDeleteWs === item.id && (
-                  <div className="mx-1.5 mb-1 rounded-lg border border-line bg-surface p-2 text-xs text-ink-2">
-                    <span>删除后会话、产物、文件版本全部清除，不可恢复。</span>
-                    <div className="mt-1.5 flex justify-end gap-1.5">
-                      <Button type="button" variant="danger" size="sm" onClick={() => void removeWorkspace(item.id)}>确认删除</Button>
-                      <Button type="button" variant="secondary" size="sm" onClick={() => setConfirmDeleteWs(null)}>取消</Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </nav>
-        </aside>
-
+      <div className="fw-grid">
         <div className="fw-main">
         <PanelGroup direction="horizontal" autoSaveId="fw-conv-canvas-split">
           <Panel defaultSize={50} minSize={20} className="fw-panel">
@@ -463,11 +380,6 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
         <section className="fw-conversation">
           <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-3">
             <div className="flex min-w-0 items-center gap-2">
-              {sidebarCollapsed && (
-                <IconButton size="md" label="展开侧栏" onClick={() => setSidebarCollapsed(false)}>
-                  <Icon name="chevron-down" size={14} className="-rotate-90" />
-                </IconButton>
-              )}
               <div className="min-w-0">
                 <h1 className="truncate text-lg font-semibold tracking-tight">{snapshot?.session.title ?? "新任务"}</h1>
               </div>
