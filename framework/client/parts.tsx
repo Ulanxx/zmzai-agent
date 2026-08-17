@@ -2,18 +2,25 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { Badge, DiffView, Icon, Markdown, ToolGroup } from "@zmzai/theme";
+import {
+  ArtifactCard,
+  Badge,
+  EditCard as ThemeEditCard,
+  formatBytes,
+  Icon,
+  Markdown,
+  MessageItem,
+  Reasoning,
+  shortContentType,
+  ToolGroup,
+} from "@zmzai/theme";
 
-import type { ArtifactCard, FileEdit, PermissionRequest, Reply, TodoItem } from "@/framework/client/use-framework-session";
-import type { MessageWithParts, Part } from "@/framework/core/session/types";
+import type { ArtifactCard as ArtifactCardData, FileEdit, MessageWithParts, Part } from "@/framework/client/use-framework-session";
 
-// 业务组件（审批卡/Task Plan/工具卡/Markdown/DiffView）已下沉 @zmzai/theme 0.3.0；
-// PermissionCard/TodoChecklist 此处 re-export 保持 workbench 的既有导入路径。
+// 业务组件（消息流/思考/工具卡/产物卡/改动卡/审批卡/Task Plan/Markdown/DiffView）
+// 已全部下沉 @zmzai/theme 0.4.0；PermissionCard/TodoChecklist 此处 re-export
+// 保持 workbench 的既有导入路径。
 export { PermissionCard, TodoChecklist } from "@zmzai/theme";
-
-/** Part renderers (spec §10.2): the conversation stream renders directly from
- *  the part list — text/reasoning/tool/step parts inline, approvals as inline
- *  cards, todos as a pinned checklist, artifacts as preview cards. */
 
 /** Canvas 内的 pptx 预览：fetch previewUrl 原始字节，用 pptx-preview 渲染
  *  成可翻页的幻灯片（pptx 无法像 html/pdf 那样 iframe 内嵌）。 */
@@ -47,31 +54,10 @@ export function PptxPreview({ previewUrl }: { previewUrl: string }) {
   return <div ref={containerRef} className="pptx-preview-host p-3" />;
 }
 
-
-function formatBytes(value: number): string {
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
-  return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
-}
-
 type ToolPart = Extract<Part, { type: "tool" }>;
 
 function TextPart({ part }: { part: Extract<Part, { type: "text" }> }) {
-  return <div className="fw-message-content"><Markdown text={part.text} /></div>;
-}
-
-function ReasoningPart({ part, active }: { part: Extract<Part, { type: "reasoning" }>; active: boolean }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="fw-reasoning">
-      <button type="button" className="fw-reasoning-toggle" aria-expanded={active || open} onClick={() => setOpen((value) => !value)}>
-        <span className="fw-reasoning-dot" aria-hidden />
-        <span>思考过程</span>
-        <Icon name="chevron-down" size={11} className={active || open ? "fw-chevron open" : "fw-chevron"} />
-      </button>
-      {(active || open) && <pre className="fw-reasoning-body">{part.text}</pre>}
-    </div>
-  );
+  return <div className="zmz-message-content"><Markdown text={part.text} /></div>;
 }
 
 function SubtaskPart({ part }: { part: Extract<Part, { type: "subtask" }> }) {
@@ -97,13 +83,9 @@ export function MessageView({ entry: source, hideTools = false, sessionIdle = fa
     const created = new Date(entry.info.time.created);
     const timeLabel = Number.isNaN(created.getTime()) ? null : created.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
     return (
-      <div className="fw-message user">
-        <span className="fw-message-avatar">你</span>
-        <div className="fw-message-column">
-          <div className="fw-message-meta"><strong>你</strong>{timeLabel && <span>{timeLabel}</span>}</div>
-          <div className="fw-message-content">{text}</div>
-        </div>
-      </div>
+      <MessageItem role="user" avatar="你" name="你" time={timeLabel}>
+        <div className="zmz-message-content">{text}</div>
+      </MessageItem>
     );
   }
   const assistantEntries = entries.filter((item) => item.info.role === "assistant");
@@ -136,7 +118,7 @@ export function MessageView({ entry: source, hideTools = false, sessionIdle = fa
         rendered.push(<TextPart key={part.id} part={part} />);
         break;
       case "reasoning":
-        rendered.push(<ReasoningPart key={part.id} part={part} active={active} />);
+        rendered.push(<Reasoning key={part.id} text={part.text} active={active} />);
         break;
       case "subtask":
         rendered.push(<SubtaskPart key={part.id} part={part} />);
@@ -151,14 +133,10 @@ export function MessageView({ entry: source, hideTools = false, sessionIdle = fa
     ? new Date(firstCreated).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
     : null;
   return (
-    <div className="fw-message assistant">
-      <span className="fw-message-avatar assistant">使</span>
-      <div className="fw-message-column">
-      <div className="fw-message-meta"><strong>ZMZAI Agent</strong><Badge variant={active ? "accent" : "success"} size="sm">{active ? "执行中" : "已完成"}</Badge>{timeLabel && <span className="fw-message-time">{timeLabel}</span>}</div>
+    <MessageItem role="assistant" avatar="使" name="ZMZAI Agent" status={{ active }} time={timeLabel} noMotion>
       <div className="fw-execution-tree">{rendered}</div>
       {error && <div className="run-note">出错了：{error.message}</div>}
-      </div>
-    </div>
+    </MessageItem>
   );
 }
 
@@ -183,59 +161,20 @@ export function groupAssistantMessages(messages: MessageWithParts[]): Array<Mess
   return grouped;
 }
 
-/** MIME → 卡片用的短类型名。完整 MIME（如 OOXML 的超长串）会撑坏
- *  卡片布局也不可读，映射为扩展名风格；未知长类型取 subtype 末段。 */
-function shortContentType(contentType: string): string {
-  const type = contentType.split(";")[0]!.trim().toLowerCase();
-  const known: Record<string, string> = {
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
-    "application/vnd.openxmlformats-officedocument.presentationml.slideshow": "ppsx",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
-    "application/pdf": "pdf",
-    "application/json": "json",
-    "application/zip": "zip",
-    "text/html": "html",
-    "text/markdown": "md",
-    "text/plain": "txt",
-    "text/css": "css",
-  };
-  if (known[type]) return known[type]!;
-  const sub = type.split("/").pop() ?? "file";
-  if (sub.length <= 14) return sub;
-  const tail = sub.split(".").pop() ?? sub;
-  return tail.length <= 14 ? tail : "file";
-}
-
-export function ArtifactPreviewCard({ artifact, onOpen }: { artifact: ArtifactCard; onOpen: (artifact: ArtifactCard) => void }) {
+/** 产物卡适配器：agent 的 ArtifactCard 数据（GridFS 产物）→ theme ArtifactCard。 */
+export function ArtifactPreviewCard({ artifact, onOpen }: { artifact: ArtifactCardData; onOpen: (artifact: ArtifactCardData) => void }) {
   return (
-    <button type="button" className="fw-artifact-card" onClick={() => onOpen(artifact)}>
-      <span className="fw-artifact-name">{artifact.path}</span>
-      <span className="fw-artifact-meta">
-        {shortContentType(artifact.contentType)} · {formatBytes(artifact.bytes)}
-      </span>
-      <span className="fw-artifact-actions">
-        {artifact.previewUrl && <span className="fw-artifact-preview-hint">预览</span>}
-        {artifact.downloadUrl && (
-          <a className="fw-artifact-download" href={artifact.downloadUrl} onClick={(event) => event.stopPropagation()}>
-            <Icon name="download" size={12} />
-          </a>
-        )}
-      </span>
-    </button>
+    <ArtifactCard
+      path={artifact.path}
+      meta={`${shortContentType(artifact.contentType)} · ${formatBytes(artifact.bytes)}`}
+      previewHint={Boolean(artifact.previewUrl)}
+      downloadUrl={artifact.downloadUrl}
+      onOpen={() => onOpen(artifact)}
+    />
   );
 }
 
+/** 改动卡适配器：agent 的 FileEdit → theme EditCard。 */
 export function EditCard({ edit }: { edit: FileEdit }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="fw-edit-card">
-      <button type="button" className="fw-edit-head" onClick={() => setOpen((value) => !value)}>
-        <Icon name="chevron-down" size={11} className={open ? "fw-chevron open" : "fw-chevron"} />
-        <span className="fw-edit-path">{edit.path}</span>
-        <small>{edit.revisionId.slice(0, 12)}</small>
-      </button>
-      {open && <DiffView diff={edit.diff} />}
-    </div>
-  );
+  return <ThemeEditCard path={edit.path} revision={edit.revisionId} diff={edit.diff} />;
 }

@@ -761,20 +761,10 @@
   .fw-assistant-turn { display: grid; gap: 0.5rem; margin-bottom: 1rem; }
 
   /* Cloudflare Workshop-style transcript: one role row owns all parts of a turn. */
-  .fw-message { display: flex; align-items: flex-start; gap: 0.7rem; max-width: 52rem; margin: 0 0 1.35rem; }
-  .fw-message-avatar { display: grid; width: 1.5rem; height: 1.5rem; flex: 0 0 1.5rem; place-items: center; border-radius: 50%; background: var(--color-surface-strong); color: var(--color-accent-strong); font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700; }
-  .fw-message-avatar.assistant { background: var(--color-accent); color: var(--color-accent-ink); }
-  .fw-message-column { display: grid; min-width: 0; flex: 1; gap: 0.55rem; }
-  .fw-message-meta { display: flex; align-items: baseline; gap: 0.55rem; min-height: 1.5rem; }
-  .fw-message-meta strong { font-size: 0.75rem; font-weight: 700; color: var(--color-ink); }
-  .fw-message-meta span { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6rem; }
-  .fw-message-time { margin-left: auto; }
   /* G1 工具折叠摘要：默认收起为「运行了 N 个工具」，点开看详情 */
-  .fw-message-content { min-width: 0; color: var(--color-ink); font-size: 0.875rem; line-height: 1.65; overflow-wrap: anywhere; }
-  .fw-message.user .fw-message-content { padding: 0.65rem 0.8rem; border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-surface); }
   .fw-execution-tree { position: relative; display: grid; gap: 0; margin: 0.05rem 0 0.15rem; padding: 0.1rem 0 0.1rem 1.15rem; }
   .fw-execution-tree::before { position: absolute; top: 0; bottom: 0.2rem; left: 0.34rem; width: 1px; background: var(--color-line); content: ""; }
-  .fw-execution-tree > .fw-message-content { margin-bottom: 0.35rem; }
+  .fw-execution-tree > .zmz-message-content { margin-bottom: 0.35rem; }
 
   /* Execution tree: each tool is a branch, not a standalone card. */
 
@@ -787,11 +777,8 @@
   .fw-subtask-state { flex: 0 0 auto; }
 
   /* 思考过程（可折叠） */
-  .fw-reasoning { border-left: 2px solid var(--color-line); padding-left: 0.6rem; }
-  .fw-reasoning-toggle { display: inline-flex; align-items: center; gap: 0.3rem; background: none; border: 0; cursor: pointer; font-family: var(--font-mono); font-size: 0.625rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-muted); padding: 0.15rem 0; }
   .fw-chevron { transition: transform var(--animate-dur-fast) var(--ease-out); }
   .fw-chevron.open { transform: rotate(180deg); }
-  .fw-reasoning-body { margin: 0.4rem 0 0; font-size: 0.75rem; color: var(--color-muted); white-space: pre-wrap; }
 
   /* 内联审批卡 */
   .fw-feedback-input { flex: 1; min-width: 8rem; border: 1px solid var(--color-line); background: var(--color-surface); padding: 0.4rem 0.6rem; font-size: 0.8125rem; font-family: var(--font-sans); color: var(--color-ink); border-radius: var(--radius-sm); }
