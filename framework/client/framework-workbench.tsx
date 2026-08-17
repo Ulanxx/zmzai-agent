@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
-import { Badge, Button, IconButton, Icon, Input, MovingBorder, Navbar, navItemClass, Select as ThemeSelect, SelectTrigger, SelectValue, SelectContent, SelectItem, Tabs, Textarea } from "@zmzai/theme";
+import { Badge, Button, IconButton, Icon, Input, ModelSelector, MovingBorder, Navbar, navItemClass, Select as ThemeSelect, SelectTrigger, SelectValue, SelectContent, SelectItem, Tabs, Textarea, type ModelSelectorData, type ModelSelectorValue } from "@zmzai/theme";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
   fwApi,
@@ -15,7 +15,6 @@ import {
 } from "@/framework/client/use-framework-session";
 import { ArtifactPreviewCard, EditCard, groupAssistantMessages, MessageView, PermissionCard, PptxPreview, TodoChecklist } from "@/framework/client/parts";
 
-type Model = { model: string; maxOutputTokens: number };
 type Workspace = { id: string; name: string; defaultModel: string };
 
 type CanvasTab = "artifacts" | "edits";
@@ -38,11 +37,12 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   const router = useRouter();
   const pathname = usePathname();
   const { snapshot, live, loading, loadError } = useFrameworkSession(sessionId);
-  const [models, setModels] = useState<Model[]>([]);
+  const [modelSelectorData, setModelSelectorData] = useState<ModelSelectorData | null>(null);
+  const [modelValue, setModelValue] = useState<ModelSelectorValue>({ model: "" });
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
-  const [model, setModel] = useState("");
+  const model = modelValue.model;
   const [sending, setSending] = useState(false);
   const [replying, setReplying] = useState(false);
   const [canvasTab, setCanvasTab] = useState<CanvasTab>("artifacts");
@@ -100,10 +100,10 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   useEffect(() => {
     void (async () => {
       const [modelResult, workspaceResult] = await Promise.allSettled([
-        fetchList<Model>("/api/models", "models"),
+        fetch("/api/models", { cache: "no-store" }).then((r) => r.ok ? r.json() as Promise<{ modelSelectorData: ModelSelectorData }> : Promise.reject(new Error("failed"))),
         fetchList<WorkspaceSummary>("/api/workspaces", "workspaces"),
       ]);
-      if (modelResult.status === "fulfilled") setModels(modelResult.value);
+      if (modelResult.status === "fulfilled") setModelSelectorData(modelResult.value.modelSelectorData);
       if (workspaceResult.status === "fulfilled") {
         setWorkspaces(workspaceResult.value);
         const first = workspaceResult.value[0];
@@ -131,13 +131,14 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   // session (no snapshot yet — was broken before: model stayed "" so send()
   // silently no-oped) and an existing session (restore its pinned model).
   useEffect(() => {
-    if (!models.length || model) return;
+    if (!modelSelectorData || model) return;
     queueMicrotask(() => {
       const workspace = workspaces.find((item) => item.id === workspaceId);
-      const initial = snapshot?.session.model.modelId || workspace?.defaultModel || models[0]?.model || "";
-      if (initial) setModel(initial);
+      const allModels = modelSelectorData.channels.flatMap((ch: { models: { id: string }[] }) => ch.models);
+      const initial = snapshot?.session.model.modelId || workspace?.defaultModel || modelSelectorData.featured[0]?.id || allModels[0]?.id || "";
+      if (initial) setModelValue({ model: initial });
     });
-  }, [snapshot, models, workspaces, model, workspaceId]);
+  }, [snapshot, modelSelectorData, workspaces, model, workspaceId]);
 
   // Auto-scroll the conversation while following.
   useEffect(() => {
@@ -303,14 +304,13 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                   )) : <SelectItem value="">请先创建智能体</SelectItem>}
                 </SelectContent>
               </ThemeSelect>
-              <ThemeSelect value={model || undefined} onValueChange={setModel}>
-                <SelectTrigger className="w-auto" aria-label="模型">
-                  <SelectValue placeholder="选择模型" />
-                </SelectTrigger>
-                <SelectContent>
-                  {models.length ? models.map((item) => <SelectItem key={item.model} value={item.model}>{item.model}</SelectItem>) : <SelectItem value="">模型目录不可用</SelectItem>}
-                </SelectContent>
-              </ThemeSelect>
+              <ModelSelector
+                data={modelSelectorData ?? { featured: [], channels: [] }}
+                value={modelValue}
+                onChange={(v: ModelSelectorValue) => { setModelValue(v); }}
+                placeholder="选择模型"
+                searchable
+              />
               <IconButton size="md" label="新建智能体" onClick={() => setCreatingWs((value) => !value)}>
                 <Icon name="plus" size={14} />
               </IconButton>
@@ -440,14 +440,13 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
             }}
           >
             <div className="mb-2 flex gap-2">
-              <ThemeSelect value={model || undefined} onValueChange={setModel}>
-                <SelectTrigger className="h-8 w-auto text-xs" aria-label="模型">
-                  <SelectValue placeholder="选择模型" />
-                </SelectTrigger>
-                <SelectContent>
-                  {models.length ? models.map((item) => <SelectItem key={item.model} value={item.model}>{item.model}</SelectItem>) : <SelectItem value="">模型目录不可用</SelectItem>}
-                </SelectContent>
-              </ThemeSelect>
+              <ModelSelector
+                data={modelSelectorData ?? { featured: [], channels: [] }}
+                value={modelValue}
+                onChange={(v: ModelSelectorValue) => { setModelValue(v); }}
+                placeholder="选择模型"
+                className="h-8 text-xs"
+              />
             </div>
             <Textarea
               ref={textareaRef}

@@ -5,9 +5,8 @@ import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-import { Button, Icon, Navbar, navItemClass } from "@zmzai/theme";
+import { Button, Icon, ModelSelector, Navbar, navItemClass, type ModelSelectorData, type ModelSelectorValue } from "@zmzai/theme";
 
-type Model = { model: string };
 type WorkspaceDetail = {
   id: string;
   name: string;
@@ -28,11 +27,12 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const [detail, setDetail] = useState<WorkspaceDetail | null>(null);
-  const [models, setModels] = useState<Model[]>([]);
+  const [modelSelectorData, setModelSelectorData] = useState<ModelSelectorData | null>(null);
+  const [modelValue, setModelValue] = useState<ModelSelectorValue>({ model: "" });
+  const model = modelValue.model;
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [prompt, setPrompt] = useState("");
-  const [model, setModel] = useState("");
   const [steps, setSteps] = useState(12);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -57,14 +57,14 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
     setName(ws.name);
     setDescription(ws.description);
     setPrompt(ws.prompt);
-    setModel(ws.defaultModel);
+    setModelValue({ model: ws.defaultModel });
     setSteps(ws.steps);
   }, []);
 
   useEffect(() => {
     void Promise.all([
       json<{ workspace: WorkspaceDetail }>(`/api/workspaces/${encodeURIComponent(workspaceId)}`).then((body) => applyDetail(body.workspace)),
-      json<{ models: Model[] }>("/api/models").then((body) => setModels(body.models)),
+      fetch("/api/models", { cache: "no-store" }).then((r) => r.ok ? r.json() as Promise<{ modelSelectorData: ModelSelectorData }> : Promise.reject(new Error("failed"))).then((body) => setModelSelectorData(body.modelSelectorData)),
     ]).catch((cause) => setError(cause instanceof Error ? cause.message : "无法加载智能体配置"));
   }, [workspaceId, applyDetail]);
 
@@ -116,7 +116,7 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
             <label><span>名称</span><input value={name} maxLength={120} onChange={(event) => setName(event.target.value)} /></label>
             <label><span>描述</span><input value={description} maxLength={2_000} onChange={(event) => setDescription(event.target.value)} /></label>
             <div className="agent-form-row">
-              <label><span>默认模型</span><select value={model} onChange={(event) => setModel(event.target.value)}><option value="">跟随任务选择</option>{models.map((item) => <option key={item.model} value={item.model}>{item.model}</option>)}</select></label>
+              <label><span>默认模型</span><ModelSelector data={modelSelectorData ?? { featured: [], channels: [] }} value={modelValue} onChange={setModelValue} placeholder="跟随任务选择" /></label>
               <label><span>最大步骤</span><input type="number" min="1" max="64" value={steps} onChange={(event) => setSteps(Math.min(64, Math.max(1, Number(event.target.value) || 1)))} /></label>
             </div>
             <label className="agent-prompt-label"><span>系统提示词（AGENT.md）</span><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} spellCheck={false} /></label>

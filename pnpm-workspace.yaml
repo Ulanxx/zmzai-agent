@@ -6,3 +6,6 @@ allowBuilds:
   protobufjs: false
   sharp: false
   unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - '@zmzai/theme@0.4.1'
