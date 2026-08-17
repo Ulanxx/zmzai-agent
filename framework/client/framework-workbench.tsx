@@ -42,7 +42,6 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   const [models, setModels] = useState<Model[]>([]);
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState("");
   const [sending, setSending] = useState(false);
@@ -58,15 +57,11 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   const [renamingWs, setRenamingWs] = useState<string | null>(null);
   const [renamingName, setRenamingName] = useState("");
   const [confirmDeleteWs, setConfirmDeleteWs] = useState<string | null>(null);
-  // G3 会话搜索。
-  const [sessionQuery, setSessionQuery] = useState("");
   // 首页最近任务（跨 workspace）。
   const [recentSessions, setRecentSessions] = useState<SessionInfo[]>([]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [followScroll, setFollowScroll] = useState(true);
-  // 会话列表请求序号：快速切换 Workspace 时丢弃过期响应，避免旧列表覆盖新列表。
-  const sessionsReqSeq = useRef(0);
 
   const busy = live.status !== "idle";
   const queuedCount = snapshot?.session.queuedPrompts.length ?? 0;
@@ -136,7 +131,6 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
       if (!response.ok) throw new Error("删除失败");
       setWorkspaces((current) => current.filter((item) => item.id !== id));
       setWorkspaceId((current) => (current === id ? null : current));
-      setSessions([]);
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : "删除失败");
     } finally {
@@ -168,23 +162,12 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
     void fwApi.listSessions().then((result) => setRecentSessions(result.sessions.slice(0, 6))).catch(() => undefined);
   }, [sessionId]);
 
-  // Align workspace with the loaded session, then list its sessions. The
-  // setState calls are deferred so the effect body stays free of sync updates.
+  // Align workspace with the loaded session.
+  // The setState call is deferred so the effect body stays free of sync updates.
   useEffect(() => {
     const id = snapshot?.session.workspaceId;
     if (id) queueMicrotask(() => setWorkspaceId(id));
   }, [snapshot?.session.workspaceId]);
-
-  useEffect(() => {
-    if (!workspaceId) return;
-    const seq = ++sessionsReqSeq.current;
-    void fwApi.listSessions(workspaceId)
-      .then((result) => {
-        if (seq !== sessionsReqSeq.current) return; // 已切换 Workspace，丢弃过期响应
-        setSessions(result.sessions);
-      })
-      .catch(() => undefined);
-  }, [workspaceId, snapshot?.session.time.updated]);  
 
   // Initialize the model once models/workspace are known. Works for BOTH a new
   // session (no snapshot yet — was broken before: model stayed "" so send()
@@ -471,35 +454,6 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               </div>
             ))}
           </nav>
-          <section className="mt-4">
-            <div className="flex items-center justify-between px-1 pb-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-ink-3">任务</span>
-              <small className="rounded-full bg-surface-2 px-1.5 text-xs text-ink-3">{sessions.length}</small>
-            </div>
-            {sessions.length > 5 && (
-              <Input
-                className="mb-2 w-full"
-                value={sessionQuery}
-                onChange={(event) => setSessionQuery(event.target.value)}
-                placeholder="搜索会话"
-                aria-label="搜索会话"
-              />
-            )}
-            <nav className="flex flex-col gap-0.5" aria-label="会话列表">
-              {sessions
-                .filter((item) => !sessionQuery.trim() || item.title.toLowerCase().includes(sessionQuery.trim().toLowerCase()) || item.agent.toLowerCase().includes(sessionQuery.trim().toLowerCase()))
-                .map((item) => (
-                <button type="button" key={item.id}
-                  className={`w-full justify-start rounded-sm border border-transparent px-2.5 py-1.5 ${item.id === sessionId ? "border-line bg-surface" : "hover:bg-surface-2"}`}
-                  onClick={() => router.push(`/fw/s/${item.id}`)}>
-                  <strong className="block truncate text-sm font-medium">{item.title}</strong>
-                  <small className="font-mono text-xs text-ink-3">{item.agent}</small>
-                </button>
-              ))}
-              {!sessions.length && <p className="px-2.5 py-2 text-sm text-ink-3">此智能体还没有任务。</p>}
-              {sessions.length > 0 && sessions.filter((item) => !sessionQuery.trim() || item.title.toLowerCase().includes(sessionQuery.trim().toLowerCase())).length === 0 && <p className="px-2.5 py-2 text-sm text-ink-3">没有匹配的会话。</p>}
-            </nav>
-          </section>
         </aside>
 
         <div className="fw-main">
