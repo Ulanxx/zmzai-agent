@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { Badge, Button, Icon, Input } from "@zmzai/theme";
+import { Badge, DiffView, Icon, Markdown, ToolGroup } from "@zmzai/theme";
 
-import { DiffView } from "@/components/diff-view";
-import { Markdown } from "@/components/markdown";
 import type { ArtifactCard, FileEdit, PermissionRequest, Reply, TodoItem } from "@/framework/client/use-framework-session";
 import type { MessageWithParts, Part } from "@/framework/core/session/types";
+
+// 业务组件（审批卡/Task Plan/工具卡/Markdown/DiffView）已下沉 @zmzai/theme 0.3.0；
+// PermissionCard/TodoChecklist 此处 re-export 保持 workbench 的既有导入路径。
+export { PermissionCard, TodoChecklist } from "@zmzai/theme";
 
 /** Part renderers (spec §10.2): the conversation stream renders directly from
  *  the part list — text/reasoning/tool/step parts inline, approvals as inline
@@ -52,101 +54,7 @@ function formatBytes(value: number): string {
   return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
-function formatToolInput(input: unknown): string {
-  if (typeof input === "string") return input;
-  try {
-    return JSON.stringify(input, null, 2);
-  } catch {
-    return String(input);
-  }
-}
-
-function toolDuration(part: Extract<Part, { type: "tool" }>): string | null {
-  if (part.state.status !== "completed" && part.state.status !== "error") return null;
-  const duration = new Date(part.state.time.end).getTime() - new Date(part.state.time.start).getTime();
-  if (!Number.isFinite(duration) || duration < 0) return null;
-  return duration >= 1000 ? `${(duration / 1000).toFixed(1)}s` : `${duration}ms`;
-}
-
 type ToolPart = Extract<Part, { type: "tool" }>;
-
-/** 工具折叠摘要（G1，借鉴 aipower「运行了 N 个工具」）：assistant 一轮里
- *  的工具调用默认收起为一行摘要，点开才逐个展开工具卡。避免长任务对话被
- *  工具卡淹没。运行中/出错/单条工具时直接展开（保持即时反馈）。 */
-function ToolGroupSummary({ tools, expanded, onToggle, sessionIdle }: { tools: ToolPart[]; expanded: boolean; onToggle: () => void; sessionIdle: boolean }) {
-  const running = tools.filter((t) => t.state.status === "running" || t.state.status === "pending");
-  const failed = tools.filter((t) => t.state.status === "error");
-  const done = tools.filter((t) => t.state.status === "completed");
-  // 运行中或有失败时默认展开，给即时反馈。
-  const autoExpand = running.length > 0 || failed.length > 0 || tools.length <= 1;
-  const open = expanded || autoExpand;
-  const glyph = failed.length > 0 ? "cross" : running.length > 0 ? "chevron-down" : "check";
-  const summary = [
-    running.length > 0 && `${running.length} 个进行中`,
-    failed.length > 0 && `${failed.length} 个失败`,
-    done.length > 0 && `${done.length} 个完成`,
-  ].filter(Boolean).join(" · ");
-  return (
-    <div className="fw-tool-group">
-      <button type="button" className="fw-tool-group-trigger" aria-expanded={open} onClick={onToggle} disabled={autoExpand}>
-        <span className="tool-card-glyph" aria-hidden><Icon name={glyph as never} size={12} /></span>
-        <span className="fw-tool-group-label">运行了 {tools.length} 个工具</span>
-        {!autoExpand && <small>{summary}</small>}
-        <Icon name="chevron-down" size={12} className={open ? "tool-card-chevron open" : "tool-card-chevron"} />
-      </button>
-      {open && (
-        <div className="fw-tool-group-body">
-          {tools.map((part) => <ToolPartCard key={`${part.id}:${part.state.status}`} part={part} sessionIdle={sessionIdle} />)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ToolPartCard({ part, sessionIdle = false }: { part: ToolPart; sessionIdle?: boolean }) {
-  const [expanded, setExpanded] = useState(false);
-  const state = part.state;
-  const running = state.status === "running" || state.status === "pending";
-  // A tool stuck in a non-terminal state while the session is idle is a
-  // leftover from an interrupted run (crash/restart) — render it as such
-  // instead of "waiting" forever.
-  const interrupted = running && sessionIdle;
-  const title = state.status === "completed" ? state.title : state.status === "running" ? (state.title ?? part.tool) : part.tool;
-  const output = state.status === "completed" ? state.output : state.status === "error" ? state.error : null;
-  const statusClass = state.status === "completed" ? "completed" : interrupted ? "failed" : state.status === "error" ? "failed" : "running";
-
-  // Running tools are always open. Once a terminal state arrives, `expanded`
-  // remains false unless the user explicitly opens the output.
-  const isOpen = running || expanded;
-
-  return (
-    <div className={`tool-card ${statusClass}`}>
-      <button type="button" className="tool-card-trigger" aria-expanded={isOpen} onClick={() => setExpanded((value) => !value)}>
-        <span className="tool-card-glyph" aria-hidden><Icon name={state.status === "completed" ? "check" : interrupted || state.status === "error" ? "cross" : "chevron-down"} size={12} /></span>
-        <span className="tool-card-label">{title}</span>
-        {(state.status === "error" || interrupted) && <Badge variant="danger" size="sm">失败</Badge>}
-        {running && !interrupted && <Badge variant="warning" size="sm">运行中</Badge>}
-        {toolDuration(part) && <span className="tool-card-duration">{toolDuration(part)}</span>}
-        <Icon name="chevron-down" size={12} className={isOpen ? "tool-card-chevron open" : "tool-card-chevron"} />
-      </button>
-      {isOpen && (
-        <div className="tool-card-detail">
-          <div className="tool-card-detail-section">
-            <span className="tool-card-detail-label">输入</span>
-            <pre>{formatToolInput(state.input)}</pre>
-          </div>
-          {output !== null && (
-            <div className="tool-card-detail-section">
-              <span className="tool-card-detail-label">输出</span>
-              <pre>{output}</pre>
-            </div>
-          )}
-          {running && <span className="tool-card-live-note">{interrupted ? "运行已中断（服务重启），可在同一会话继续。" : "正在等待工具返回结果…"}</span>}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function TextPart({ part }: { part: Extract<Part, { type: "text" }> }) {
   return <div className="fw-message-content"><Markdown text={part.text} /></div>;
@@ -177,7 +85,6 @@ function SubtaskPart({ part }: { part: Extract<Part, { type: "subtask" }> }) {
 }
 
 export function MessageView({ entry: source, hideTools = false, sessionIdle = false }: { entry: MessageWithParts | MessageWithParts[]; hideTools?: boolean; sessionIdle?: boolean }) {
-  const [toolGroupOpen, setToolGroupOpen] = useState(false);
   const entries = Array.isArray(source) ? source : [source];
   const entry = entries[0];
   if (!entry) return null;
@@ -216,7 +123,7 @@ export function MessageView({ entry: source, hideTools = false, sessionIdle = fa
     // 不展开工具卡。但若该组只有 1 个且是 todo 工具，整组跳过（todo 由
     // TodoChecklist 单独渲染，不重复）。
     if (hideTools && group.length === 1 && group[0]!.tool === "todo") return;
-    rendered.push(<ToolGroupSummary key={`toolgroup-${keyCounter++}`} tools={hideTools ? group.filter((t) => t.tool !== "todo") : group} expanded={toolGroupOpen} onToggle={() => setToolGroupOpen((v) => !v)} sessionIdle={sessionIdle} />);
+    rendered.push(<ToolGroup key={`toolgroup-${keyCounter++}`} calls={hideTools ? group.filter((t) => t.tool !== "todo") : group} sessionIdle={sessionIdle} />);
   };
   for (const part of parts) {
     if (part.type === "tool") {
@@ -274,102 +181,6 @@ export function groupAssistantMessages(messages: MessageWithParts[]): Array<Mess
   }
   flush();
   return grouped;
-}
-
-export function PermissionCard({ request, busy, onReply }: { request: PermissionRequest; busy: boolean; onReply: (reply: Reply, feedback?: string) => void }) {
-  const [feedback, setFeedback] = useState("");
-  const command = typeof (request.metadata as { command?: unknown } | undefined)?.command === "string" ? (request.metadata as { command: string }).command : null;
-  return (
-    <article className="fw-permission-card">
-      <div className="fw-permission-head">
-        <Badge variant="solid" size="sm">{request.permission}</Badge>
-        <strong>{command ?? request.patterns.join("、")}</strong>
-      </div>
-      <p className="fw-permission-note">
-        {request.permission === "bash" ? "Agent 请求在隔离沙箱中执行这条命令。批准后本次运行一次有效；选择「始终允许」则同任务内同类命令不再询问。" : "Agent 请求执行此操作。"}
-      </p>
-      <div className="proposal-actions">
-        <Input
-          className="fw-feedback-input"
-          placeholder="拒绝理由（可选，会反馈给 Agent）"
-          value={feedback}
-          onChange={(event) => setFeedback(event.target.value)}
-        />
-        <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => onReply("reject", feedback || undefined)}>
-          拒绝
-        </Button>
-        <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => onReply("always")}>
-          始终允许
-        </Button>
-        <Button type="button" size="sm" disabled={busy} onClick={() => onReply("once")}>
-          允许一次
-        </Button>
-      </div>
-    </article>
-  );
-}
-
-function metadataCount(part: ToolPart): number | null {
-  if (part.state.status !== "completed") return null;
-  const value = part.state.metadata?.completed;
-  return typeof value === "number" && Number.isInteger(value) ? value : null;
-}
-
-function assignToolsToTodos(todos: TodoItem[], tools: ToolPart[]): ToolPart[][] {
-  const branches = todos.map(() => [] as ToolPart[]);
-  let branchIndex = 0;
-  for (const tool of tools) {
-    if (tool.tool === "todo") {
-      const completed = metadataCount(tool);
-      if (completed !== null) branchIndex = Math.min(Math.max(completed, 0), todos.length - 1);
-      continue;
-    }
-    branches[branchIndex]?.push(tool);
-  }
-  return branches;
-}
-
-function TaskPlanNode({ todo, index, tools }: { todo: TodoItem; index: number; tools: ToolPart[] }) {
-  const [expanded, setExpanded] = useState(false);
-  const active = todo.status === "in_progress";
-  const canExpand = tools.length > 0;
-  const open = canExpand && (active || expanded);
-  const state = active ? "当前执行" : todo.status === "completed" ? "已完成" : todo.status === "cancelled" ? "已跳过" : "待执行";
-  const stateVariant = active ? "accent" : todo.status === "completed" ? "success" : todo.status === "cancelled" ? "danger" : "outline";
-  return (
-    <li className={`fw-task-node ${todo.status}`}>
-      <button type="button" className="fw-task-node-trigger" aria-expanded={open} disabled={!canExpand} onClick={() => setExpanded((value) => !value)}>
-        <span className="fw-task-node-marker" aria-hidden>{todo.status === "completed" ? <Icon name="check" size={10} /> : active ? <span className="fw-todo-spinner" /> : null}</span>
-        <span className="fw-task-node-copy"><span className="fw-task-node-index">{String(index + 1).padStart(2, "0")}</span><strong>{todo.content}</strong></span>
-        {canExpand ? <Badge variant="outline" size="sm">{tools.length} 次执行</Badge> : <Badge variant={stateVariant} size="sm">{state}</Badge>}
-        {canExpand && <Icon name="chevron-down" size={12} className={open ? "fw-chevron open" : "fw-chevron"} />}
-      </button>
-      {open && tools.length > 0 && <div className="fw-task-executions">{tools.map((tool) => <ToolPartCard key={`${tool.id}:${tool.state.status}`} part={tool} />)}</div>}
-    </li>
-  );
-}
-
-export function TodoChecklist({ todos, tools }: { todos: TodoItem[]; tools: ToolPart[] }) {
-  if (!todos.length) return null;
-  const done = todos.filter((todo) => todo.status === "completed").length;
-  const current = todos.find((todo) => todo.status === "in_progress");
-  const progress = Math.round((done / todos.length) * 100);
-  const branches = assignToolsToTodos(todos, tools);
-  return (
-    <section className="fw-todo">
-      <div className="fw-todo-head">
-        <div className="fw-todo-heading"><span className="fw-todo-kicker">Task Plan</span><Badge variant={current ? "accent" : done === todos.length ? "success" : "outline"} size="sm">{current ? "执行中" : done === todos.length ? "已完成" : "待执行"}</Badge></div>
-        <span className="fw-todo-progress"><b>{done}</b>/{todos.length}</span>
-      </div>
-      <div className="fw-todo-summary"><span>{current?.content ?? (done === todos.length ? "所有步骤已完成" : "等待 Agent 开始执行")}</span><span>{progress}%</span></div>
-      <div className="fw-todo-progressbar" aria-hidden><span style={{ width: `${progress}%` }} /></div>
-      <ol className="fw-todo-list">
-        {todos.map((todo, index) => (
-          <TaskPlanNode key={`${todo.content}-${index}`} todo={todo} index={index} tools={branches[index] ?? []} />
-        ))}
-      </ol>
-    </section>
-  );
 }
 
 /** MIME → 卡片用的短类型名。完整 MIME（如 OOXML 的超长串）会撑坏

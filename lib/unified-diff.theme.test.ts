@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseUnifiedDiff } from "@/lib/unified-diff";
+import { parseUnifiedDiff } from "@zmzai/theme/parse-unified-diff";
 
 describe("parseUnifiedDiff", () => {
   it("parses a created file", () => {

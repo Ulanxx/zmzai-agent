@@ -409,7 +409,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
             {messages.map((entry, index) => (
               <MessageView key={Array.isArray(entry) ? `assistant-${index}-${entry[0]?.info.id}` : entry.info.id} entry={entry} hideTools={live.todos.length > 0} sessionIdle={live.status === "idle"} />
             ))}
-            <TodoChecklist todos={live.todos} tools={taskTools} />
+            <TodoChecklist todos={live.todos} calls={taskTools} />
             {live.pendingPermission && <PermissionCard request={live.pendingPermission} busy={replying} onReply={(reply, feedback) => void replyPermission(reply, feedback)} />}
             {live.error && <div className="mx-auto my-2 max-w-2xl rounded-lg border border-accent bg-accent/5 px-3 py-2 text-sm text-accent">{live.error}</div>}
             {!followScroll && (
