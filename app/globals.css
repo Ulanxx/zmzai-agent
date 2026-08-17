@@ -29,7 +29,7 @@
   --color-dark-ink:      #FAFAFA;
   --color-dark-line:     #27272A;
 
-  --font-sans: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+  --font-sans: "MiSans", "Noto Serif SC", "Source Han Serif SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
 
@@ -94,7 +94,7 @@
     margin: 0;
     background: var(--color-paper);
     color: var(--color-ink);
-    font-family: var(--font-serif);
+    font-family: var(--font-sans);
     font-size: 1rem;
     line-height: 1.65;
     text-rendering: optimizeLegibility;
