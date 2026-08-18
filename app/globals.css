@@ -768,14 +768,6 @@
 
   /* Execution tree: each tool is a branch, not a standalone card. */
 
-  .fw-subtask-row { position: relative; display: flex; align-items: center; gap: 0.5rem; min-height: 2.15rem; padding: 0.38rem 0.4rem; background: transparent; }
-  .fw-subtask-row::before { position: absolute; top: 1.08rem; left: -0.81rem; width: 0.81rem; height: 1px; background: var(--color-line); content: ""; }
-  .fw-subtask-icon { display: grid; width: 1rem; height: 1rem; place-items: center; color: var(--color-accent); }
-  .fw-subtask-copy { display: grid; min-width: 0; flex: 1; gap: 0.1rem; }
-  .fw-subtask-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; font-weight: 600; }
-  .fw-subtask-copy small, .fw-subtask-state { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6rem; }
-  .fw-subtask-state { flex: 0 0 auto; }
-
   /* 思考过程（可折叠） */
   .fw-chevron { transition: transform var(--animate-dur-fast) var(--ease-out); }
   .fw-chevron.open { transform: rotate(180deg); }

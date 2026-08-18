@@ -4,14 +4,13 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import {
   ArtifactCard,
-  Badge,
   EditCard as ThemeEditCard,
   formatBytes,
-  Icon,
   Markdown,
   MessageItem,
   Reasoning,
   shortContentType,
+  SubtaskPart,
   ToolGroup,
 } from "@zmzai/theme";
 
@@ -58,16 +57,6 @@ type ToolPart = Extract<Part, { type: "tool" }>;
 
 function TextPart({ part }: { part: Extract<Part, { type: "text" }> }) {
   return <div className="zmz-message-content"><Markdown text={part.text} /></div>;
-}
-
-function SubtaskPart({ part }: { part: Extract<Part, { type: "subtask" }> }) {
-  return (
-    <div className="fw-subtask-row">
-      <span className="fw-subtask-icon" aria-hidden><Icon name="chevron-down" size={12} /></span>
-      <span className="fw-subtask-copy"><strong>{part.description || part.agent}</strong><small>{part.prompt}</small></span>
-      <Badge variant="outline" size="sm">子任务</Badge>
-    </div>
-  );
 }
 
 export function MessageView({ entry: source, hideTools = false, sessionIdle = false }: { entry: MessageWithParts | MessageWithParts[]; hideTools?: boolean; sessionIdle?: boolean }) {
@@ -121,7 +110,7 @@ export function MessageView({ entry: source, hideTools = false, sessionIdle = fa
         rendered.push(<Reasoning key={part.id} text={part.text} active={active} />);
         break;
       case "subtask":
-        rendered.push(<SubtaskPart key={part.id} part={part} />);
+        rendered.push(<SubtaskPart key={part.id} description={part.description} agent={part.agent} prompt={part.prompt} />);
         break;
       default:
         break;
