@@ -112,6 +112,7 @@ type OpenAiChunk = {
     completion_tokens?: number;
     cache_read_input_tokens?: number;
     cache_creation_input_tokens?: number;
+    prompt_cache_hit_tokens?: number;
     prompt_tokens_details?: { cached_tokens?: number };
   };
 };
@@ -123,7 +124,12 @@ function extractUsage(chunk: OpenAiChunk): { input: number; output: number; cach
   if (!usage) return null;
   const prompt = usage.prompt_tokens ?? 0;
   const completion = usage.completion_tokens ?? 0;
-  const cacheRead = usage.prompt_tokens_details?.cached_tokens ?? usage.cache_read_input_tokens ?? 0;
+  // 上游可能同时报多个字段（DeepSeek 会把 cached_tokens 置 0 而 hit 有值），取最大值避免丢计。
+  const cacheRead = Math.max(
+    usage.prompt_tokens_details?.cached_tokens ?? 0,
+    usage.prompt_cache_hit_tokens ?? 0,
+    usage.cache_read_input_tokens ?? 0,
+  );
   const cacheWrite = usage.cache_creation_input_tokens ?? 0;
   // pi-ai 的 input 不含 cache 部分，与 relay 的 regularInput 口径对齐。
   return { input: Math.max(0, prompt - cacheRead - cacheWrite), output: completion, cacheRead, cacheWrite, totalTokens: prompt + completion };

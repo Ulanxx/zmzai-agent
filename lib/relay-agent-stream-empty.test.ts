@@ -76,4 +76,45 @@ describe("relay stream empty-response handling", () => {
     const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as { reasoning_effort?: string };
     expect(request.reasoning_effort).toBe("low");
   });
+
+  it("parses DeepSeek cache tokens from the trailing usage event", async () => {
+    // 与生产实测一致：relay 透传的末尾 usage 事件没有 choices，
+    // DeepSeek 用 prompt_cache_hit_tokens/prompt_cache_miss_tokens 报缓存。
+    const sse = [
+      'data: {"choices":[{"delta":{"content":"收到"},"finish_reason":"stop"}]}',
+      'data: {"choices":[],"usage":{"prompt_tokens":1096,"completion_tokens":10,"total_tokens":1106,"prompt_tokens_details":{"cached_tokens":0},"prompt_cache_hit_tokens":1024,"prompt_cache_miss_tokens":72}}',
+      "data: [DONE]",
+      "",
+    ].join("\n\n");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } })));
+    const streamFn = createRelayStreamFunction({ userId: "user_1", taskRunId: "run_1" });
+    const events = await collect(streamFn(createRelayModel("deepseek-v4-flash"), minimalContext(), {}) as never);
+    const done = events.find((event) => event.type === "done") as { message: { usage: { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number } } } | undefined;
+    expect(done).toBeDefined();
+    // input 剔除 cache 与 relay regularInput 口径对齐：1096 - 1024 = 72
+    expect(done?.message.usage).toMatchObject({ input: 72, output: 10, cacheRead: 1024, cacheWrite: 0, totalTokens: 1106 });
+  });
+
+  it("parses OpenAI-style cached_tokens when DeepSeek fields are absent", async () => {
+    const sse = [
+      'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}',
+      'data: {"usage":{"prompt_tokens":500,"completion_tokens":20,"prompt_tokens_details":{"cached_tokens":300}}}',
+      "data: [DONE]",
+      "",
+    ].join("\n\n");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } })));
+    const streamFn = createRelayStreamFunction({ userId: "user_1", taskRunId: "run_1" });
+    const events = await collect(streamFn(createRelayModel("gpt-5.6-luna"), minimalContext(), {}) as never);
+    const done = events.find((event) => event.type === "done") as { message: { usage: { input: number; cacheRead: number; totalTokens: number } } } | undefined;
+    expect(done?.message.usage).toMatchObject({ input: 200, output: 20, cacheRead: 300, totalTokens: 520 });
+  });
+
+  it("falls back to zero usage when the stream omits the usage event", async () => {
+    const sse = 'data: {"choices":[{"delta":{"content":"你好"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } })));
+    const streamFn = createRelayStreamFunction({ userId: "user_1", taskRunId: "run_1" });
+    const events = await collect(streamFn(createRelayModel("deepseek-v4-flash"), minimalContext(), {}) as never);
+    const done = events.find((event) => event.type === "done") as { message: { usage: { input: number; totalTokens: number } } } | undefined;
+    expect(done?.message.usage.totalTokens).toBe(0);
+  });
 });
