@@ -107,8 +107,27 @@ type OpenAiChunk = {
     };
     finish_reason?: string | null;
   }>;
-  usage?: { prompt_tokens?: number; completion_tokens?: number };
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+    prompt_tokens_details?: { cached_tokens?: number };
+  };
 };
+
+/** 从 relay 透传的 usage 事件提取 token 数（含 cache 维度，语义与 relay 计费一致：
+ *  prompt_tokens 含 cache，cacheRead/Write 是其子集）。 */
+function extractUsage(chunk: OpenAiChunk): { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number } | null {
+  const usage = chunk.usage;
+  if (!usage) return null;
+  const prompt = usage.prompt_tokens ?? 0;
+  const completion = usage.completion_tokens ?? 0;
+  const cacheRead = usage.prompt_tokens_details?.cached_tokens ?? usage.cache_read_input_tokens ?? 0;
+  const cacheWrite = usage.cache_creation_input_tokens ?? 0;
+  // pi-ai 的 input 不含 cache 部分，与 relay 的 regularInput 口径对齐。
+  return { input: Math.max(0, prompt - cacheRead - cacheWrite), output: completion, cacheRead, cacheWrite, totalTokens: prompt + completion };
+}
 
 function relayError(status: number, payload: unknown): RelayAgentError {
   const body = payload && typeof payload === "object" ? payload as { code?: unknown; error?: unknown } : {};
@@ -185,7 +204,7 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
       throw relayError(response?.status ?? 500, null);
     };
 
-    const consumeTurn = async (response: Response, partial: AssistantMessage): Promise<{ textStarted: boolean; reasoningStarted: boolean; toolCallCount: number }> => {
+    const consumeTurn = async (response: Response, partial: AssistantMessage): Promise<{ textStarted: boolean; reasoningStarted: boolean; toolCallCount: number; usage: ReturnType<typeof extractUsage> }> => {
       if (!response.body) throw relayError(500, null);
       let buffer = "";
       let textStarted = false;
@@ -193,6 +212,7 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
       let textContentIndex: number | null = null;
       let thinkingContentIndex: number | null = null;
       const toolCalls = new Map<number, { id: string; name: string; arguments: string }>();
+      let usage: ReturnType<typeof extractUsage> = null;
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
 
@@ -209,7 +229,12 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
           );
         }
         const choice = chunk.choices?.[0];
-        if (!choice) return;
+        if (!choice) {
+          // relay 强制上游 include_usage 并透传：末尾 usage 事件没有 choices。
+          const parsed = extractUsage(chunk);
+          if (parsed) usage = parsed;
+          return;
+        }
         if (choice.delta?.content) {
           if (!textStarted) {
             partial.content.push({ type: "text", text: "" });
@@ -263,7 +288,7 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
         partial.content.push(toolCall);
         stream.push({ type: "toolcall_end", contentIndex: partial.content.length - 1, toolCall, partial });
       }
-      return { textStarted, reasoningStarted, toolCallCount: toolCalls.size };
+      return { textStarted, reasoningStarted, toolCallCount: toolCalls.size, usage };
     };
 
     try {
@@ -272,7 +297,7 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
       // Upstream occasionally returns a 200 stream with no content at all
       // (relay marks these "unsettled / stream omitted usage"). Retry once,
       // then fail loudly instead of recording an empty successful turn.
-      let turn = { textStarted: false, reasoningStarted: false, toolCallCount: 0 };
+      let turn = { textStarted: false, reasoningStarted: false, toolCallCount: 0, usage: null as ReturnType<typeof extractUsage> };
       for (let attempt = 0; attempt < 2; attempt += 1) {
         partial.content = [];
         const response = await fetchTurn();
@@ -287,7 +312,10 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
         return;
       }
       partial.stopReason = turn.toolCallCount > 0 ? "toolUse" : "stop";
-      partial.usage = emptyUsage();
+      const usage = turn.usage;
+      partial.usage = usage
+        ? { input: usage.input, output: usage.output, cacheRead: usage.cacheRead, cacheWrite: usage.cacheWrite, totalTokens: usage.totalTokens, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }
+        : emptyUsage();
       stream.push({ type: "done", reason: partial.stopReason as "stop" | "toolUse", message: partial });
       stream.end(partial);
     } catch (cause) {
