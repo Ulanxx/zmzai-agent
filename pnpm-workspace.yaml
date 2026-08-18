@@ -9,3 +9,6 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - '@zmzai/theme@0.4.1'
+
+settings:
+  managePackageManagerVersions: false
