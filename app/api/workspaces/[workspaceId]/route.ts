@@ -14,6 +14,7 @@ const updateSchema = z.object({
   prompt: z.string().max(64 * 1024).optional(),
   steps: z.number().int().min(1).max(64).optional(),
   defaultModel: z.string().trim().max(160).optional(),
+  approvalMode: z.enum(["ask", "auto"]).optional(),
 }).strict();
 
 export async function GET(_: Request, context: { params: Promise<{ workspaceId: string }> }) {

@@ -75,6 +75,9 @@ function getOrCreateRunner(): SessionRunner {
       resolve: async (session) => {
         const ws = await getWorkspace(session.userId, session.workspaceId);
         if (!ws) return null;
+        // 自治档位：auto 档在 workspace 规则前预置 bash 放行；排在后面（last-match-wins）
+        // 的显式规则仍可覆盖它，deny/ask 不被绕过。"always" 是历史值，等同 ask。
+        const autoAllow: Ruleset = ws.approvalMode === "auto" ? [{ permission: "bash", pattern: "*", action: "allow" }] : [];
         return {
           agent: {
             name: ws.name || "default",
@@ -83,7 +86,7 @@ function getOrCreateRunner(): SessionRunner {
             model: { providerId: "relay", modelId: ws.defaultModel },
             prompt: ws.prompt || undefined,
             steps: ws.steps,
-            permission: ws.permission as Ruleset,
+            permission: [...autoAllow, ...(ws.permission as Ruleset)],
           },
         };
       },

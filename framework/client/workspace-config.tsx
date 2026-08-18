@@ -5,13 +5,14 @@ import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-import { Button, Icon, ModelSelector, Navbar, navItemClass, type ModelSelectorData, type ModelSelectorValue } from "@zmzai/theme";
+import { Button, Icon, ModelSelector, Navbar, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, navItemClass, type ModelSelectorData, type ModelSelectorValue } from "@zmzai/theme";
 
 type WorkspaceDetail = {
   id: string;
   name: string;
   description: string;
   defaultModel: string;
+  approvalMode: "ask" | "auto" | "always";
   prompt: string;
   steps: number;
 };
@@ -34,6 +35,7 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
   const [description, setDescription] = useState("");
   const [prompt, setPrompt] = useState("");
   const [steps, setSteps] = useState(12);
+  const [approvalMode, setApprovalMode] = useState<"ask" | "auto">("ask");
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +61,8 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
     setPrompt(ws.prompt);
     setModelValue({ model: ws.defaultModel });
     setSteps(ws.steps);
+    // 历史值 "always" 等同逐项审批，归入 ask 档显示。
+    setApprovalMode(ws.approvalMode === "auto" ? "auto" : "ask");
   }, []);
 
   useEffect(() => {
@@ -76,7 +80,7 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
       const response = await fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, description, prompt, steps, defaultModel: model }),
+        body: JSON.stringify({ name, description, prompt, steps, defaultModel: model, approvalMode }),
       });
       const body = (await response.json()) as { workspace?: WorkspaceDetail; error?: string };
       if (!response.ok) throw new Error(body.error ?? "保存失败");
@@ -87,7 +91,7 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
     } finally {
       setSaving(false);
     }
-  }, [detail, saving, workspaceId, name, description, prompt, model, steps, applyDetail]);
+  }, [detail, saving, workspaceId, name, description, prompt, model, steps, approvalMode, applyDetail]);
 
   if (!detail) return <main className="workbench-loading">{error ?? "加载中…"}</main>;
 
@@ -117,8 +121,19 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
             <label><span>描述</span><input value={description} maxLength={2_000} onChange={(event) => setDescription(event.target.value)} /></label>
             <div className="agent-form-row">
               <label><span>默认模型</span><ModelSelector data={modelSelectorData ?? { featured: [], channels: [] }} value={modelValue} onChange={setModelValue} placeholder="跟随任务选择" /></label>
+              <label>
+                <span>自治档位</span>
+                <Select value={approvalMode} onValueChange={(value) => setApprovalMode(value === "auto" ? "auto" : "ask")}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ask">逐项确认</SelectItem>
+                    <SelectItem value="auto">自动执行</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
               <label><span>最大步骤</span><input type="number" min="1" max="64" value={steps} onChange={(event) => setSteps(Math.min(64, Math.max(1, Number(event.target.value) || 1)))} /></label>
             </div>
+            <p className="agent-approval-hint">{approvalMode === "auto" ? "自动执行：任务内的命令不再逐项询问，适合可信任的沙箱任务。" : "逐项确认：执行命令前会弹出审批，可随时在会话中放行。"}</p>
             <label className="agent-prompt-label"><span>系统提示词（AGENT.md）</span><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} spellCheck={false} /></label>
           </div>
         </section>

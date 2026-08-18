@@ -3,13 +3,15 @@ import { WorkspaceFileModel } from "@/models/workspace-file";
 import { WorkspaceRevisionModel } from "@/models/workspace-revision";
 import { WorkspaceModel } from "@/models/workspace";
 
+export type ApprovalMode = "ask" | "auto" | "always";
+
 export type WorkspaceSummary = {
   id: string;
   name: string;
   description: string;
   currentRevisionId?: string | null;
   defaultModel: string;
-  approvalMode: "always";
+  approvalMode: ApprovalMode;
   // —— Agent 配置（Workspace = 智能体）——
   prompt: string;
   steps: number;
@@ -28,7 +30,7 @@ function toWorkspaceSummary(workspace: {
   description: string;
   currentRevisionId?: string | null;
   defaultModel: string;
-  approvalMode: "always";
+  approvalMode: ApprovalMode;
   prompt?: string;
   steps?: number;
   tools?: string[];
@@ -67,7 +69,7 @@ export async function createWorkspace(input: { workspaceId: string; userId: stri
     name: input.name,
     description: input.description,
     defaultModel: input.defaultModel,
-    approvalMode: "always",
+    approvalMode: "ask",
     ...(input.prompt ? { prompt: input.prompt } : {}),
   });
   return toWorkspaceSummary(workspace);
@@ -98,7 +100,7 @@ export async function ensureDefaultWorkspace(userId: string): Promise<void> {
     name: "通用",
     description: "默认通用智能体，直接描述任务即可开始。",
     defaultModel: "gpt-5.6-luna",
-    approvalMode: "always",
+    approvalMode: "ask",
     prompt: "",
     steps: 12,
   });
@@ -109,6 +111,7 @@ export async function updateWorkspace(userId: string, workspaceId: string, patch
   name?: string;
   description?: string;
   defaultModel?: string;
+  approvalMode?: ApprovalMode;
   prompt?: string;
   steps?: number;
   tools?: string[];
@@ -121,6 +124,7 @@ export async function updateWorkspace(userId: string, workspaceId: string, patch
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.description !== undefined) set.description = patch.description;
   if (patch.defaultModel !== undefined) set.defaultModel = patch.defaultModel;
+  if (patch.approvalMode !== undefined) set.approvalMode = patch.approvalMode;
   if (patch.prompt !== undefined) set.prompt = patch.prompt;
   if (patch.steps !== undefined) set.steps = patch.steps;
   if (patch.tools !== undefined) set.tools = patch.tools;

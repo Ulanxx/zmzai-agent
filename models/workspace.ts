@@ -10,7 +10,9 @@ const workspaceSchema = new Schema(
     description: { type: String, default: "", maxlength: 2_000 },
     currentRevisionId: { type: String, default: null },
     defaultModel: { type: String, required: true, maxlength: 160 },
-    approvalMode: { type: String, enum: ["always"], required: true, default: "always" },
+    // 自治档位：ask = 危险操作逐项审批；auto = 会话内自动放行（bash 预 stamp allow）。
+    // "always" 是历史占位值（2026-08 前全量写入），语义等同 ask，仅为存量兼容保留。
+    approvalMode: { type: String, enum: ["ask", "auto", "always"], required: true, default: "ask" },
     // —— Agent 配置（原 AgentModel/AgentVersion 字段搬入）——
     /** 系统提示词（AGENT.md）。 */
     prompt: { type: String, default: "", maxlength: 64 * 1024 },
