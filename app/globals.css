@@ -745,6 +745,9 @@
   .fw-resizer::after { content: ""; position: absolute; inset: 0.75rem 0.125rem; border-radius: 999px; background: var(--color-line); opacity: 0.6; transition: background 0.15s var(--ease-out), opacity 0.15s var(--ease-out); }
   .fw-resizer:hover, .fw-resizer[data-resize-handle-active] { background: color-mix(in oklab, var(--color-accent) 8%, transparent); }
   .fw-resizer:hover::after, .fw-resizer[data-resize-handle-active]::after { background: var(--color-accent); opacity: 0.9; }
+  /* 窄屏垂直分栏（≤48rem，见 framework-workbench useIsNarrow）：分割条转横向 */
+  .fw-resizer[data-panel-group-direction="vertical"] { width: auto; height: 0.45rem; cursor: row-resize; }
+  .fw-resizer[data-panel-group-direction="vertical"]::after { inset: 0.125rem 0.75rem; }
   .fw-canvas { background: color-mix(in oklab, var(--color-surface) 92%, var(--color-paper)); overflow: hidden; }
   /* 侧栏任务列表超长必须可滚（原先 hidden 直接裁掉看不到底部的会话） */
   /* 收起/展开按钮：仅窄屏显示（见 48rem 断点），桌面常驻隐藏 */

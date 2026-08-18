@@ -15,6 +15,20 @@ import {
 } from "@/framework/client/use-framework-session";
 import { ArtifactPreviewCard, EditCard, groupAssistantMessages, MessageView, PermissionCard, PptxPreview, TodoChecklist } from "@/framework/client/parts";
 
+/** 窄屏断点（≤48rem，与 globals.css 的 48rem 媒体查询一致）：
+ *  分栏从左右改上下，避免两栏在手机上被压成不可读。 */
+function useIsNarrow() {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 48rem)");
+    const update = () => setNarrow(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return narrow;
+}
+
 type Workspace = { id: string; name: string; defaultModel: string };
 
 type CanvasTab = "artifacts" | "edits";
@@ -34,6 +48,7 @@ async function fetchList<T>(url: string, key: string): Promise<T[]> {
 }
 
 export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) {
+  const isNarrow = useIsNarrow();
   const router = useRouter();
   const pathname = usePathname();
   const { snapshot, live, loading, loadError } = useFrameworkSession(sessionId);
@@ -371,7 +386,13 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
       {snapshot && (
       <div className="fw-grid">
         <div className="fw-main">
-        <PanelGroup direction="horizontal" autoSaveId="fw-conv-canvas-split">
+        {/* key 随方向变化强制重建：react-resizable-panels 的 direction 是
+            静态 prop，运行时切换需 remount；两方向各自 autoSave 尺寸。 */}
+        <PanelGroup
+          key={isNarrow ? "fw-split-vertical" : "fw-split-horizontal"}
+          direction={isNarrow ? "vertical" : "horizontal"}
+          autoSaveId={isNarrow ? "fw-conv-canvas-split-v" : "fw-conv-canvas-split"}
+        >
           <Panel defaultSize={50} minSize={20} className="fw-panel">
 
         <section className="fw-conversation">
