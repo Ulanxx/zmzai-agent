@@ -7,6 +7,7 @@ import { createFrameworkSession } from "@/framework/core/runtime/runner";
 import { defaultStore } from "@/framework/core/runtime/runner";
 import { getFrameworkRunner } from "@/framework/server/context";
 import { getWorkspace } from "@/lib/workspaces";
+import { createRunForTask, createTaskForSession } from "@/lib/task-run-control";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,8 +47,11 @@ export async function POST(request: NextRequest) {
     ...(parsed.data.prompt ? { prompt: parsed.data.prompt } : {}),
   });
 
+  const task = await createTaskForSession({ session, goal: parsed.data.prompt, title: session.title });
+  const run = parsed.data.prompt ? await createRunForTask({ task, session }) : null;
+
   if (parsed.data.prompt) {
     await getFrameworkRunner().prompt(session.id, { text: parsed.data.prompt });
   }
-  return NextResponse.json({ session }, { status: 201, headers: { "cache-control": "no-store" } });
+  return NextResponse.json({ session, task, run }, { status: 201, headers: { "cache-control": "no-store" } });
 }

@@ -6,7 +6,7 @@ const runSchema = new Schema(
     taskId: { type: String, required: true, immutable: true },
     workspaceId: { type: String, required: true, immutable: true },
     userId: { type: String, required: true, immutable: true },
-    sessionId: { type: String, required: true, unique: true, immutable: true },
+    sessionId: { type: String, required: true, immutable: true },
     parentRunId: { type: String, default: null, immutable: true },
     resumeCheckpointId: { type: String, default: null, immutable: true },
     status: { type: String, enum: ["created", "running", "waiting_input", "waiting_approval", "paused", "succeeded", "failed", "cancelled"], required: true, default: "created" },
@@ -23,6 +23,7 @@ const runSchema = new Schema(
 
 runSchema.index({ taskId: 1, active: 1 }, { unique: true, partialFilterExpression: { active: true } });
 runSchema.index({ taskId: 1, createdAt: -1 });
+runSchema.index({ sessionId: 1, createdAt: -1 });
 runSchema.index({ workspaceId: 1, userId: 1, createdAt: -1 });
 
 export type RunRecord = InferSchemaType<typeof runSchema>;

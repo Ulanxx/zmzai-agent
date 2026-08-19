@@ -1,6 +1,6 @@
 import { AgentRegistry, SessionRunner, type SessionInfo, type ModelRef, type ToolContext, type PermissionEngine, type Ruleset } from "@zmzai/agent-framework";
 import { loadCustomAgents } from "@zmzai/agent-framework";
-import { mongoEventLog } from "@/framework/core/events/mongo-event-log";
+import { productEventLog } from "@/framework/core/events/product-event-log";
 import { mongoSessionStore } from "@/framework/core/session/mongo-store";
 import { createMongoWorkspaceFiles, createWorkspaceAggregateFiles } from "@/framework/core/tools/mongo-workspace";
 import { createRelayModel, createRelayStreamFunction } from "@/lib/relay-agent-stream";
@@ -20,7 +20,7 @@ function getOrCreateRunner(): SessionRunner {
   const runner = new SessionRunner({
     store: mongoSessionStore,
     registry: new AgentRegistry(),
-    eventLog: mongoEventLog,
+    eventLog: productEventLog,
     streamFnFor: (session) => createRelayStreamFunction({ userId: session.userId, taskRunId: session.id }),
     modelFor: (ref: ModelRef) => createRelayModel(ref.modelId),
     workspaceFor: (session) => createMongoWorkspaceFiles({ userId: session.userId, workspaceId: session.workspaceId, sessionId: session.id }),

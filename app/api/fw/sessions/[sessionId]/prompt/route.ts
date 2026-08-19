@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { apiError, unauthenticated } from "@/lib/api-error";
 import { defaultStore } from "@/framework/core/runtime/runner";
 import { getFrameworkRunner } from "@/framework/server/context";
+import { ensureRunForPrompt } from "@/lib/task-run-control";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,9 +27,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ se
   const parsed = promptSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return apiError("INVALID_BODY", 400, "prompt 请求格式不正确");
 
+  const control = await ensureRunForPrompt(session, parsed.data.text);
   const result = await getFrameworkRunner().prompt(sessionId, {
     text: parsed.data.text,
     ...(parsed.data.agent ? { agent: parsed.data.agent } : {}),
   });
-  return NextResponse.json({ accepted: true, queued: result.queued }, { status: 202, headers: { "cache-control": "no-store" } });
+  return NextResponse.json({ accepted: true, queued: result.queued, task: control.task, run: control.run }, { status: 202, headers: { "cache-control": "no-store" } });
 }
