@@ -1,6 +1,7 @@
 import type { SandboxSnapshot, SandboxCommand, SandboxLimits } from "@/lib/sandbox-types";
+import { sandboxAgentContractVersion, sandboxRunResponseSchema } from "@/lib/internal-contracts";
 
-export type SandboxRunStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+export type SandboxRunStatus = "queued" | "planning" | "running" | "waiting_approval" | "cancellation_requested" | "cleanup_pending" | "succeeded" | "failed" | "cancelled";
 
 export type SandboxRunView = {
   id: string;
@@ -49,13 +50,17 @@ async function parseError(response: Response): Promise<AgentSandboxError> {
   return new AgentSandboxError(code, message, response.status);
 }
 
+function contractHeaders(secret: string): Record<string, string> {
+  return { authorization: `Bearer ${secret}`, "x-zmzai-contract-version": sandboxAgentContractVersion };
+}
+
 export async function createAgentSandboxRun(input: { userId: string; taskRunId: string; requestId: string; snapshot: SandboxSnapshot; command: SandboxCommand; limits?: SandboxLimits }): Promise<SandboxRunView> {
   const config = sandboxConfig();
   let response: Response;
   try {
     response = await fetch(`${config.url}/api/internal/agent/runs`, {
       method: "POST",
-      headers: { authorization: `Bearer ${config.secret}`, "content-type": "application/json" },
+      headers: { ...contractHeaders(config.secret), "content-type": "application/json" },
       body: JSON.stringify(input),
       cache: "no-store",
     });
@@ -63,9 +68,9 @@ export async function createAgentSandboxRun(input: { userId: string; taskRunId: 
     throw new AgentSandboxError("SANDBOX_UNAVAILABLE", "无法连接 Sandbox 服务");
   }
   if (!response.ok) throw await parseError(response);
-  const body = (await response.json()) as { run?: SandboxRunView };
-  if (!body.run) throw new AgentSandboxError("SANDBOX_INVALID_RESPONSE", "Sandbox 创建响应缺少 run");
-  return body.run;
+  const body = sandboxRunResponseSchema.safeParse(await response.json().catch(() => null));
+  if (!body.success) throw new AgentSandboxError("SANDBOX_INVALID_RESPONSE", "Sandbox 创建响应不符合 v1 契约");
+  return body.data.run;
 }
 
 export async function getAgentSandboxRun(runId: string): Promise<SandboxRunView | null> {
@@ -73,7 +78,7 @@ export async function getAgentSandboxRun(runId: string): Promise<SandboxRunView 
   let response: Response;
   try {
     response = await fetch(`${config.url}/api/internal/agent/runs/${encodeURIComponent(runId)}`, {
-      headers: { authorization: `Bearer ${config.secret}` },
+      headers: contractHeaders(config.secret),
       cache: "no-store",
     });
   } catch {
@@ -81,8 +86,9 @@ export async function getAgentSandboxRun(runId: string): Promise<SandboxRunView 
   }
   if (response.status === 404) return null;
   if (!response.ok) throw await parseError(response);
-  const body = (await response.json()) as { run?: SandboxRunView };
-  return body.run ?? null;
+  const body = sandboxRunResponseSchema.safeParse(await response.json().catch(() => null));
+  if (!body.success) throw new AgentSandboxError("SANDBOX_INVALID_RESPONSE", "Sandbox 状态响应不符合 v1 契约");
+  return body.data.run;
 }
 
 export type SandboxArtifactMeta = { path: string; bytes: number; contentType: string; sha256: string; tooLarge: boolean };
@@ -92,7 +98,7 @@ export async function getAgentSandboxRunArtifacts(runId: string): Promise<Sandbo
   let response: Response;
   try {
     response = await fetch(`${config.url}/api/internal/agent/runs/${encodeURIComponent(runId)}/artifacts`, {
-      headers: { authorization: `Bearer ${config.secret}` },
+      headers: contractHeaders(config.secret),
       cache: "no-store",
     });
   } catch {
@@ -109,7 +115,7 @@ export async function getAgentSandboxRunArtifact(runId: string, path: string): P
   let response: Response;
   try {
     response = await fetch(`${config.url}/api/internal/agent/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(path)}`, {
-      headers: { authorization: `Bearer ${config.secret}` },
+      headers: contractHeaders(config.secret),
       cache: "no-store",
     });
   } catch {
@@ -127,7 +133,7 @@ export async function cancelAgentSandboxRun(runId: string): Promise<void> {
   try {
     response = await fetch(`${config.url}/api/internal/agent/runs/${encodeURIComponent(runId)}/cancel`, {
       method: "POST",
-      headers: { authorization: `Bearer ${config.secret}` },
+      headers: contractHeaders(config.secret),
       cache: "no-store",
     });
   } catch {
@@ -147,7 +153,7 @@ export async function streamAgentSandboxEvents(runId: string, onEvent: (event: S
   let response: Response;
   try {
     response = await fetch(`${config.url}/api/internal/agent/runs/${encodeURIComponent(runId)}/events`, {
-      headers: { authorization: `Bearer ${config.secret}` },
+      headers: contractHeaders(config.secret),
       cache: "no-store",
       signal,
     });

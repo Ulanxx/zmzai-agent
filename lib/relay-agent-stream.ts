@@ -12,6 +12,7 @@ import {
 } from "@earendil-works/pi-ai";
 
 import { getServerEnvironment } from "@/config/env";
+import { relayAgentContractVersion } from "@/lib/internal-contracts";
 
 export class RelayAgentError extends Error {
   constructor(public readonly code: string, message: string) {
@@ -187,7 +188,7 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
         try {
           response = await fetch(`${environment.RELAY_AGENT_URL.replace(/\/$/, "")}/api/internal/agent/chat`, {
             method: "POST",
-            headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+            headers: { authorization: `Bearer ${secret}`, "content-type": "application/json", "x-zmzai-contract-version": relayAgentContractVersion },
             body: requestBody,
             cache: "no-store",
             signal: options?.signal,
