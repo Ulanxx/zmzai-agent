@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { apiError, unauthenticated } from "@/lib/api-error";
 import { defaultStore } from "@/framework/core/runtime/runner";
 import { getFrameworkRunner } from "@/framework/server/context";
+import { projectApprovalReply } from "@/lib/approval-projection";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,5 +29,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ se
 
   const resolved = await getFrameworkRunner().replyPermission(sessionId, requestId, parsed.data.reply, parsed.data.feedback);
   if (!resolved) return apiError("PERMISSION_REQUEST_NOT_FOUND", 404, "审批请求不存在或已处理");
+  await projectApprovalReply({ sessionId, requestId, reply: parsed.data.reply, decidedBy: user.id, feedback: parsed.data.feedback });
   return NextResponse.json({ resolved: true }, { headers: { "cache-control": "no-store" } });
 }

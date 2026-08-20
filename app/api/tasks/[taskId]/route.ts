@@ -9,6 +9,7 @@ import { defaultStore } from "@/framework/core/runtime/runner";
 import { RunModel } from "@/models/run";
 import { TaskModel } from "@/models/task";
 import { ProjectModel } from "@/models/project";
+import { ApprovalGrantModel, ApprovalRequestModel } from "@/models/approval";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,7 +27,11 @@ export async function GET(_: Request, context: { params: Promise<{ taskId: strin
   const session = sessionId ? await defaultStore.getSession(sessionId) : null;
   const messages = sessionId ? await defaultStore.getMessages(sessionId) : [];
   const events = sessionId ? await readFrameworkEvents(sessionId, 0, 5_000) : [];
-  return NextResponse.json({ task, runs, session, messages, events }, { headers: { "cache-control": "no-store" } });
+  const [approvals, grants] = await Promise.all([
+    ApprovalRequestModel.find({ taskId, requesterId: user.id }).sort({ createdAt: -1 }).lean(),
+    ApprovalGrantModel.find({ taskId, revokedAt: null, expiresAt: { $gt: new Date() } }).sort({ expiresAt: 1 }).lean(),
+  ]);
+  return NextResponse.json({ task, runs, session, messages, events, approvals, grants }, { headers: { "cache-control": "no-store" } });
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ taskId: string }> }) {

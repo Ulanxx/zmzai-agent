@@ -13,7 +13,8 @@ type Workspace = { id: string; name: string; defaultModel: string };
 type TaskRecord = { taskId: string; workspaceId: string; projectId?: string | null; title: string; goal: string; status: "draft" | "active" | "succeeded" | "failed" | "cancelled"; activeRunId?: string | null; latestRunId?: string | null; updatedAt?: string };
 type RunRecord = { runId: string; taskId: string; sessionId: string; status: "created" | "running" | "waiting_input" | "waiting_approval" | "paused" | "succeeded" | "failed" | "cancelled"; attempt: number; terminalReason?: string | null; createdAt?: string; finishedAt?: string | null };
 type TaskListItem = { task: TaskRecord; latestRun: RunRecord | null };
-type TaskDetail = { task: TaskRecord; runs: RunRecord[]; session: { id: string; title: string } | null };
+type ApprovalHistory = { requestId: string; action: string; impact: string; resourceScope: string[]; status: "pending" | "approved" | "rejected" | "expired" | "revoked"; decidedAt?: string | null; feedback?: string | null };
+type TaskDetail = { task: TaskRecord; runs: RunRecord[]; session: { id: string; title: string } | null; approvals?: ApprovalHistory[] };
 type ProjectOption = { project: { projectId: string; name: string } };
 type QaCheckResult = { status: "passed" | "failed"; checks: { id: string; status: "passed" | "failed"; message: string }[]; viewports: { width: number; height: number; overflow: boolean }[] };
 
@@ -87,6 +88,15 @@ function QualityCard({ result }: { result: QaCheckResult }) {
   return <section className={`task-structured-card quality-card ${result.status}`}>
     <div className="structured-card-head"><span className="structured-card-icon"><Icon name={result.status === "passed" ? "check" : "warning"} size={14} /></span><div><strong>质量检查</strong><small>{passed}/{result.checks.length} 项通过</small></div><span className="quality-status">{result.status === "passed" ? "通过" : "需要修复"}</span></div>
     <div className="quality-checks">{result.checks.map((check) => <div className="quality-check" key={check.id}><span className={`quality-check-mark ${check.status}`} /> <span>{check.message}</span></div>)}</div>
+  </section>;
+}
+
+function ApprovalHistoryCard({ approvals }: { approvals: ApprovalHistory[] }) {
+  const resolved = approvals.filter((approval) => approval.status !== "pending");
+  if (!resolved.length) return null;
+  return <section className="task-structured-card approval-history-card">
+    <div className="structured-card-head"><span className="structured-card-icon"><Icon name="shield" size={14} /></span><div><strong>授权记录</strong><small>{resolved.length} 项已处理</small></div></div>
+    <div className="approval-history-list">{resolved.slice(0, 5).map((approval) => <div key={approval.requestId}><span className={approval.status}>{approval.status === "approved" ? "已允许" : approval.status === "rejected" ? "已拒绝" : approval.status}</span><p>{approval.impact}</p>{approval.feedback && <small>{approval.feedback}</small>}</div>)}</div>
   </section>;
 }
 
@@ -258,6 +268,7 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
             <PlanCard todos={live.todos} taskTools={taskTools} />
             {qualityResult && <QualityCard result={qualityResult} />}
             {live.pendingPermission && <PermissionCard request={live.pendingPermission as PermissionRequest} busy={replying} onReply={(reply, feedback) => void replyPermission(reply, feedback)} />}
+            <ApprovalHistoryCard approvals={taskDetail?.approvals ?? []} />
             {live.error && <div className="task-error"><Icon name="warning" size={14} /><span>{live.error}</span></div>}
             {(latestRun?.status === "succeeded" || task?.status === "succeeded") && <CompletionCard artifacts={live.artifacts} onFollowUp={() => setPrompt("请继续修改这个成果，并说明你准备调整的内容") } />}
           </div>

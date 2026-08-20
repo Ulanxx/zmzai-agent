@@ -370,6 +370,13 @@
   .quality-check-mark { flex: 0 0 auto; width: 0.42rem; height: 0.42rem; border: 1px solid var(--color-muted); border-radius: 50%; }
   .quality-check-mark.passed { border-color: var(--color-success); background: var(--color-success); }
   .quality-check-mark.failed { border-color: #b03a28; background: #b03a28; }
+  .approval-history-list { display: grid; gap: 0.55rem; margin-top: 0.8rem; }
+  .approval-history-list > div { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 0.5rem; }
+  .approval-history-list span { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6rem; }
+  .approval-history-list span.approved { color: #3f7f42; }
+  .approval-history-list span.rejected { color: #8f2f20; }
+  .approval-history-list p { margin: 0; overflow: hidden; color: var(--color-muted); font-size: 0.7rem; text-overflow: ellipsis; white-space: nowrap; }
+  .approval-history-list small { grid-column: 2; color: var(--color-muted); font-size: 0.62rem; }
   .completion-card { border-color: color-mix(in oklab, var(--color-success) 45%, var(--color-line)); }
   .completion-actions { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.85rem; }
   .completion-hint { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6rem; }
