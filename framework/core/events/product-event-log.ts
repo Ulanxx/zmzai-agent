@@ -2,6 +2,7 @@ import type { EventLog, FrameworkEvent, PersistedFrameworkEvent } from "@zmzai/a
 
 import { mongoEventLog } from "@/framework/core/events/mongo-event-log";
 import { projectFrameworkEvent } from "@/lib/task-run-control";
+import { persistTaskCheckpoint } from "@/lib/task-checkpoint";
 
 /** Product event log: durable framework events remain the source stream, while
  * Task/Run is updated as a best-effort projection that can be rebuilt later. */
@@ -10,6 +11,9 @@ export const productEventLog: EventLog = {
     const persisted = await mongoEventLog.append(event);
     await projectFrameworkEvent(persisted).catch((error) => {
       console.error("project framework event to Task/Run", error);
+    });
+    await persistTaskCheckpoint(persisted).catch((error) => {
+      console.error("persist Task/Run checkpoint", error);
     });
     return persisted;
   },

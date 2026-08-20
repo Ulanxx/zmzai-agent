@@ -25,6 +25,7 @@
     "clsx": "^2.1.0",
     "framer-motion": "^11.0.0",
     "highlight.js": "^11.11.1",
+    "jszip": "3.10.1",
     "mongodb": "^7.5.0",
     "mongoose": "^9.9.1",
     "next": "15.5.21",

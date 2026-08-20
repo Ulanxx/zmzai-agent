@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -7,7 +9,9 @@ import { createFrameworkSession } from "@/framework/core/runtime/runner";
 import { defaultStore } from "@/framework/core/runtime/runner";
 import { getFrameworkRunner } from "@/framework/server/context";
 import { getWorkspace } from "@/lib/workspaces";
-import { createRunForTask, createTaskForSession } from "@/lib/task-run-control";
+import { createRunForTask, createTaskForSession, taskForSession } from "@/lib/task-run-control";
+import { IdempotencyError, claimIdempotency } from "@/lib/idempotency";
+import { RunModel } from "@/models/run";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,9 +41,33 @@ export async function POST(request: NextRequest) {
   const workspace = await getWorkspace(user.id, parsed.data.workspaceId);
   if (!workspace) return apiError("WORKSPACE_NOT_FOUND", 404, "Workspace 不存在或无权访问");
 
+  let claim;
+  try {
+    claim = await claimIdempotency({
+      userId: user.id,
+      scope: "session.create",
+      key: request.headers.get("idempotency-key"),
+      body: parsed.data,
+      resourceId: `ses_${randomUUID().replaceAll("-", "").slice(0, 20)}`,
+    });
+  } catch (error) {
+    if (error instanceof IdempotencyError) return apiError(error.code, error.code === "IDEMPOTENCY_KEY_REQUIRED" ? 400 : 409, error.code === "IDEMPOTENCY_KEY_REQUIRED" ? "Idempotency-Key 必须是 16 到 128 个可打印字符" : "同一 Idempotency-Key 不能对应不同请求");
+    throw error;
+  }
+
+  if (claim.replayed) {
+    const existing = await defaultStore.getSession(claim.resourceId);
+    if (existing) {
+      const task = await taskForSession(existing.id);
+      const run = task ? await RunModel.findOne({ taskId: task.taskId, userId: user.id }).sort({ createdAt: -1 }).lean() : null;
+      return NextResponse.json({ session: existing, task, run, replayed: true }, { status: 201, headers: { "cache-control": "no-store" } });
+    }
+  }
+
   // Workspace = 智能体：session 绑定 workspace，配置从 workspace 实时读（agentResolver）。
   const session = await createFrameworkSession({
     store: defaultStore,
+    id: claim.resourceId,
     userId: user.id,
     workspaceId: parsed.data.workspaceId,
     agent: workspace.name,
@@ -53,5 +81,5 @@ export async function POST(request: NextRequest) {
   if (parsed.data.prompt) {
     await getFrameworkRunner().prompt(session.id, { text: parsed.data.prompt });
   }
-  return NextResponse.json({ session, task, run }, { status: 201, headers: { "cache-control": "no-store" } });
+  return NextResponse.json({ session, task, run, replayed: claim.replayed }, { status: 201, headers: { "cache-control": "no-store" } });
 }

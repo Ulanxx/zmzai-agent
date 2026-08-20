@@ -39,7 +39,7 @@ export const fwApi = {
   createSession: (input: { workspaceId: string; model: { providerId: string; modelId: string }; prompt?: string }) =>
     requestJson<{ session: SessionInfo; task?: { taskId: string } }>("/api/fw/sessions", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
       body: JSON.stringify(input),
     }),
   getSession: (sessionId: string) => requestJson<SessionSnapshot>(`/api/fw/sessions/${encodeURIComponent(sessionId)}`),

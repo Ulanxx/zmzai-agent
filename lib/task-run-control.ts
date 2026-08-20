@@ -37,13 +37,14 @@ export async function createRunForTask(input: {
   session: SessionInfo;
   parentRunId?: string | null;
   resumeCheckpointId?: string | null;
+  runIdOverride?: string;
 }): Promise<RunRecord> {
   const current = await RunModel.findOne({ taskId: input.task.taskId, active: true }).sort({ createdAt: -1 }).lean();
   if (current) return current as RunRecord;
 
   const previous = await RunModel.findOne({ taskId: input.task.taskId }).sort({ createdAt: -1 }).lean();
   const candidate = {
-    runId: runId(),
+    runId: input.runIdOverride ?? runId(),
     taskId: input.task.taskId,
     workspaceId: input.session.workspaceId,
     userId: input.session.userId,
@@ -87,14 +88,14 @@ export async function activeRunIdForSession(sessionId: string): Promise<string> 
   return run?.runId ?? sessionId;
 }
 
-export async function ensureRunForPrompt(session: SessionInfo, goal?: string): Promise<{ task: TaskRecord; run: RunRecord }> {
+export async function ensureRunForPrompt(session: SessionInfo, goal?: string, options?: { runIdOverride?: string; parentRunId?: string | null; resumeCheckpointId?: string | null }): Promise<{ task: TaskRecord; run: RunRecord }> {
   let task = await taskForSession(session.id);
   if (!task) task = await createTaskForSession({ session, goal });
 
   const active = await RunModel.findOne({ taskId: task.taskId, active: true }).sort({ createdAt: -1 }).lean();
   if (active) return { task, run: active as RunRecord };
 
-  const run = await createRunForTask({ task, session });
+  const run = await createRunForTask({ task, session, ...options });
   return { task: (await TaskModel.findOne({ taskId: task.taskId }).lean()) as TaskRecord, run };
 }
 

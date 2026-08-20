@@ -157,6 +157,8 @@ export async function deleteWorkspace(userId: string, workspaceId: string): Prom
   const { RunModel } = await import("@/models/run");
   const { CheckpointModel } = await import("@/models/checkpoint");
   const { ApprovalGrantModel, ApprovalRequestModel } = await import("@/models/approval");
+  const { ProjectModel } = await import("@/models/project");
+  const { AutomationModel } = await import("@/models/automation");
 
   const sessions = await FrameworkSessionModel.find({ workspaceId }).select({ sessionId: 1 }).lean();
   const sessionIds = sessions.map((session) => session.sessionId);
@@ -186,6 +188,8 @@ export async function deleteWorkspace(userId: string, workspaceId: string): Prom
     WorkspaceSkillModel.deleteMany({ workspaceId }),
     WorkspacePluginModel.deleteMany({ workspaceId }),
     WorkspaceConnectorModel.deleteMany({ workspaceId }),
+    ProjectModel.deleteMany({ workspaceId, userId }),
+    AutomationModel.deleteMany({ workspaceId, userId }),
     WorkspaceModel.deleteOne({ workspaceId }),
   ]);
   return true;

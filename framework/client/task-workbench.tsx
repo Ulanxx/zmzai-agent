@@ -10,10 +10,12 @@ import { ArtifactPreviewCard, EditCard, groupAssistantMessages, MessageView, Per
 import { fwApi, useFrameworkSession, type ArtifactCard, type PermissionRequest, type Reply } from "@/framework/client/use-framework-session";
 
 type Workspace = { id: string; name: string; defaultModel: string };
-type TaskRecord = { taskId: string; workspaceId: string; title: string; goal: string; status: "draft" | "active" | "succeeded" | "failed" | "cancelled"; activeRunId?: string | null; latestRunId?: string | null; updatedAt?: string };
+type TaskRecord = { taskId: string; workspaceId: string; projectId?: string | null; title: string; goal: string; status: "draft" | "active" | "succeeded" | "failed" | "cancelled"; activeRunId?: string | null; latestRunId?: string | null; updatedAt?: string };
 type RunRecord = { runId: string; taskId: string; sessionId: string; status: "created" | "running" | "waiting_input" | "waiting_approval" | "paused" | "succeeded" | "failed" | "cancelled"; attempt: number; terminalReason?: string | null; createdAt?: string; finishedAt?: string | null };
 type TaskListItem = { task: TaskRecord; latestRun: RunRecord | null };
 type TaskDetail = { task: TaskRecord; runs: RunRecord[]; session: { id: string; title: string } | null };
+type ProjectOption = { project: { projectId: string; name: string } };
+type QaCheckResult = { status: "passed" | "failed"; checks: { id: string; status: "passed" | "failed"; message: string }[]; viewports: { width: number; height: number; overflow: boolean }[] };
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...init, cache: "no-store" });
@@ -51,8 +53,10 @@ function TaskRail({ tasks, activeTaskId, onNew, onOpen }: { tasks: TaskListItem[
         <span className="task-rail-label">工作</span>
         <Link href="/fw" className="task-rail-link active"><Icon name="message" size={14} />新对话</Link>
         <Link href="/fw" className="task-rail-link"><Icon name="list" size={14} />任务</Link>
-        <span className="task-rail-link muted"><Icon name="folder" size={14} />项目</span>
-        <span className="task-rail-link muted"><Icon name="archive" size={14} />成果</span>
+        <Link href="/projects" className="task-rail-link"><Icon name="folder" size={14} />项目</Link>
+        <Link href="/artifacts" className="task-rail-link"><Icon name="archive" size={14} />成果</Link>
+        <Link href="/automations" className="task-rail-link"><Icon name="clock" size={14} />自动化</Link>
+        <Link href="/connectors" className="task-rail-link"><Icon name="link" size={14} />连接器</Link>
       </div>
       <div className="task-rail-section task-rail-recent">
         <div className="task-rail-label-row"><span className="task-rail-label">最近任务</span><span className="task-rail-count">{tasks.length}</span></div>
@@ -78,6 +82,21 @@ function PlanCard({ todos, taskTools }: { todos: { content: string; status: "pen
   );
 }
 
+function QualityCard({ result }: { result: QaCheckResult }) {
+  const passed = result.checks.filter((check) => check.status === "passed").length;
+  return <section className={`task-structured-card quality-card ${result.status}`}>
+    <div className="structured-card-head"><span className="structured-card-icon"><Icon name={result.status === "passed" ? "check" : "warning"} size={14} /></span><div><strong>质量检查</strong><small>{passed}/{result.checks.length} 项通过</small></div><span className="quality-status">{result.status === "passed" ? "通过" : "需要修复"}</span></div>
+    <div className="quality-checks">{result.checks.map((check) => <div className="quality-check" key={check.id}><span className={`quality-check-mark ${check.status}`} /> <span>{check.message}</span></div>)}</div>
+  </section>;
+}
+
+function CompletionCard({ artifacts, onFollowUp }: { artifacts: ArtifactCard[]; onFollowUp: () => void }) {
+  return <section className="task-structured-card completion-card">
+    <div className="structured-card-head"><span className="structured-card-icon"><Icon name="check" size={14} /></span><div><strong>任务已完成</strong><small>{artifacts.length ? `${artifacts.length} 个成果已准备好` : "结果已整理到对话中"}</small></div></div>
+    <div className="completion-actions"><Button type="button" variant="secondary" size="sm" onClick={onFollowUp}><Icon name="message" size={13} />继续修改</Button>{artifacts.length > 0 && <span className="completion-hint">可在右侧预览或下载</span>}</div>
+  </section>;
+}
+
 function WorkspacePanel({ artifacts, edits, preview, onOpen, onClose }: { artifacts: ArtifactCard[]; edits: { path: string; revisionId: string; diff: string; at: string }[]; preview: ArtifactCard | null; onOpen: (artifact: ArtifactCard) => void; onClose: () => void }) {
   return (
     <aside className="task-workspace-panel">
@@ -98,6 +117,7 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
   const pathname = usePathname();
   const [tasks, setTasks] = useState<TaskListItem[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [resolvedTaskId, setResolvedTaskId] = useState<string | null>(null);
   const [taskDetail, setTaskDetail] = useState<TaskDetail | null>(null);
   const [prompt, setPrompt] = useState("");
@@ -117,15 +137,28 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
   const busy = live.status !== "idle" || latestRun?.status === "running" || latestRun?.status === "waiting_approval";
   const messages = useMemo(() => groupAssistantMessages(snapshot?.messages ?? []), [snapshot?.messages]);
   const taskTools = useMemo(() => (snapshot?.messages ?? []).flatMap((entry) => entry.parts.filter((part) => part.type === "tool")), [snapshot?.messages]);
+  const qualityResult = useMemo(() => {
+    for (const message of [...(snapshot?.messages ?? [])].reverse()) {
+      for (const part of [...message.parts].reverse()) {
+        if (part.type !== "tool" || part.tool !== "qa-check" || part.state.status !== "completed") continue;
+        const value = part.state.metadata?.qaCheck;
+        if (!value || typeof value !== "object") continue;
+        const candidate = value as Partial<QaCheckResult>;
+        if ((candidate.status === "passed" || candidate.status === "failed") && Array.isArray(candidate.checks) && Array.isArray(candidate.viewports)) return candidate as QaCheckResult;
+      }
+    }
+    return null;
+  }, [snapshot?.messages]);
 
   const fetchTasks = useCallback(() => json<{ tasks: TaskListItem[] }>("/api/tasks"), []);
 
   const fetchTask = useCallback((id: string) => json<TaskDetail>(`/api/tasks/${encodeURIComponent(id)}`), []);
 
   useEffect(() => {
-    void Promise.all([fetchTasks(), json<{ workspaces: Workspace[] }>("/api/workspaces")]).then(([taskResult, workspaceResult]) => {
+    void Promise.all([fetchTasks(), json<{ workspaces: Workspace[] }>("/api/workspaces"), json<{ projects: ProjectOption[] }>("/api/projects")]).then(([taskResult, workspaceResult, projectResult]) => {
       setTasks(taskResult.tasks);
       setWorkspaces(workspaceResult.workspaces);
+      setProjects(projectResult.projects);
       if (routeSessionId && !taskId) {
         const match = taskResult.tasks.find((item) => item.latestRun?.sessionId === routeSessionId);
         if (match) setResolvedTaskId(match.task.taskId);
@@ -175,7 +208,7 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
     if (!taskId) return;
     setActionError(null);
     try {
-      await json(`/api/tasks/${encodeURIComponent(taskId)}/actions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: name, ...(text ? { text } : {}) }) });
+      await json(`/api/tasks/${encodeURIComponent(taskId)}/actions`, { method: "POST", headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() }, body: JSON.stringify({ action: name, ...(text ? { text } : {}) }) });
       const [taskResult, taskListResult] = await Promise.all([fetchTask(taskId), fetchTasks()]);
       setTaskDetail(taskResult);
       setTasks(taskListResult.tasks);
@@ -183,6 +216,16 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
       setActionError(error instanceof Error ? error.message : "任务操作失败");
     }
   }, [fetchTask, fetchTasks, taskId]);
+
+  const assignProject = useCallback(async (projectId: string) => {
+    if (!taskId) return;
+    try {
+      const result = await json<{ task: TaskRecord }>(`/api/tasks/${encodeURIComponent(taskId)}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ projectId: projectId || null }) });
+      setTaskDetail((current) => current && current.task.taskId === taskId ? { ...current, task: result.task } : current);
+      const taskResult = await fetchTasks();
+      setTasks(taskResult.tasks);
+    } catch (error: unknown) { setActionError(error instanceof Error ? error.message : "更新项目归属失败"); }
+  }, [fetchTasks, taskId]);
 
   const replyPermission = useCallback(async (reply: Reply, feedback?: string) => {
     if (!sessionId || !live.pendingPermission || replying) return;
@@ -204,7 +247,7 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
     <section className="task-content">
       <header className="task-topbar">
         <div className="task-topbar-title"><span className="task-topbar-kicker">{pathname === "/fw" ? "新的工作" : task?.workspaceId ? selectedWorkspace?.name ?? "任务" : "任务"}</span><h1>{task?.title ?? (snapshot?.session.title ?? "开始一个新任务")}</h1></div>
-        <div className="task-topbar-actions"><Link href="/fw" className="task-topbar-link">新对话</Link><IconButton size="md" label="刷新任务" onClick={() => { void fetchTasks().then((result) => setTasks(result.tasks)); if (taskId) void fetchTask(taskId).then(setTaskDetail); }}><Icon name="refresh" size={14} /></IconButton></div>
+        <div className="task-topbar-actions">{task && <select className="task-project-select" value={task.projectId ?? ""} onChange={(event) => void assignProject(event.target.value)} aria-label="项目归属"><option value="">未加入项目</option>{projects.map(({ project }) => <option value={project.projectId} key={project.projectId}>{project.name}</option>)}</select>}<Link href="/fw" className="task-topbar-link">新对话</Link><IconButton size="md" label="刷新任务" onClick={() => { void fetchTasks().then((result) => setTasks(result.tasks)); if (taskId) void fetchTask(taskId).then(setTaskDetail); }}><Icon name="refresh" size={14} /></IconButton></div>
       </header>
 
       {!sessionId ? <div className="task-home"><div className="task-home-intro"><span className="eyebrow">通用智能体</span><h2>把想做的事交给它。</h2><p>从一句自然语言开始。Agent 会理解目标、拆解步骤、调用工具，并把可用成果交付给你。</p></div><div className="task-composer task-composer-home"><Textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={handleKeyDown} placeholder="例如：读取 sales.csv，生成一个可预览的销售数据看板" rows={5} /><div className="task-composer-foot"><span>{selectedWorkspace ? `将使用 ${selectedWorkspace.name}` : "正在准备工作区"}</span><Button type="button" onClick={() => void send()} disabled={!prompt.trim() || sending || !selectedWorkspace}><Icon name="arrow-up" size={14} />{sending ? "开始中" : "开始任务"}</Button></div></div><div className="task-examples"><span className="eyebrow">可以从这里开始</span><button type="button" onClick={() => setPrompt("读取 sales.csv，生成一个可预览的销售数据看板，并检查桌面和移动端布局")}>生成数据看板</button><button type="button" onClick={() => setPrompt("分析当前资料，整理成一份带结论和行动建议的报告")}>整理一份报告</button><button type="button" onClick={() => setPrompt("检查当前项目中的代码，找出最需要优先修复的问题")}>检查代码问题</button></div></div> : <div className="task-detail-grid">
@@ -213,8 +256,10 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
           <div className="task-message-scroll" ref={scrollRef} onScroll={() => { const element = scrollRef.current; if (element) setFollowScroll(element.scrollHeight - element.scrollTop - element.clientHeight < 160); }}>
             {messages.length ? messages.map((entry, index) => <MessageView key={Array.isArray(entry) ? `assistant-${index}-${entry[0]?.info.id}` : entry.info.id} entry={entry} hideTools={live.todos.length > 0} sessionIdle={live.status === "idle"} />) : <div className="task-empty-conversation"><span className="task-empty-glyph">z</span><p>任务准备完成，开始补充你的要求。</p></div>}
             <PlanCard todos={live.todos} taskTools={taskTools} />
+            {qualityResult && <QualityCard result={qualityResult} />}
             {live.pendingPermission && <PermissionCard request={live.pendingPermission as PermissionRequest} busy={replying} onReply={(reply, feedback) => void replyPermission(reply, feedback)} />}
             {live.error && <div className="task-error"><Icon name="warning" size={14} /><span>{live.error}</span></div>}
+            {(latestRun?.status === "succeeded" || task?.status === "succeeded") && <CompletionCard artifacts={live.artifacts} onFollowUp={() => setPrompt("请继续修改这个成果，并说明你准备调整的内容") } />}
           </div>
           <form className="task-composer task-composer-detail" onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}><Textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={handleKeyDown} placeholder={busy ? "补充要求会在当前步骤完成后处理…" : "继续这条任务…"} rows={3} /><div className="task-composer-foot"><span>{busy ? "Agent 正在工作" : "Enter 发送 · Shift+Enter 换行"}</span><Button type="submit" disabled={!prompt.trim() || sending}><Icon name="arrow-up" size={14} />发送</Button></div></form>
         </section>
