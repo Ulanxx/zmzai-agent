@@ -13,6 +13,21 @@ type CheckpointState = {
   summary: Record<string, unknown>;
 };
 
+export type CheckpointResumeSummary = {
+  checkpointId: string;
+  eventSeq: number;
+  boundary: CheckpointState["boundary"];
+  summary: Record<string, unknown>;
+  completedStepIds: string[];
+  completedToolCallIds: string[];
+  artifactIds: string[];
+};
+
+export function buildCheckpointResumeContext(checkpoint: CheckpointResumeSummary | null): string {
+  if (!checkpoint) return "\n没有可用的持久检查点，请先检查当前 Workspace 状态再执行。";
+  return `\n恢复检查点 ${checkpoint.checkpointId}（事件 ${checkpoint.eventSeq}）：已完成步骤 ${checkpoint.completedStepIds.length} 个、已完成工具调用 ${checkpoint.completedToolCallIds.length} 个、已生成成果 ${checkpoint.artifactIds.length} 个。不要重复确认已完成的成果；先核对当前 Workspace 状态，再从未完成的动作继续。`;
+}
+
 const checkpointEvents = new Set<PersistedFrameworkEvent["type"]>([
   "session.status",
   "permission.replied",
@@ -120,4 +135,20 @@ export async function persistTaskCheckpoint(event: PersistedFrameworkEvent): Pro
     return;
   }
   await RunModel.updateOne({ runId: run.runId }, { $set: { latestCheckpointId: checkpointId } });
+}
+
+export async function latestCheckpointForRun(input: { runId: string; userId: string }): Promise<CheckpointResumeSummary | null> {
+  const run = await RunModel.findOne({ runId: input.runId, userId: input.userId }).select({ runId: 1 }).lean();
+  if (!run) return null;
+  const checkpoint = await CheckpointModel.findOne({ runId: input.runId }).sort({ eventSeq: -1 }).lean();
+  if (!checkpoint) return null;
+  return {
+    checkpointId: checkpoint.checkpointId,
+    eventSeq: checkpoint.eventSeq,
+    boundary: (checkpoint.state as { boundary?: CheckpointState["boundary"] }).boundary ?? "status",
+    summary: (checkpoint.state as { summary?: Record<string, unknown> }).summary ?? {},
+    completedStepIds: checkpoint.completedStepIds,
+    completedToolCallIds: checkpoint.completedToolCallIds,
+    artifactIds: checkpoint.artifactIds,
+  };
 }

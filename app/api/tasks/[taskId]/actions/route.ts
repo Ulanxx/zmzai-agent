@@ -9,6 +9,7 @@ import { apiError, unauthenticated } from "@/lib/api-error";
 import { getCurrentUser } from "@/lib/auth/session";
 import { IdempotencyError, claimIdempotency } from "@/lib/idempotency";
 import { cancelRunForSession, ensureRunForPrompt, pauseRunForSession } from "@/lib/task-run-control";
+import { buildCheckpointResumeContext, latestCheckpointForRun } from "@/lib/task-checkpoint";
 import { RunModel } from "@/models/run";
 import { TaskModel } from "@/models/task";
 
@@ -47,7 +48,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ta
 
   const session = await defaultStore.getSession(latestRun.sessionId);
   if (!session || session.userId !== user.id) return apiError("SESSION_NOT_FOUND", 404, "任务会话不存在或无权访问");
-  const text = parsed.data.action === "follow_up" ? parsed.data.text : parsed.data.action === "retry" ? `请重试并完成原任务：${task.goal}` : "请从最近一次安全检查点继续完成任务。";
+  const checkpoint = parsed.data.action === "resume" || parsed.data.action === "retry" ? await latestCheckpointForRun({ runId: latestRun.runId, userId: user.id }) : null;
+  const checkpointContext = buildCheckpointResumeContext(checkpoint);
+  const text = parsed.data.action === "follow_up" ? parsed.data.text : parsed.data.action === "retry" ? `请重试并完成原任务：${task.goal}${checkpointContext}` : `请从最近一次安全检查点继续完成任务。${checkpointContext}`;
   if (!text) return apiError("INVALID_BODY", 400, "后续任务内容不能为空");
   let claim;
   try {
