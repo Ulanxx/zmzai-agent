@@ -152,13 +152,16 @@ export function relayReasoningEffort(reasoning: SimpleStreamOptions["reasoning"]
   return reasoning === "minimal" ? "low" : reasoning;
 }
 
-export function createRelayStreamFunction(identity: { userId: string; taskRunId: string }): StreamFunction {
+type RelayIdentity = { userId: string; taskRunId: string | (() => string | Promise<string>) };
+
+export function createRelayStreamFunction(identity: RelayIdentity): StreamFunction {
   return (model, context, options) => streamFromRelay(model, context, options, identity);
 }
 
-function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStreamOptions | undefined, identity: { userId: string; taskRunId: string }): AssistantMessageEventStream {
+function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStreamOptions | undefined, identity: RelayIdentity): AssistantMessageEventStream {
   const stream = createAssistantMessageEventStream();
   void (async () => {
+    const taskRunId = typeof identity.taskRunId === "function" ? await identity.taskRunId() : identity.taskRunId;
     const environment = getServerEnvironment();
     const secret = environment.RELAY_AGENT_SERVICE_SECRET_CURRENT;
     if (!secret) {
@@ -171,8 +174,8 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
     const reasoningEffort = relayReasoningEffort(options?.reasoning);
     const requestBody = JSON.stringify({
       userId: identity.userId,
-      taskRunId: identity.taskRunId,
-      requestId: `${identity.taskRunId}_${Date.now()}`,
+      taskRunId,
+      requestId: `${taskRunId}_${Date.now()}`,
       model: model.id,
       messages: toOpenAiMessages(context),
       tools: toOpenAiTools(context.tools),

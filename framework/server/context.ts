@@ -6,6 +6,7 @@ import { createMongoWorkspaceFiles, createWorkspaceAggregateFiles } from "@/fram
 import { createRelayModel, createRelayStreamFunction } from "@/lib/relay-agent-stream";
 import { buildExecSnapshot } from "@/lib/sandbox-snapshot";
 import { runSandboxCommandAndStream } from "@/lib/sandbox-execution";
+import { activeRunIdForSession } from "@/lib/task-run-control";
 import { FrameworkSessionModel } from "@/framework/core/session/mongo-models";
 import { getWorkspace } from "@/lib/workspaces";
 
@@ -21,7 +22,7 @@ function getOrCreateRunner(): SessionRunner {
     store: mongoSessionStore,
     registry: new AgentRegistry(),
     eventLog: productEventLog,
-    streamFnFor: (session) => createRelayStreamFunction({ userId: session.userId, taskRunId: session.id }),
+    streamFnFor: (session) => createRelayStreamFunction({ userId: session.userId, taskRunId: () => activeRunIdForSession(session.id) }),
     modelFor: (ref: ModelRef) => createRelayModel(ref.modelId),
     workspaceFor: (session) => createMongoWorkspaceFiles({ userId: session.userId, workspaceId: session.workspaceId, sessionId: session.id }),
     sandbox: {
@@ -29,7 +30,7 @@ function getOrCreateRunner(): SessionRunner {
       run: async (input) => {
         const result = await runSandboxCommandAndStream({
           userId: input.userId,
-          runId: input.runId,
+          runId: await activeRunIdForSession(input.runId),
           workspaceId: input.workspaceId,
           toolCallId: input.toolCallId,
           snapshot: input.snapshot,

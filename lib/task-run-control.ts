@@ -82,6 +82,11 @@ export async function taskForSession(sessionId: string): Promise<TaskRecord | nu
   return TaskModel.findOne({ taskId: run.taskId }).lean() as Promise<TaskRecord | null>;
 }
 
+export async function activeRunIdForSession(sessionId: string): Promise<string> {
+  const run = await RunModel.findOne({ sessionId, active: true }).sort({ createdAt: -1 }).lean();
+  return run?.runId ?? sessionId;
+}
+
 export async function ensureRunForPrompt(session: SessionInfo, goal?: string): Promise<{ task: TaskRecord; run: RunRecord }> {
   let task = await taskForSession(session.id);
   if (!task) task = await createTaskForSession({ session, goal });

@@ -153,10 +153,18 @@ export async function deleteWorkspace(userId: string, workspaceId: string): Prom
   const { WorkspaceSkillModel } = await import("@/models/workspace-skill");
   const { WorkspacePluginModel } = await import("@/models/workspace-plugin");
   const { WorkspaceConnectorModel } = await import("@/models/workspace-connector");
+  const { TaskModel } = await import("@/models/task");
+  const { RunModel } = await import("@/models/run");
+  const { CheckpointModel } = await import("@/models/checkpoint");
+  const { ApprovalGrantModel, ApprovalRequestModel } = await import("@/models/approval");
 
   const sessions = await FrameworkSessionModel.find({ workspaceId }).select({ sessionId: 1 }).lean();
   const sessionIds = sessions.map((session) => session.sessionId);
-  await Promise.all(sessionIds.map((sessionId) => deleteRunArtifacts(sessionId).catch(() => undefined)));
+  const runs = await RunModel.find({ workspaceId, userId }).select({ runId: 1, taskId: 1 }).lean();
+  const runIds = runs.map((run) => run.runId);
+  const taskIds = [...new Set(runs.map((run) => run.taskId))];
+  const artifactRunIds = [...new Set([...sessionIds, ...runIds])];
+  await Promise.all(artifactRunIds.map((runId) => deleteRunArtifacts(runId).catch(() => undefined)));
   if (sessionIds.length) {
     await Promise.all([
       FrameworkMessageModel.deleteMany({ sessionId: { $in: sessionIds } }),
@@ -168,6 +176,11 @@ export async function deleteWorkspace(userId: string, workspaceId: string): Prom
   await FrameworkSessionModel.deleteMany({ workspaceId });
 
   await Promise.all([
+    CheckpointModel.deleteMany({ runId: { $in: runIds } }),
+    ApprovalRequestModel.deleteMany({ taskId: { $in: taskIds } }),
+    ApprovalGrantModel.deleteMany({ taskId: { $in: taskIds } }),
+    RunModel.deleteMany({ workspaceId, userId }),
+    TaskModel.deleteMany({ workspaceId, userId }),
     WorkspaceFileModel.deleteMany({ workspaceId }),
     WorkspaceRevisionModel.deleteMany({ workspaceId }),
     WorkspaceSkillModel.deleteMany({ workspaceId }),
