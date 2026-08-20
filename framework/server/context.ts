@@ -9,6 +9,7 @@ import { runSandboxCommandAndStream } from "@/lib/sandbox-execution";
 import { activeRunIdForSession } from "@/lib/task-run-control";
 import { FrameworkSessionModel } from "@/framework/core/session/mongo-models";
 import { getWorkspace } from "@/lib/workspaces";
+import { resolveWorkspaceConnectorTools } from "@/lib/mcp-connector-tools";
 
 /** Process-wide runner singleton assembled from the framework package + the
  *  product's Mongo/relay/OpenSandbox adapters (M5 §3). */
@@ -89,6 +90,7 @@ function getOrCreateRunner(): SessionRunner {
             steps: ws.steps,
             permission: [...autoAllow, ...(ws.permission as Ruleset)],
           },
+          tools: await resolveWorkspaceConnectorTools({ userId: session.userId, workspaceId: session.workspaceId, connectorIds: ws.connectorIds }),
         };
       },
     },

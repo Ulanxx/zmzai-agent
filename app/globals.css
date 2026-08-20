@@ -465,6 +465,7 @@
   .automation-status.paused, .connector-status-dot.untested { background: var(--color-warning); }
   .connector-status-dot.error { background: #b03a28; }
   .automation-actions { display: flex; align-items: center; gap: 0.4rem; }
+  .connector-actions { display: flex; align-items: center; gap: 0.4rem; }
   .connector-copy em { display: block; overflow: hidden; color: #8f2f20; font-size: 0.65rem; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
 
   @media (max-width: 58rem) {

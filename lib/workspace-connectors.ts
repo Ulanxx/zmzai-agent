@@ -30,7 +30,7 @@ export function isPublicConnectorAddress(address: string): boolean {
   return isIP(address) === 6;
 }
 
-async function assertPublicConnectorTarget(url: string): Promise<void> {
+export async function assertPublicConnectorTarget(url: string): Promise<void> {
   const hostname = new URL(url).hostname.replace(/^\[|\]$/g, "");
   if (hostname === "localhost" || hostname.endsWith(".localhost")) throw new Error("MCP 地址不能指向本地网络");
   const addresses = await lookup(hostname, { all: true, verbatim: true });
@@ -47,6 +47,7 @@ export async function createWorkspaceConnector(input: { userId: string; workspac
   if (!url) throw new Error("MCP 地址必须是 HTTPS URL");
   await assertPublicConnectorTarget(url);
   const record = await WorkspaceConnectorModel.create({ connectorId: `mcp_${randomUUID()}`, userId: input.userId, workspaceId: input.workspaceId, name: input.name, transport: input.transport, url, encryptedHeaders: encryptConnectorHeaders(input.headers) });
+  await import("@/models/workspace").then(({ WorkspaceModel }) => WorkspaceModel.updateOne({ userId: input.userId, workspaceId: input.workspaceId }, { $addToSet: { connectorIds: record.connectorId } }));
   return summary(record);
 }
 

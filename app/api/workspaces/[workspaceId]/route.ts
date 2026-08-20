@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/session";
 import { apiError, unauthenticated } from "@/lib/api-error";
 import { deleteWorkspace, getWorkspace, updateWorkspace } from "@/lib/workspaces";
+import { workspaceOwnsConnectorIds } from "@/lib/workspace-connectors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ const updateSchema = z.object({
   steps: z.number().int().min(1).max(64).optional(),
   defaultModel: z.string().trim().max(160).optional(),
   approvalMode: z.enum(["ask", "auto"]).optional(),
+  connectorIds: z.array(z.string().trim().min(1).max(128)).max(32).optional(),
 }).strict();
 
 export async function GET(_: Request, context: { params: Promise<{ workspaceId: string }> }) {
@@ -33,6 +35,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
   const { workspaceId } = await context.params;
   const parsed = updateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return apiError("INVALID_BODY", 400, "Workspace 更新请求格式不正确");
+  if (parsed.data.connectorIds && !(await workspaceOwnsConnectorIds({ userId: user.id, workspaceId, connectorIds: parsed.data.connectorIds }))) {
+    return apiError("INVALID_CONNECTORS", 400, "连接器不存在、属于其他 Workspace 或重复出现");
+  }
   const workspace = await updateWorkspace(user.id, workspaceId, parsed.data);
   if (!workspace) return apiError("WORKSPACE_NOT_FOUND", 404, "Workspace 不存在");
   return NextResponse.json({ workspace }, { headers: { "cache-control": "no-store" } });
