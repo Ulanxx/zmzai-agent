@@ -5,6 +5,7 @@ import { AgentSandboxError, createAgentSandboxRun, getAgentSandboxRun, getAgentS
 import type { SandboxCommand, SandboxLimits, SandboxSnapshot } from "@/lib/sandbox-types";
 import { SandboxArtifactModel } from "@/models/sandbox-artifact";
 import { buildWebAppZip, isWebAppArtifactSet } from "@/lib/web-app-zip";
+import { artifactTitle, qualityStatusFor, reserveArtifactVersion } from "@/lib/artifact-metadata";
 
 const maxArtifactBytes = 64 * 1024;
 
@@ -118,17 +119,22 @@ async function importDeliverables(input: { userId: string; runId: string; toolCa
     const stored = await storeArtifactBytes({ content: fetched.content, contentType: meta.contentType, filename: basename(meta.path) }).catch(() => null);
     if (!stored) continue;
     const artifactId = `art_${randomUUID()}`;
+    const lineage = await reserveArtifactVersion({ userId: input.userId, runId: input.runId, path: meta.path });
     await SandboxArtifactModel.create({
       artifactId,
       runId: input.runId,
       userId: input.userId,
       toolCallId: input.toolCallId,
       sandboxPath: meta.path,
+      title: artifactTitle(meta.path),
+      versionGroupId: lineage.versionGroupId,
+      version: lineage.version,
       contentType: meta.contentType,
       sizeBytes: meta.bytes,
       sha256: meta.sha256,
       gridFsFileId: stored.fileId,
       tooLarge: false,
+      qualityStatus: qualityStatusFor(meta.contentType, meta.path),
     }).catch(() => undefined);
     runTotal += meta.bytes;
     contents.push({ path: meta.path, content: fetched.content });
@@ -142,7 +148,8 @@ async function importDeliverables(input: { userId: string; runId: string; toolCa
       if (stored) {
         const sha256 = createHash("sha256").update(zipContent).digest("hex");
         const artifactId = `art_${randomUUID()}`;
-        await SandboxArtifactModel.create({ artifactId, runId: input.runId, userId: input.userId, toolCallId: input.toolCallId, sandboxPath: "web_app.zip", contentType: "application/zip", sizeBytes: zipContent.length, sha256, gridFsFileId: stored.fileId, tooLarge: false }).catch(() => undefined);
+        const lineage = await reserveArtifactVersion({ userId: input.userId, runId: input.runId, path: "web_app.zip" });
+        await SandboxArtifactModel.create({ artifactId, runId: input.runId, userId: input.userId, toolCallId: input.toolCallId, sandboxPath: "web_app.zip", title: artifactTitle("web_app.zip"), versionGroupId: lineage.versionGroupId, version: lineage.version, contentType: "application/zip", sizeBytes: zipContent.length, sha256, gridFsFileId: stored.fileId, tooLarge: false, qualityStatus: "pending" }).catch(() => undefined);
         imported.push({ path: "web_app.zip", bytes: zipContent.length, contentType: "application/zip", sha256, tooLarge: false, artifactId });
       }
     }

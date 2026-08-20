@@ -431,9 +431,11 @@
   .artifact-list { display: grid; }
   .artifact-row { display: flex; align-items: center; gap: 0.8rem; padding: 0.95rem 0; border-bottom: 1px solid var(--color-line); }
   .artifact-row-icon { display: grid; width: 2rem; height: 2rem; flex: 0 0 auto; place-items: center; border: 1px solid var(--color-line); background: var(--color-surface); }
-  .artifact-row-copy { min-width: 0; flex: 1; }
+  .artifact-row-copy { min-width: 0; flex: 1; text-align: left; }
+  button.artifact-row-copy { padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; }
   .artifact-row-copy h2 { margin: 0; overflow: hidden; font-size: 0.82rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
   .artifact-row-copy p { margin: 0.2rem 0 0; overflow: hidden; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6rem; text-overflow: ellipsis; white-space: nowrap; }
+  .artifact-row-copy small { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6rem; font-weight: 400; }
   .artifact-row-actions { display: flex; align-items: center; flex: 0 0 auto; gap: 0.45rem; color: var(--color-muted); }
   .artifact-row-actions a { display: grid; place-items: center; }
   .artifact-row-actions a:hover { color: var(--color-ink); }
@@ -442,6 +444,18 @@
   .artifact-reader-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding-bottom: 0.8rem; border-bottom: 1px solid var(--color-line); }
   .artifact-reader-head h2 { margin: 0.25rem 0 0; font-size: 1rem; }
   .artifact-reader iframe { display: block; width: 100%; min-height: 65dvh; margin-top: 1rem; border: 1px solid var(--color-line); background: var(--color-paper); }
+  .artifact-meta-form { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.9rem; }
+  .artifact-meta-form input { min-width: 10rem; flex: 1 1 14rem; border: 1px solid var(--color-line); border-radius: var(--radius-sm); background: var(--color-paper); color: var(--color-ink); padding: 0.5rem 0.6rem; font: inherit; font-size: 0.7rem; }
+  .artifact-quality { margin-top: 0.45rem; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.62rem; }
+  .artifact-quality.passed { color: #3f7f42; }
+  .artifact-quality.failed { color: #8f2f20; }
+  .artifact-share-url { width: 100%; margin-top: 0.65rem; border: 1px solid var(--color-line); background: var(--color-surface); color: var(--color-muted); padding: 0.45rem 0.55rem; font-family: var(--font-mono); font-size: 0.62rem; }
+  .shared-artifact-page { width: min(100% - 2rem, 74rem); margin: 0 auto; padding: 3rem 0; }
+  .shared-artifact-page header { padding-bottom: 1rem; border-bottom: 1px solid var(--color-line); }
+  .shared-artifact-page h1 { margin: 0.35rem 0; font-size: 1.4rem; }
+  .shared-artifact-page p { color: var(--color-muted); font-size: 0.75rem; }
+  .shared-artifact-page iframe { display: block; width: 100%; min-height: 70dvh; margin-top: 1rem; border: 1px solid var(--color-line); background: var(--color-paper); }
+  .shared-artifact-download { display: inline-flex; margin-top: 1.2rem; padding: 0.55rem 0.75rem; border: 1px solid var(--color-ink); color: var(--color-ink); font-size: 0.75rem; }
   .automation-create, .connector-toolbar { display: flex; flex-wrap: wrap; gap: 0.45rem; padding: 1.2rem 0; border-bottom: 1px solid var(--color-line); }
   .automation-create input, .automation-create select, .connector-toolbar input, .connector-toolbar select { min-width: 9rem; flex: 1 1 12rem; border: 1px solid var(--color-line); border-radius: var(--radius-sm); background: var(--color-paper); color: var(--color-ink); padding: 0.55rem 0.6rem; font: inherit; font-size: 0.7rem; }
   .automation-create select, .connector-toolbar select { flex: 0 1 9rem; }

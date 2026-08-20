@@ -22,6 +22,16 @@ export const productEventLog: EventLog = {
         console.error("project automation execution failure", error);
       });
     }
+    const updatedPart = persisted.type === "message.part.updated" ? persisted.data.part : null;
+    if (updatedPart?.type === "tool" && updatedPart.tool === "qa-check" && updatedPart.state.status === "completed") {
+      const entryPath = typeof updatedPart.state.input === "object" && updatedPart.state.input !== null && "entryPath" in updatedPart.state.input && typeof (updatedPart.state.input as { entryPath?: unknown }).entryPath === "string"
+        ? (updatedPart.state.input as { entryPath: string }).entryPath
+        : "index.html";
+      const qaResult = updatedPart.state.metadata?.qaCheck;
+      await import("@/lib/artifact-metadata").then(({ projectArtifactQuality }) => projectArtifactQuality({ sessionId: persisted.sessionId, entryPath, result: qaResult })).catch((error) => {
+        console.error("project artifact quality", error);
+      });
+    }
     await persistTaskCheckpoint(persisted).catch((error) => {
       console.error("persist Task/Run checkpoint", error);
     });
