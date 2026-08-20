@@ -12,6 +12,16 @@ export const productEventLog: EventLog = {
     await projectFrameworkEvent(persisted).catch((error) => {
       console.error("project framework event to Task/Run", error);
     });
+    if (persisted.type === "session.status" && persisted.data.status === "idle") {
+      await import("@/lib/automation-execution").then(({ projectAutomationExecution }) => projectAutomationExecution({ sessionId: persisted.sessionId, status: "succeeded" })).catch((error) => {
+        console.error("project automation execution success", error);
+      });
+    }
+    if (persisted.type === "session.error") {
+      await import("@/lib/automation-execution").then(({ projectAutomationExecution }) => projectAutomationExecution({ sessionId: persisted.sessionId, status: "failed", error: `${persisted.data.name}: ${persisted.data.message}` })).catch((error) => {
+        console.error("project automation execution failure", error);
+      });
+    }
     await persistTaskCheckpoint(persisted).catch((error) => {
       console.error("persist Task/Run checkpoint", error);
     });

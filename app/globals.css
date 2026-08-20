@@ -452,6 +452,14 @@
   .automation-title h2, .connector-title h2 { margin: 0; font-size: 0.85rem; }
   .automation-copy p, .connector-copy p { margin: 0.25rem 0; overflow: hidden; color: var(--color-muted); font-size: 0.72rem; text-overflow: ellipsis; white-space: nowrap; }
   .automation-copy small, .connector-title small { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6rem; }
+  .automation-copy em { display: block; margin-top: 0.35rem; overflow: hidden; color: #8f2f20; font-size: 0.65rem; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+  .automation-history { margin-top: 0.45rem; color: var(--color-muted); font-size: 0.65rem; }
+  .automation-history summary { width: fit-content; cursor: pointer; font-family: var(--font-mono); }
+  .automation-history a { display: flex; align-items: center; gap: 0.35rem; max-width: 100%; margin-top: 0.3rem; overflow: hidden; color: var(--color-muted); text-overflow: ellipsis; white-space: nowrap; }
+  .automation-history a:hover { color: var(--color-ink); }
+  .automation-history a span { width: 0.35rem; height: 0.35rem; flex: 0 0 auto; border-radius: 50%; background: var(--color-muted); }
+  .automation-history a span[data-status="succeeded"] { background: var(--color-success); }
+  .automation-history a span[data-status="failed"], .automation-history a span[data-status="cancelled"] { background: #b03a28; }
   .automation-status, .connector-status-dot { width: 0.45rem; height: 0.45rem; flex: 0 0 auto; border-radius: 50%; background: var(--color-muted); }
   .automation-status.active, .connector-status-dot.ready { background: var(--color-success); }
   .automation-status.paused, .connector-status-dot.untested { background: var(--color-warning); }

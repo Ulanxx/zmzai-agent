@@ -7,12 +7,14 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { apiError, unauthenticated } from "@/lib/api-error";
 import { IdempotencyError, claimIdempotency } from "@/lib/idempotency";
 import { getWorkspace } from "@/lib/workspaces";
+import { initializeAutomationSchedule } from "@/lib/automation-scheduler";
+import { isSupportedSchedule, isSupportedTimeZone } from "@/lib/automation-schedule";
 import { AutomationModel } from "@/models/automation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const createSchema = z.object({ workspaceId: z.string().trim().min(1).max(64), name: z.string().trim().min(1).max(160), goal: z.string().trim().min(1).max(32 * 1024), schedule: z.string().trim().max(120).default("手动运行") }).strict();
+const createSchema = z.object({ workspaceId: z.string().trim().min(1).max(64), name: z.string().trim().min(1).max(160), goal: z.string().trim().min(1).max(32 * 1024), schedule: z.string().trim().max(120).default("手动运行"), timezone: z.string().trim().max(64).default("Asia/Shanghai") }).strict();
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -25,6 +27,8 @@ export async function POST(request: NextRequest) {
   if (!user) return unauthenticated();
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return apiError("INVALID_BODY", 400, "自动化请求格式不正确");
+  if (!isSupportedSchedule(parsed.data.schedule)) return apiError("INVALID_SCHEDULE", 400, "计划仅支持手动运行、每天 HH:mm、工作日 HH:mm、每小时或五段 cron");
+  if (!isSupportedTimeZone(parsed.data.timezone)) return apiError("INVALID_TIMEZONE", 400, "时区必须是有效的 IANA 时区，例如 Asia/Shanghai");
   if (!(await getWorkspace(user.id, parsed.data.workspaceId))) return apiError("WORKSPACE_NOT_FOUND", 404, "Workspace 不存在或无权访问");
   try {
     const claim = await claimIdempotency({ userId: user.id, scope: "automation.create", key: request.headers.get("idempotency-key"), body: parsed.data, resourceId: `aut_${randomUUID().replaceAll("-", "").slice(0, 20)}` });
@@ -32,7 +36,7 @@ export async function POST(request: NextRequest) {
       const existing = await AutomationModel.findOne({ automationId: claim.resourceId, userId: user.id }).lean();
       if (existing) return NextResponse.json({ automation: existing, replayed: true }, { status: 201, headers: { "cache-control": "no-store" } });
     }
-    const automation = await AutomationModel.create({ automationId: claim.resourceId, userId: user.id, ...parsed.data });
+    const automation = await AutomationModel.create({ automationId: claim.resourceId, userId: user.id, ...parsed.data, nextRunAt: await initializeAutomationSchedule(parsed.data) });
     return NextResponse.json({ automation }, { status: 201, headers: { "cache-control": "no-store" } });
   } catch (error) {
     if (error instanceof IdempotencyError) return apiError(error.code, error.code === "IDEMPOTENCY_KEY_REQUIRED" ? 400 : 409, error.code === "IDEMPOTENCY_KEY_REQUIRED" ? "Idempotency-Key 必须是 16 到 128 个可打印字符" : "同一 Idempotency-Key 不能对应不同请求");

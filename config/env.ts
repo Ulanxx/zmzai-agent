@@ -17,6 +17,7 @@ const environmentSchema = z.object({
   RELAY_AGENT_SERVICE_SECRET_PREVIOUS: optionalString,
   SANDBOX_AGENT_URL: z.string().url().default("https://z.zmzai.cloud"),
   SANDBOX_AGENT_SERVICE_SECRET_CURRENT: optionalString,
+  AUTOMATION_SCHEDULER_SECRET: optionalString,
 });
 
 export type ServerEnvironment = z.infer<typeof environmentSchema>;
