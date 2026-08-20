@@ -430,6 +430,8 @@
   .project-create-form select { width: 7.5rem; }
   .project-list { display: grid; }
   .project-row { padding: 1.1rem 0; border-bottom: 1px solid var(--color-line); }
+  .project-row-open { display: block; color: inherit; }
+  .project-row-open:hover h2 { color: var(--color-accent-strong); }
   .project-row-main { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
   .project-row-title { display: flex; align-items: flex-start; gap: 0.7rem; min-width: 0; }
   .project-mark { display: grid; width: 1.9rem; height: 1.9rem; flex: 0 0 auto; place-items: center; border: 1px solid var(--color-line); background: var(--color-surface); }
@@ -443,10 +445,47 @@
   .project-row-tasks a span[data-status="active"] { background: var(--color-accent); }
   .project-row-tasks a span[data-status="succeeded"] { background: var(--color-success); }
   .project-row-tasks a span[data-status="failed"] { background: #b03a28; }
+  .project-open-icon { display: grid; width: 1.8rem; height: 1.8rem; flex: 0 0 auto; place-items: center; margin-left: auto; border: 1px solid var(--color-line); color: var(--color-muted); }
+  .project-open-icon:hover { border-color: var(--color-ink); color: var(--color-ink); }
   .project-empty { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.62rem; }
   .product-empty { display: grid; place-items: center; min-height: 18rem; color: var(--color-muted); text-align: center; }
   .product-empty strong { margin-top: 0.7rem; color: var(--color-ink); font-size: 0.85rem; }
   .product-empty p { margin: 0.25rem 0 0; font-size: 0.72rem; }
+  .product-loading { padding: 8rem 0; color: var(--color-muted); text-align: center; font-family: var(--font-mono); font-size: 0.7rem; }
+  .project-overview { display: flex; align-items: end; justify-content: space-between; gap: 1rem; padding: 1.25rem 0; border-bottom: 1px solid var(--color-line); }
+  .project-stat-row { display: flex; flex-wrap: wrap; gap: 1.25rem; margin-top: 0.7rem; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.65rem; }
+  .project-stat-row strong { margin-right: 0.3rem; color: var(--color-ink); font-family: var(--font-sans); font-size: 1.15rem; }
+  .project-editor { display: grid; gap: 0.8rem; padding: 1rem 0 1.2rem; border-bottom: 1px solid var(--color-line); }
+  .project-editor label { display: grid; gap: 0.35rem; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.62rem; }
+  .project-editor input, .project-editor textarea { width: 100%; border: 1px solid var(--color-line); border-radius: var(--radius-sm); background: var(--color-paper); color: var(--color-ink); padding: 0.55rem 0.6rem; font: inherit; font-size: 0.75rem; }
+  .project-editor textarea { resize: vertical; line-height: 1.5; }
+  .project-detail-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(18rem, 0.75fr); gap: 2rem; }
+  .project-detail-section { min-width: 0; padding: 1.5rem 0; border-bottom: 1px solid var(--color-line); }
+  .section-heading { display: flex; align-items: end; justify-content: space-between; gap: 1rem; margin-bottom: 0.8rem; }
+  .section-heading h2 { margin: 0.25rem 0 0; font-size: 1rem; }
+  .section-caption { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.62rem; }
+  .text-link { display: inline-flex; align-items: center; gap: 0.3rem; color: var(--color-muted); font-size: 0.68rem; white-space: nowrap; }
+  .text-link:hover { color: var(--color-ink); }
+  .project-task-list, .project-artifact-list, .project-run-list { display: grid; border-top: 1px solid var(--color-line); }
+  .project-task-row, .project-run-row, .project-artifact-row { display: flex; align-items: center; gap: 0.6rem; min-width: 0; padding: 0.7rem 0; border-bottom: 1px solid var(--color-line); color: inherit; }
+  .project-task-row:hover, .project-run-row:hover { color: var(--color-accent-strong); }
+  .project-task-status { width: 0.45rem; height: 0.45rem; flex: 0 0 auto; border-radius: 50%; background: var(--color-muted); }
+  .project-task-status[data-status="active"], .project-task-status[data-status="running"] { background: var(--color-accent); }
+  .project-task-status[data-status="succeeded"] { background: var(--color-success); }
+  .project-task-status[data-status="failed"], .project-task-status[data-status="cancelled"] { background: #b03a28; }
+  .project-task-copy, .project-run-row > span:nth-child(2), .project-artifact-row > span { display: grid; min-width: 0; flex: 1; gap: 0.18rem; }
+  .project-task-copy strong, .project-run-row strong, .project-artifact-row strong { overflow: hidden; font-size: 0.75rem; text-overflow: ellipsis; white-space: nowrap; }
+  .project-task-copy small, .project-run-row small, .project-artifact-row small { overflow: hidden; color: var(--color-muted); font-size: 0.62rem; text-overflow: ellipsis; white-space: nowrap; }
+  .project-task-date { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6rem; white-space: nowrap; }
+  .project-artifact-row > svg { color: var(--color-muted); flex: 0 0 auto; }
+  .project-artifact-row a { display: grid; flex: 0 0 auto; place-items: center; color: var(--color-muted); }
+  .project-artifact-row a:hover { color: var(--color-ink); }
+  .project-run-row em { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6rem; font-style: normal; }
+  .project-run-row em[data-status="succeeded"] { color: var(--color-success); }
+  .project-run-row em[data-status="failed"], .project-run-row em[data-status="cancelled"] { color: #b03a28; }
+  .project-section-empty { padding: 1rem 0; color: var(--color-muted); font-size: 0.7rem; }
+  .project-section-empty a { color: var(--color-accent-strong); text-decoration: underline; }
+  .project-runs-section { padding-top: 1.25rem; }
   .artifact-list { display: grid; }
   .artifact-row { display: flex; align-items: center; gap: 0.8rem; padding: 0.95rem 0; border-bottom: 1px solid var(--color-line); }
   .artifact-row-icon { display: grid; width: 2rem; height: 2rem; flex: 0 0 auto; place-items: center; border: 1px solid var(--color-line); background: var(--color-surface); }
@@ -521,6 +560,9 @@
     .project-create-form input, .project-create-form select { flex: 1 1 10rem; width: auto; }
     .project-row-main { flex-direction: column; }
     .project-row-tasks { margin-left: 0; flex-wrap: wrap; }
+    .project-detail-grid { display: block; }
+    .project-overview { align-items: flex-start; flex-direction: column; }
+    .project-task-date { display: none; }
     .task-topbar { padding-inline: 1rem; }
     .task-detail-grid { display: flex; flex-direction: column; }
     .task-conversation { min-height: 70dvh; }
