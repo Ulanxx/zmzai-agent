@@ -10,6 +10,9 @@ import { activeRunIdForSession } from "@/lib/task-run-control";
 import { FrameworkSessionModel } from "@/framework/core/session/mongo-models";
 import { getWorkspace } from "@/lib/workspaces";
 import { resolveWorkspaceConnectorTools } from "@/lib/mcp-connector-tools";
+import { combineAgentInstructions } from "@/lib/project-agent-context";
+import { taskForSession } from "@/lib/task-run-control";
+import { ProjectModel } from "@/models/project";
 
 /** Process-wide runner singleton assembled from the framework package + the
  *  product's Mongo/relay/OpenSandbox adapters (M5 §3). */
@@ -81,6 +84,8 @@ function getOrCreateRunner(): SessionRunner {
         if (session.parentId) return null;
         const ws = await getWorkspace(session.userId, session.workspaceId);
         if (!ws) return null;
+        const task = await taskForSession(session.id);
+        const project = task?.projectId ? await ProjectModel.findOne({ projectId: task.projectId, userId: session.userId, workspaceId: session.workspaceId }).select({ instructions: 1 }).lean() : null;
         // 自治档位：auto 档在 workspace 规则前预置 bash 放行；排在后面（last-match-wins）
         // 的显式规则仍可覆盖它，deny/ask 不被绕过。"always" 是历史值，等同 ask。
         const autoAllow: Ruleset = ws.approvalMode === "auto" ? [{ permission: "bash", pattern: "*", action: "allow" }] : [];
@@ -90,7 +95,7 @@ function getOrCreateRunner(): SessionRunner {
             description: ws.description || undefined,
             mode: "primary",
             model: { providerId: "relay", modelId: ws.defaultModel },
-            prompt: ws.prompt || undefined,
+            prompt: combineAgentInstructions(ws.prompt, project?.instructions),
             steps: ws.steps,
             permission: [...autoAllow, ...(ws.permission as Ruleset)],
           },
