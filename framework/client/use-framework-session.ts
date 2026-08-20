@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { FrameworkEventType } from "@/framework/core/events/manifest";
+import type { FrameworkEventType, PersistedFrameworkEvent } from "@/framework/core/events/manifest";
 import type { MessageWithParts, Part, SessionInfo, SessionStatus } from "@/framework/core/session/types";
 import type { PermissionRequest, Reply } from "@/framework/core/permission/engine";
 
@@ -22,6 +22,7 @@ export type FileEdit = { path: string; revisionId: string; diff: string; at: str
 export type SessionSnapshot = {
   session: SessionInfo;
   messages: MessageWithParts[];
+  events?: PersistedFrameworkEvent[];
 };
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -36,7 +37,7 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 export const fwApi = {
   listSessions: (workspaceId?: string) => requestJson<{ sessions: SessionInfo[] }>(`/api/fw/sessions${workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ""}`),
   createSession: (input: { workspaceId: string; model: { providerId: string; modelId: string }; prompt?: string }) =>
-    requestJson<{ session: SessionInfo }>("/api/fw/sessions", {
+    requestJson<{ session: SessionInfo; task?: { taskId: string } }>("/api/fw/sessions", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
@@ -77,6 +78,35 @@ const initialLive: LiveState = {
   error: null,
   streamState: "idle",
 };
+
+function liveFromEvents(events: PersistedFrameworkEvent[] | undefined): LiveState {
+  let live = { ...initialLive };
+  for (const event of events ?? []) {
+    const data = event.data as Record<string, unknown>;
+    if (event.type === "session.status") {
+      const status = data.status as SessionStatus;
+      live = { ...live, status, streamState: status === "idle" ? "idle" : live.streamState };
+      if (status === "idle") {
+        live.pendingPermission = null;
+        live.todos = live.todos.map((item) => (item.status === "pending" || item.status === "in_progress" ? { ...item, status: "cancelled" as const } : item));
+      }
+    } else if (event.type === "session.error") {
+      live = { ...live, status: "idle", error: String(data.message ?? "任务执行失败") };
+    } else if (event.type === "todo.updated") {
+      live = { ...live, todos: data.todos as TodoItem[] };
+    } else if (event.type === "permission.asked") {
+      live = { ...live, status: "waiting_permission", pendingPermission: data.request as PermissionRequest };
+    } else if (event.type === "permission.replied") {
+      live = { ...live, pendingPermission: null };
+    } else if (event.type === "artifact.created") {
+      const artifact = data as unknown as ArtifactCard;
+      if (!live.artifacts.some((item) => item.artifactId === artifact.artifactId)) live = { ...live, artifacts: [...live.artifacts, artifact] };
+    } else if (event.type === "file.edited") {
+      live = { ...live, edits: [...live.edits, { ...(data as unknown as Omit<FileEdit, "at">), at: event.at }] };
+    }
+  }
+  return live;
+}
 
 /** Applies one framework event to the message/part list (spec §8.2 client
  *  projection): part snapshots replace by id, deltas append text. */
@@ -144,6 +174,7 @@ export function useFrameworkSession(sessionId: string | null) {
       .then((result) => {
         if (cancelled) return;
         setSnapshot(result);
+        setLive(liveFromEvents(result.events));
         setLoading(false);
       })
       .catch((cause: unknown) => {

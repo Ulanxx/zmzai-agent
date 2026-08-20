@@ -1,5 +1,5 @@
 import { WorkspaceConfig } from "@/framework/client/workspace-config";
-import { FrameworkWorkbench } from "@/framework/client/framework-workbench";
+import { TaskWorkbench } from "@/framework/client/task-workbench";
 
 export const dynamic = "force-dynamic";
 
@@ -12,5 +12,6 @@ export default async function FrameworkPage({ params }: { params: Promise<{ slug
     return <WorkspaceConfig workspaceId={slug[1]} />;
   }
   const sessionId = slug[0] === "s" && slug[1] ? slug[1] : null;
-  return <FrameworkWorkbench sessionId={sessionId} />;
+  const taskId = slug[0] === "t" && slug[1] ? slug[1] : null;
+  return <TaskWorkbench sessionId={sessionId} taskId={taskId} />;
 }

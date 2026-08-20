@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { apiError, unauthenticated } from "@/lib/api-error";
+import { readFrameworkEvents } from "@/framework/core/events/bus";
 import { defaultStore } from "@/framework/core/runtime/runner";
 
 export const runtime = "nodejs";
@@ -13,6 +14,6 @@ export async function GET(_: Request, context: { params: Promise<{ sessionId: st
   const { sessionId } = await context.params;
   const session = await defaultStore.getSession(sessionId);
   if (!session || session.userId !== user.id) return apiError("SESSION_NOT_FOUND", 404, "会话不存在或无权访问");
-  const messages = await defaultStore.getMessages(sessionId);
-  return NextResponse.json({ session, messages }, { headers: { "cache-control": "no-store" } });
+  const [messages, events] = await Promise.all([defaultStore.getMessages(sessionId), readFrameworkEvents(sessionId, 0, 5_000)]);
+  return NextResponse.json({ session, messages, events }, { headers: { "cache-control": "no-store" } });
 }

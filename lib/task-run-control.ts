@@ -141,6 +141,10 @@ export async function cancelRunForSession(sessionId: string, reason = "用户取
   return transitionRunForSession(sessionId, "cancelled", reason);
 }
 
+export async function pauseRunForSession(sessionId: string, reason = "用户暂停任务"): Promise<RunRecord | null> {
+  return transitionRunForSession(sessionId, "paused", reason);
+}
+
 export async function projectFrameworkEvent(event: PersistedFrameworkEvent): Promise<void> {
   if (event.type === "session.status") {
     if (event.data.status === "running") await transitionRunForSession(event.sessionId, "running");
