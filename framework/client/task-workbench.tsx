@@ -14,7 +14,8 @@ type TaskRecord = { taskId: string; workspaceId: string; projectId?: string | nu
 type RunRecord = { runId: string; taskId: string; sessionId: string; status: "created" | "running" | "waiting_input" | "waiting_approval" | "paused" | "succeeded" | "failed" | "cancelled"; attempt: number; terminalReason?: string | null; createdAt?: string; finishedAt?: string | null };
 type TaskListItem = { task: TaskRecord; latestRun: RunRecord | null };
 type ApprovalHistory = { requestId: string; action: string; impact: string; resourceScope: string[]; status: "pending" | "approved" | "rejected" | "expired" | "revoked"; decidedAt?: string | null; feedback?: string | null };
-type TaskDetail = { task: TaskRecord; runs: RunRecord[]; session: { id: string; title: string } | null; approvals?: ApprovalHistory[] };
+type SubagentHistory = { subagentRunId: string; parentSubagentRunId?: string | null; childSessionId: string; agent: string; description: string; status: "queued" | "running" | "completed" | "failed" | "cancelled"; summary?: string | null; error?: string | null };
+type TaskDetail = { task: TaskRecord; runs: RunRecord[]; session: { id: string; title: string } | null; approvals?: ApprovalHistory[]; subagents?: SubagentHistory[] };
 type ProjectOption = { project: { projectId: string; name: string } };
 type QaCheckResult = { status: "passed" | "failed"; checks: { id: string; status: "passed" | "failed"; message: string }[]; viewports: { width: number; height: number; overflow: boolean }[] };
 
@@ -100,6 +101,14 @@ function ApprovalHistoryCard({ approvals }: { approvals: ApprovalHistory[] }) {
   </section>;
 }
 
+function SubagentCard({ subagents, onRetry, retryingId }: { subagents: SubagentHistory[]; onRetry: (id: string) => void; retryingId: string | null }) {
+  if (!subagents.length) return null;
+  return <section className="task-structured-card subagent-card">
+    <div className="structured-card-head"><span className="structured-card-icon"><Icon name="sparkles" size={14} /></span><div><strong>协作任务</strong><small>{subagents.filter((subagent) => subagent.status === "completed").length}/{subagents.length} 已完成</small></div></div>
+    <div className="subagent-list">{subagents.map((subagent) => <div key={subagent.subagentRunId} className="subagent-row"><span className={`subagent-status ${subagent.status}`} /><div><strong>{subagent.description}</strong><small>{subagent.agent} · {subagent.status === "completed" ? "已完成" : subagent.status === "failed" ? "需要重试" : "执行中"}</small>{subagent.summary && <p>{subagent.summary}</p>}{subagent.error && <p className="subagent-error">{subagent.error}</p>}</div>{subagent.status === "failed" && <IconButton size="sm" label="重试此子任务" disabled={retryingId === subagent.subagentRunId} onClick={() => onRetry(subagent.subagentRunId)}><Icon name="refresh" size={13} /></IconButton>}</div>)}</div>
+  </section>;
+}
+
 function CompletionCard({ artifacts, onFollowUp }: { artifacts: ArtifactCard[]; onFollowUp: () => void }) {
   return <section className="task-structured-card completion-card">
     <div className="structured-card-head"><span className="structured-card-icon"><Icon name="check" size={14} /></span><div><strong>任务已完成</strong><small>{artifacts.length ? `${artifacts.length} 个成果已准备好` : "结果已整理到对话中"}</small></div></div>
@@ -133,6 +142,7 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
   const [prompt, setPrompt] = useState("");
   const [sending, setSending] = useState(false);
   const [replying, setReplying] = useState(false);
+  const [retryingSubagentId, setRetryingSubagentId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ArtifactCard | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -243,6 +253,15 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
     try { await fwApi.replyPermission(sessionId, live.pendingPermission.id, reply, feedback); } catch (error: unknown) { setActionError(error instanceof Error ? error.message : "审批操作失败"); } finally { setReplying(false); }
   }, [live.pendingPermission, replying, sessionId]);
 
+  const retrySubagent = useCallback(async (subagentRunId: string) => {
+    if (!taskId || retryingSubagentId) return;
+    setRetryingSubagentId(subagentRunId);
+    try {
+      await json(`/api/tasks/${encodeURIComponent(taskId)}/subagents/${encodeURIComponent(subagentRunId)}/retry`, { method: "POST", headers: { "idempotency-key": crypto.randomUUID() } });
+      setTaskDetail(await fetchTask(taskId));
+    } catch (error: unknown) { setActionError(error instanceof Error ? error.message : "子任务重试失败"); } finally { setRetryingSubagentId(null); }
+  }, [fetchTask, retryingSubagentId, taskId]);
+
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); }
   };
@@ -268,6 +287,7 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
             <PlanCard todos={live.todos} taskTools={taskTools} />
             {qualityResult && <QualityCard result={qualityResult} />}
             {live.pendingPermission && <PermissionCard request={live.pendingPermission as PermissionRequest} busy={replying} onReply={(reply, feedback) => void replyPermission(reply, feedback)} />}
+            <SubagentCard subagents={taskDetail?.subagents ?? []} onRetry={(id) => void retrySubagent(id)} retryingId={retryingSubagentId} />
             <ApprovalHistoryCard approvals={taskDetail?.approvals ?? []} />
             {live.error && <div className="task-error"><Icon name="warning" size={14} /><span>{live.error}</span></div>}
             {(latestRun?.status === "succeeded" || task?.status === "succeeded") && <CompletionCard artifacts={live.artifacts} onFollowUp={() => setPrompt("请继续修改这个成果，并说明你准备调整的内容") } />}

@@ -75,6 +75,10 @@ function getOrCreateRunner(): SessionRunner {
       // Workspace = 智能体：从 workspace 文档读 prompt/steps/permission，
       // 返回 ResolvedAgent。不再走 AgentVersion（已废弃）。
       resolve: async (session) => {
+        // Child sessions must keep their explicit `explore` / `general`
+        // identity. Applying the Workspace primary-agent resolver here would
+        // silently replace its prompt, steps and permission policy.
+        if (session.parentId) return null;
         const ws = await getWorkspace(session.userId, session.workspaceId);
         if (!ws) return null;
         // 自治档位：auto 档在 workspace 规则前预置 bash 放行；排在后面（last-match-wins）

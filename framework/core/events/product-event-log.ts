@@ -4,6 +4,7 @@ import { mongoEventLog } from "@/framework/core/events/mongo-event-log";
 import { projectFrameworkEvent } from "@/lib/task-run-control";
 import { persistTaskCheckpoint } from "@/lib/task-checkpoint";
 import { projectApprovalEvent } from "@/lib/approval-projection";
+import { projectSubagentEvent } from "@/lib/subagent-projection";
 
 /** Product event log: durable framework events remain the source stream, while
  * Task/Run is updated as a best-effort projection that can be rebuilt later. */
@@ -15,6 +16,9 @@ export const productEventLog: EventLog = {
     });
     await projectApprovalEvent(persisted).catch((error) => {
       console.error("project framework event to Approval", error);
+    });
+    await projectSubagentEvent(persisted).catch((error) => {
+      console.error("project framework event to Subagent", error);
     });
     if (persisted.type === "session.status" && persisted.data.status === "idle") {
       await import("@/lib/automation-execution").then(({ projectAutomationExecution }) => projectAutomationExecution({ sessionId: persisted.sessionId, status: "succeeded" })).catch((error) => {

@@ -161,6 +161,7 @@ export async function deleteWorkspace(userId: string, workspaceId: string): Prom
   const { AutomationModel } = await import("@/models/automation");
   const { AutomationExecutionModel } = await import("@/models/automation-execution");
   const { ArtifactLineageModel } = await import("@/models/artifact-lineage");
+  const { SubagentRunModel } = await import("@/models/subagent-run");
 
   const sessions = await FrameworkSessionModel.find({ workspaceId }).select({ sessionId: 1 }).lean();
   const sessionIds = sessions.map((session) => session.sessionId);
@@ -194,6 +195,7 @@ export async function deleteWorkspace(userId: string, workspaceId: string): Prom
     AutomationModel.deleteMany({ workspaceId, userId }),
     AutomationExecutionModel.deleteMany({ workspaceId, userId }),
     ArtifactLineageModel.deleteMany({ userId, taskId: { $in: taskIds } }),
+    SubagentRunModel.deleteMany({ workspaceId, userId }),
     WorkspaceModel.deleteOne({ workspaceId }),
   ]);
   return true;

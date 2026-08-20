@@ -377,6 +377,18 @@
   .approval-history-list span.rejected { color: #8f2f20; }
   .approval-history-list p { margin: 0; overflow: hidden; color: var(--color-muted); font-size: 0.7rem; text-overflow: ellipsis; white-space: nowrap; }
   .approval-history-list small { grid-column: 2; color: var(--color-muted); font-size: 0.62rem; }
+  .subagent-list { display: grid; gap: 0.65rem; margin-top: 0.85rem; }
+  .subagent-row { display: flex; align-items: flex-start; gap: 0.55rem; }
+  .subagent-row > div { min-width: 0; flex: 1; }
+  .subagent-row strong, .subagent-row small, .subagent-row p { display: block; }
+  .subagent-row strong { font-size: 0.72rem; }
+  .subagent-row small { margin-top: 0.15rem; color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6rem; }
+  .subagent-row p { display: -webkit-box; margin: 0.3rem 0 0; overflow: hidden; color: var(--color-muted); font-size: 0.66rem; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .subagent-row p.subagent-error { color: #8f2f20; }
+  .subagent-status { width: 0.42rem; height: 0.42rem; flex: 0 0 auto; margin-top: 0.25rem; border-radius: 50%; background: var(--color-muted); }
+  .subagent-status.completed { background: var(--color-success); }
+  .subagent-status.running, .subagent-status.queued { background: var(--color-accent); }
+  .subagent-status.failed, .subagent-status.cancelled { background: #b03a28; }
   .completion-card { border-color: color-mix(in oklab, var(--color-success) 45%, var(--color-line)); }
   .completion-actions { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.85rem; }
   .completion-hint { color: var(--color-muted); font-family: var(--font-mono); font-size: 0.6rem; }
