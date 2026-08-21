@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 
@@ -268,7 +268,6 @@ function WorkspacePanel({ artifacts, edits, files, tools, preview, activeTab, on
 
 export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }: { taskId: string | null; sessionId: string | null }) {
   const router = useRouter();
-  const pathname = usePathname();
   const [tasks, setTasks] = useState<TaskListItem[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
@@ -532,7 +531,7 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
 
   return (
     <main className="flex h-dvh flex-col overflow-hidden bg-bg md:flex-row">
-      <WorkbenchRail tasks={tasks} activeTaskId={taskId} onNew={newTask} onOpen={(id) => router.push(`/fw/t/${id}`)} />
+      {!(sessionId || taskId) && <WorkbenchRail tasks={tasks} activeTaskId={taskId} onNew={newTask} onOpen={(id) => router.push(`/fw/t/${id}`)} />}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {!sessionId && !taskId ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-12">
@@ -586,7 +585,7 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
         <section className="fw-conversation">
           <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-3">
             <div className="min-w-0">
-              <small className="block text-xs font-semibold uppercase tracking-wide text-ink-3">{pathname === "/fw" ? "新的工作" : selectedWorkspace?.name ?? "任务"}</small>
+              <Link href="/fw" className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-3 hover:text-ink"><Icon name="chevron-left" size={12} />{selectedWorkspace?.name ?? "返回工作台"}</Link>
               <h1 className="truncate text-lg font-semibold tracking-tight">{task?.title ?? snapshot?.session.title ?? "开始一个新任务"}</h1>
             </div>
             <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
@@ -630,12 +629,12 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
           <form className="mt-auto flex flex-col gap-2 border-t border-line px-5 py-3" onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}>
             <Textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={handleKeyDown} placeholder={busy ? "补充要求会在当前步骤完成后处理…" : "继续这条任务…"} rows={3} />
             <FileAttachments files={selectedFiles} onRemove={(index) => setSelectedFiles((current) => current.filter((_, item) => item !== index))} />
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex min-w-0 flex-shrink-0 items-center gap-2">
                 <FilePicker onFiles={(files) => setSelectedFiles((current) => [...current, ...files].slice(0, 10))} />
-                <span className="truncate text-xs text-ink-3">{uploading ? "文件上传中" : busy ? "Agent 正在工作" : "Enter 发送 · Shift+Enter 换行"}</span>
+                <span className="hidden truncate text-xs text-ink-3 sm:inline">{uploading ? "文件上传中" : busy ? "Agent 正在工作" : "Enter 发送 · Shift+Enter 换行"}</span>
               </div>
-              <Button type="submit" disabled={!prompt.trim() || sending || uploading}><Icon name="arrow-up" size={14} />{sending || uploading ? "准备中" : "发送"}</Button>
+              <Button type="submit" className="flex-shrink-0" disabled={!prompt.trim() || sending || uploading}><Icon name="arrow-up" size={14} />{sending || uploading ? "准备中" : "发送"}</Button>
             </div>
           </form>
         </section>
