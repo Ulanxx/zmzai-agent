@@ -4,6 +4,7 @@ import { WorkspaceRevisionModel } from "@/models/workspace-revision";
 import { WorkspaceModel } from "@/models/workspace";
 
 export type ApprovalMode = "ask" | "auto" | "always";
+export const defaultRelayModel = "deepseek-v4-flash";
 
 export type WorkspaceSummary = {
   id: string;
@@ -99,7 +100,7 @@ export async function ensureDefaultWorkspace(userId: string): Promise<void> {
     userId,
     name: "通用",
     description: "默认通用智能体，直接描述任务即可开始。",
-    defaultModel: "gpt-5.6-luna",
+    defaultModel: defaultRelayModel,
     approvalMode: "ask",
     prompt: "",
     steps: 12,
@@ -158,16 +159,33 @@ export async function deleteWorkspace(userId: string, workspaceId: string): Prom
   const { CheckpointModel } = await import("@/models/checkpoint");
   const { ApprovalGrantModel, ApprovalRequestModel } = await import("@/models/approval");
   const { ProjectModel } = await import("@/models/project");
+  const { ProjectArtifactModel } = await import("@/models/project-artifact");
+  const { ProjectContextItemModel } = await import("@/models/project-context-item");
+  const { ProjectMemberModel } = await import("@/models/project-member");
   const { AutomationModel } = await import("@/models/automation");
   const { AutomationExecutionModel } = await import("@/models/automation-execution");
+  const { AutomationWebhookEventModel } = await import("@/models/automation-webhook-event");
   const { ArtifactLineageModel } = await import("@/models/artifact-lineage");
   const { SubagentRunModel } = await import("@/models/subagent-run");
+  const { WideResearchJobModel } = await import("@/models/wide-research-job");
+  const { WorkspaceBudgetPolicyModel } = await import("@/models/workspace-budget-policy");
+  const { WorkspaceUsageEventModel } = await import("@/models/workspace-usage-event");
+  const { ProjectBudgetPolicyModel } = await import("@/models/project-budget-policy");
+  const { ProjectUsageEventModel } = await import("@/models/project-usage-event");
+  const { ProjectRelayUsageReconciliationModel } = await import("@/models/project-relay-usage-reconciliation");
+  const { WorkspaceRelayUsageReconciliationModel } = await import("@/models/workspace-relay-usage-reconciliation");
+  const { SandboxArtifactModel } = await import("@/models/sandbox-artifact");
+  const { WebhookSubscriptionModel } = await import("@/models/webhook-subscription");
+  const { WebhookDeliveryModel } = await import("@/models/webhook-delivery");
+  const { AgentApiKeyModel } = await import("@/models/agent-api-key");
 
   const sessions = await FrameworkSessionModel.find({ workspaceId }).select({ sessionId: 1 }).lean();
   const sessionIds = sessions.map((session) => session.sessionId);
-  const runs = await RunModel.find({ workspaceId, userId }).select({ runId: 1, taskId: 1 }).lean();
+  const runs = await RunModel.find({ workspaceId }).select({ runId: 1, taskId: 1 }).lean();
   const runIds = runs.map((run) => run.runId);
   const taskIds = [...new Set(runs.map((run) => run.taskId))];
+  const projectIds = (await ProjectModel.find({ workspaceId }).select({ projectId: 1 }).lean()).map((project) => project.projectId);
+  const automationIds = (await AutomationModel.find({ workspaceId }).select({ automationId: 1 }).lean()).map((automation) => automation.automationId);
   const artifactRunIds = [...new Set([...sessionIds, ...runIds])];
   await Promise.all(artifactRunIds.map((runId) => deleteRunArtifacts(runId).catch(() => undefined)));
   if (sessionIds.length) {
@@ -184,20 +202,40 @@ export async function deleteWorkspace(userId: string, workspaceId: string): Prom
     CheckpointModel.deleteMany({ runId: { $in: runIds } }),
     ApprovalRequestModel.deleteMany({ taskId: { $in: taskIds } }),
     ApprovalGrantModel.deleteMany({ taskId: { $in: taskIds } }),
-    RunModel.deleteMany({ workspaceId, userId }),
-    TaskModel.deleteMany({ workspaceId, userId }),
+    RunModel.deleteMany({ workspaceId }),
+    TaskModel.deleteMany({ workspaceId }),
+    SandboxArtifactModel.deleteMany({ runId: { $in: runIds } }),
     WorkspaceFileModel.deleteMany({ workspaceId }),
     WorkspaceRevisionModel.deleteMany({ workspaceId }),
     WorkspaceSkillModel.deleteMany({ workspaceId }),
     WorkspacePluginModel.deleteMany({ workspaceId }),
     WorkspaceConnectorModel.deleteMany({ workspaceId }),
-    ProjectModel.deleteMany({ workspaceId, userId }),
-    AutomationModel.deleteMany({ workspaceId, userId }),
-    AutomationExecutionModel.deleteMany({ workspaceId, userId }),
-    ArtifactLineageModel.deleteMany({ userId, taskId: { $in: taskIds } }),
-    SubagentRunModel.deleteMany({ workspaceId, userId }),
+    ProjectModel.deleteMany({ workspaceId }),
+    ProjectArtifactModel.deleteMany({ workspaceId }),
+    ProjectContextItemModel.deleteMany({ workspaceId }),
+    ProjectMemberModel.deleteMany({ workspaceId }),
+    AutomationModel.deleteMany({ workspaceId }),
+    AutomationExecutionModel.deleteMany({ workspaceId }),
+    AutomationWebhookEventModel.deleteMany({ automationId: { $in: automationIds } }),
+    ArtifactLineageModel.deleteMany({ taskId: { $in: taskIds } }),
+    SubagentRunModel.deleteMany({ workspaceId }),
+    WideResearchJobModel.deleteMany({ workspaceId }),
+    WorkspaceBudgetPolicyModel.deleteMany({ workspaceId }),
+    WorkspaceUsageEventModel.deleteMany({ workspaceId }),
+    WorkspaceRelayUsageReconciliationModel.deleteMany({ workspaceId }),
+    ProjectBudgetPolicyModel.deleteMany({ projectId: { $in: projectIds } }),
+    ProjectUsageEventModel.deleteMany({ projectId: { $in: projectIds } }),
+    ProjectRelayUsageReconciliationModel.deleteMany({ projectId: { $in: projectIds } }),
+    WebhookDeliveryModel.deleteMany({ workspaceId }),
+    WebhookSubscriptionModel.deleteMany({ workspaceId }),
     WorkspaceModel.deleteOne({ workspaceId }),
   ]);
+  const scopedKeys = await AgentApiKeyModel.find({ workspaceIds: workspaceId }).select({ agentApiKeyId: 1, workspaceIds: 1 }).lean();
+  for (const key of scopedKeys) {
+    const remaining = key.workspaceIds.filter((id) => id !== workspaceId);
+    if (remaining.length) await AgentApiKeyModel.updateOne({ agentApiKeyId: key.agentApiKeyId }, { $set: { workspaceIds: remaining } });
+    else await AgentApiKeyModel.deleteOne({ agentApiKeyId: key.agentApiKeyId });
+  }
   return true;
 }
 

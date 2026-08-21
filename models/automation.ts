@@ -5,6 +5,8 @@ const automationSchema = new Schema(
     automationId: { type: String, required: true, unique: true, immutable: true },
     userId: { type: String, required: true, immutable: true, index: true },
     workspaceId: { type: String, required: true, immutable: true, index: true },
+    projectId: { type: String, default: null, immutable: true, index: true },
+    sourceTaskId: { type: String, default: null, immutable: true, index: true },
     name: { type: String, required: true, trim: true, maxlength: 160 },
     goal: { type: String, required: true, maxlength: 32 * 1024 },
     schedule: { type: String, default: "手动运行", maxlength: 120 },
@@ -18,6 +20,8 @@ const automationSchema = new Schema(
     lastRunId: { type: String, default: null },
     schedulerLeaseOwner: { type: String, default: null },
     schedulerLeaseExpiresAt: { type: Date, default: null },
+    webhookSecret: { type: String, default: null, select: false },
+    webhookSecretPrefix: { type: String, default: null, maxlength: 24 },
   },
   { strict: "throw", timestamps: true },
 );

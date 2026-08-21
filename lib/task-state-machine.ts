@@ -7,6 +7,8 @@ export type RunStatus = (typeof runStatuses)[number];
 export const activeRunStatuses = ["created", "running", "waiting_input", "waiting_approval", "paused"] as const;
 export const terminalRunStatuses = ["succeeded", "failed", "cancelled"] as const;
 
+export type ContinuationAction = "resume" | "retry" | "follow_up";
+
 const runTransitions: Record<RunStatus, readonly RunStatus[]> = {
   created: ["running", "cancelled"],
   running: ["waiting_input", "waiting_approval", "paused", "succeeded", "failed", "cancelled"],
@@ -31,6 +33,18 @@ export function isActiveRunStatus(status: RunStatus): boolean {
 
 export function isTerminalRunStatus(status: RunStatus): boolean {
   return (terminalRunStatuses as readonly string[]).includes(status);
+}
+
+/** A continuation must never replace a live executor. Paused and explicit
+ * waiting-input runs are inert; all other active states require pause/cancel
+ * or lease recovery before a new Run can be created. */
+export function canStartContinuationRun(action: ContinuationAction, status: RunStatus): boolean {
+  if (action === "resume") return status === "paused" || status === "waiting_input";
+  return isTerminalRunStatus(status);
+}
+
+export function canSupersedeActiveRun(status: RunStatus): boolean {
+  return status === "paused" || status === "waiting_input";
 }
 
 export function canTransitionRun(from: RunStatus, to: RunStatus): boolean {

@@ -19,7 +19,7 @@ const workspacePluginSchema = new Schema(
     mcpServers: { type: Schema.Types.Mixed, required: true, default: {} },
     errors: { type: [String], required: true, default: [] },
   },
-  { strict: "throw", timestamps: true },
+  { strict: "throw", timestamps: true, suppressReservedKeysWarning: true },
 );
 
 workspacePluginSchema.index({ workspaceId: 1, repository: 1, commitSha: 1, path: 1 }, { unique: true });

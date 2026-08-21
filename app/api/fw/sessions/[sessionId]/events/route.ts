@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { subscribeFrameworkEvents } from "@/framework/core/events/bus";
 import { defaultStore } from "@/framework/core/runtime/runner";
+import { getSessionProjectAccess } from "@/lib/project-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ ses
   if (!user) return new Response("UNAUTHENTICATED", { status: 401 });
   const { sessionId } = await context.params;
   const session = await defaultStore.getSession(sessionId);
-  if (!session || session.userId !== user.id) return new Response("SESSION_NOT_FOUND", { status: 404 });
+  if (!session || (session.userId !== user.id && !(await getSessionProjectAccess(sessionId, user.id)))) return new Response("SESSION_NOT_FOUND", { status: 404 });
 
   const sinceParam = request.nextUrl.searchParams.get("since");
   const sinceSeq = sinceParam ? Number.parseInt(sinceParam, 10) : 0;

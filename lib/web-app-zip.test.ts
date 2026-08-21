@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import JSZip from "jszip";
 
 import { buildWebAppZip, isWebAppArtifactSet } from "@/lib/web-app-zip";
+import { selectWebAppSourceFiles } from "@/lib/web-app-artifact";
 
 describe("web_app zip delivery", () => {
   it("requires index.html", () => {
@@ -19,5 +20,15 @@ describe("web_app zip delivery", () => {
     const loaded = await JSZip.loadAsync(zip);
     expect(Object.keys(loaded.files).sort()).toEqual(["app.js", "index.html", "styles.css"]);
     expect(await loaded.file("index.html")?.async("string")).toBe("<main>Revenue</main>");
+  });
+
+  it("selects direct Workspace web files and excludes unrelated source data", () => {
+    expect(selectWebAppSourceFiles([
+      { path: "index.html", content: "<html></html>" },
+      { path: "styles.css", content: "body{}" },
+      { path: "app.js", content: "console.log(1)" },
+      { path: "sales.csv", content: "date,revenue" },
+      { path: "notes.md", content: "internal notes" },
+    ]).map((file) => file.path)).toEqual(["index.html", "styles.css", "app.js"]);
   });
 });

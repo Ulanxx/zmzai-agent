@@ -12,6 +12,8 @@ const runSchema = new Schema(
     status: { type: String, enum: ["created", "running", "waiting_input", "waiting_approval", "paused", "succeeded", "failed", "cancelled"], required: true, default: "created" },
     // Explicitly indexed so Mongo can enforce one non-terminal Run per Task.
     active: { type: Boolean, required: true, default: true },
+    budgetReserved: { type: Boolean, required: true, default: false },
+    workspaceBudgetReserved: { type: Boolean, required: true, default: false },
     attempt: { type: Number, required: true, min: 1, default: 1 },
     terminalReason: { type: String, default: null, maxlength: 2_000 },
     startedAt: { type: Date, default: null },

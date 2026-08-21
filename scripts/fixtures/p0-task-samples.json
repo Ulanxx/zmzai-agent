@@ -1,0 +1,42 @@
+[
+  {
+    "id": "file-analysis",
+    "kind": "file_analysis",
+    "title": "销售文件分析",
+    "goal": "读取 sales.csv，概括各区域营收和订单表现，说明最高营收区域与可行动建议。",
+    "fixtureFiles": ["sales.csv"],
+    "expect": { "finalResponse": true, "artifact": false, "approval": false }
+  },
+  {
+    "id": "web-app",
+    "kind": "web_app",
+    "title": "活动落地页",
+    "goal": "生成一个可直接打开的活动介绍网页，包含标题、三项活动信息、报名按钮和移动端布局。",
+    "fixtureFiles": [],
+    "expect": { "finalResponse": true, "artifact": "web_app", "qualityCheck": true, "approval": false }
+  },
+  {
+    "id": "code-change",
+    "kind": "code_change",
+    "title": "代码修改与验证",
+    "goal": "修改 greeting.ts，让 greeting 接受可选称呼并保持原有调用可用；运行对应检查并说明改动。",
+    "fixtureFiles": ["greeting.ts"],
+    "expect": { "finalResponse": true, "artifact": false, "qualityCheck": true, "approval": true }
+  },
+  {
+    "id": "data-dashboard",
+    "kind": "data_dashboard",
+    "title": "CSV 数据看板",
+    "goal": "读取 sales.csv，生成一个展示总营收、总订单和各区域营收的网页看板，并通过桌面与移动端质量检查。",
+    "fixtureFiles": ["sales.csv"],
+    "expect": { "finalResponse": true, "artifact": "web_app", "qualityCheck": true, "approval": false }
+  },
+  {
+    "id": "long-research",
+    "kind": "long_research",
+    "title": "长任务调研",
+    "goal": "对三个候选产品进行分工调研，比较公开定价、核心能力和适用场景，输出带来源链接的结论与推荐。",
+    "fixtureFiles": [],
+    "expect": { "finalResponse": true, "artifact": "report", "subagents": true, "approval": false }
+  }
+]

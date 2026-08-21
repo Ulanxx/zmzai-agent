@@ -5,6 +5,7 @@ const rulesetSchema = new Schema(
     permission: { type: String, required: true },
     pattern: { type: String, required: true },
     action: { type: String, required: true, enum: ["allow", "deny", "ask"] },
+    expiresAt: { type: String, required: false },
   },
   { _id: false },
 );

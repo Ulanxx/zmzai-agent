@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
-import { Badge, Button, IconButton, Icon, Input, ModelSelector, MovingBorder, Navbar, navItemClass, Select as ThemeSelect, SelectTrigger, SelectValue, SelectContent, SelectItem, Tabs, Textarea, type ModelSelectorData, type ModelSelectorValue } from "@zmzai/theme";
+import { Badge, Button, IconButton, Icon, Input, MovingBorder, Navbar, navItemClass, Select as ThemeSelect, SelectTrigger, SelectValue, SelectContent, SelectItem, Tabs, Textarea } from "@zmzai/theme";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
   fwApi,
@@ -52,12 +52,12 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   const router = useRouter();
   const pathname = usePathname();
   const { snapshot, live, loading, loadError } = useFrameworkSession(sessionId);
-  const [modelSelectorData, setModelSelectorData] = useState<ModelSelectorData | null>(null);
-  const [modelValue, setModelValue] = useState<ModelSelectorValue>({ model: "" });
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
-  const model = modelValue.model;
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const model = snapshot?.session.model.modelId ?? workspaces.find((workspace) => workspace.id === workspaceId)?.defaultModel ?? "deepseek-v4-flash";
   const [sending, setSending] = useState(false);
   const [replying, setReplying] = useState(false);
   const [canvasTab, setCanvasTab] = useState<CanvasTab>("artifacts");
@@ -65,6 +65,7 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
   const [actionError, setActionError] = useState<string | null>(null);
   const [user, setUser] = useState<{ name: string; email: string } | null>(null);
   const [creatingWs, setCreatingWs] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
   // 首页最近任务（跨 workspace）。
   const [recentSessions, setRecentSessions] = useState<SessionInfo[]>([]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -88,10 +89,8 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
     router.refresh();
   }, [router]);
 
-  const createWorkspace = useCallback(async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const name = String(form.get("name") ?? "").trim();
+  const createWorkspace = useCallback(async () => {
+    const name = newWorkspaceName.trim();
     if (!name || !model) return;
     setCreatingWs(false);
     try {
@@ -105,26 +104,25 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
       if (body.workspace) {
         setWorkspaces((current) => [body.workspace!, ...current]);
         setWorkspaceId(body.workspace.id);
+        setNewWorkspaceName("");
       }
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : "创建 Workspace 失败");
     }
-  }, [model]);
+  }, [model, newWorkspaceName]);
 
-  // Bootstrap: agents, models, workspaces, and this workspace's session list.
+  // Bootstrap: workspaces and the current workspace's session list. The model
+  // is a workspace policy, not a first-task decision users need to make.
   useEffect(() => {
     void (async () => {
-      const [modelResult, workspaceResult] = await Promise.allSettled([
-        fetch("/api/models", { cache: "no-store" }).then((r) => r.ok ? r.json() as Promise<{ modelSelectorData: ModelSelectorData }> : Promise.reject(new Error("failed"))),
-        fetchList<WorkspaceSummary>("/api/workspaces", "workspaces"),
-      ]);
-      if (modelResult.status === "fulfilled") setModelSelectorData(modelResult.value.modelSelectorData);
-      if (workspaceResult.status === "fulfilled") {
-        setWorkspaces(workspaceResult.value);
-        const first = workspaceResult.value[0];
+      const workspaceResult = await Promise.allSettled([fetchList<WorkspaceSummary>("/api/workspaces", "workspaces")]);
+      const result = workspaceResult[0];
+      if (result?.status === "fulfilled") {
+        setWorkspaces(result.value);
+        const first = result.value[0];
         if (first) setWorkspaceId((current) => current ?? first.id);
       } else {
-        setActionError(workspaceResult.reason instanceof Error ? workspaceResult.reason.message : "无法加载智能体列表");
+        setActionError(result?.status === "rejected" && result.reason instanceof Error ? result.reason.message : "无法加载智能体列表");
       }
     })();
   }, []);
@@ -142,19 +140,6 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
     if (id) queueMicrotask(() => setWorkspaceId(id));
   }, [snapshot?.session.workspaceId]);
 
-  // Initialize the model once models/workspace are known. Works for BOTH a new
-  // session (no snapshot yet — was broken before: model stayed "" so send()
-  // silently no-oped) and an existing session (restore its pinned model).
-  useEffect(() => {
-    if (!modelSelectorData || model) return;
-    queueMicrotask(() => {
-      const workspace = workspaces.find((item) => item.id === workspaceId);
-      const allModels = modelSelectorData.channels.flatMap((ch: { models: { id: string }[] }) => ch.models);
-      const initial = snapshot?.session.model.modelId || workspace?.defaultModel || modelSelectorData.featured[0]?.id || allModels[0]?.id || "";
-      if (initial) setModelValue({ model: initial });
-    });
-  }, [snapshot, modelSelectorData, workspaces, model, workspaceId]);
-
   // Auto-scroll the conversation while following.
   useEffect(() => {
     const element = scrollRef.current;
@@ -163,8 +148,19 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
 
   const send = useCallback(async () => {
     const text = prompt.trim();
-    if (!text || sending) return;
+    if (!text || sending || uploading) return;
     setActionError(null);
+
+    const files = selectedFiles;
+    const upload = async (id: string) => {
+      if (!files.length) return;
+      setUploading(true);
+      try {
+        for (const file of files) await fwApi.uploadFile(id, file);
+      } finally {
+        setUploading(false);
+      }
+    };
 
     // No session yet: create one bound to the workspace (§13.1), carrying the
     // first prompt so the runner starts immediately.
@@ -172,8 +168,13 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
       if (!workspaceId || !model) return;
       setSending(true);
       try {
-        const result = await fwApi.createSession({ workspaceId, model: { providerId: "relay", modelId: model }, prompt: text });
+        const result = await fwApi.createSession({ workspaceId, model: { providerId: "relay", modelId: model }, ...(files.length ? {} : { prompt: text }) });
+        if (files.length) {
+          await upload(result.session.id);
+          await fwApi.prompt(result.session.id, { text });
+        }
         setPrompt("");
+        setSelectedFiles([]);
         router.push(`/fw/s/${result.session.id}`);
       } catch (cause) {
         setActionError(cause instanceof Error ? cause.message : "无法创建会话");
@@ -185,14 +186,16 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
 
     setSending(true);
     try {
+      await upload(snapshot.session.id);
       await fwApi.prompt(snapshot.session.id, { text });
       setPrompt("");
+      setSelectedFiles([]);
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : "发送失败");
     } finally {
       setSending(false);
     }
-  }, [prompt, sending, snapshot, workspaceId, model, router]);
+  }, [prompt, sending, uploading, selectedFiles, snapshot, workspaceId, model, router]);
 
   const replyPermission = useCallback(
     async (reply: Reply, feedback?: string) => {
@@ -283,10 +286,11 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
             <h1 className="text-3xl font-semibold tracking-tight">今天想做些什么？</h1>
             <div className="flex flex-wrap justify-center gap-2" aria-label="快捷任务">
               {[
-                { label: "生成 PPT", prompt: "帮我生成一份 10 页的季度汇报 PPT，包含封面、目录、核心数据、总结" },
-                { label: "写文档", prompt: "帮我写一份产品需求文档（PRD），包含背景、目标、功能点、验收标准" },
-                { label: "数据分析", prompt: "分析当前 Workspace 里的数据文件，给出关键指标和趋势总结" },
-                { label: "深度研究", prompt: "深度研究一个主题：先列出大纲，再逐节展开，最后给出参考资料" },
+                { label: "分析文件", prompt: "分析我上传的文件，提取关键信息、风险和下一步建议，并生成可下载摘要。" },
+                { label: "生成网页", prompt: "根据我的需求生成一个可预览的静态网页，并完成质量检查。" },
+                { label: "修改代码", prompt: "检查当前 Workspace 的代码，完成指定修改并说明验证结果。" },
+                { label: "数据看板", prompt: "分析当前 Workspace 里的数据文件，生成可预览的数据看板并完成质量检查。" },
+                { label: "研究主题", prompt: "研究一个主题：先列出大纲，再逐节给出结论、依据和待确认事项。" },
               ].map((task) => (
                 <Button key={task.label} type="button" variant="secondary" size="sm" onClick={() => setPrompt(task.prompt)}>
                   {task.label}
@@ -319,13 +323,6 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
                   )) : <SelectItem value="">请先创建智能体</SelectItem>}
                 </SelectContent>
               </ThemeSelect>
-              <ModelSelector
-                data={modelSelectorData ?? { featured: [], channels: [] }}
-                value={modelValue}
-                onChange={(v: ModelSelectorValue) => { setModelValue(v); }}
-                placeholder="选择模型"
-                searchable
-              />
               <IconButton size="md" label="新建智能体" onClick={() => setCreatingWs((value) => !value)}>
                 <Icon name="plus" size={14} />
               </IconButton>
@@ -334,16 +331,10 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               </IconButton>
             </div>
             {creatingWs && (
-              <form
-                className="mb-3 flex gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void createWorkspace(event);
-                }}
-              >
-                <Input name="name" autoFocus maxLength={120} placeholder="智能体名称" className="min-w-0 flex-1" />
-                <Button type="submit" size="sm">创建</Button>
-              </form>
+              <div className="mb-3 flex gap-2">
+                <Input value={newWorkspaceName} onChange={(event) => setNewWorkspaceName(event.target.value)} autoFocus maxLength={120} placeholder="智能体名称" className="min-w-0 flex-1" />
+                <Button type="button" size="sm" disabled={!newWorkspaceName.trim() || !model} onClick={() => void createWorkspace()}>创建</Button>
+              </div>
             )}
             <Textarea
               ref={textareaRef}
@@ -460,15 +451,6 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               void send();
             }}
           >
-            <div className="mb-2 flex gap-2">
-              <ModelSelector
-                data={modelSelectorData ?? { featured: [], channels: [] }}
-                value={modelValue}
-                onChange={(v: ModelSelectorValue) => { setModelValue(v); }}
-                placeholder="选择模型"
-                className="h-8 text-xs"
-              />
-            </div>
             <Textarea
               ref={textareaRef}
               value={prompt}
@@ -478,15 +460,22 @@ export function FrameworkWorkbench({ sessionId }: { sessionId: string | null }) 
               rows={3}
               className="w-full resize-none px-4 py-3"
             />
+            {selectedFiles.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5" aria-label="待上传文件">{selectedFiles.map((file) => <span key={`${file.name}-${file.size}-${file.lastModified}`} className="inline-flex max-w-full items-center gap-1 rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink-2"><Icon name="book" size={12} />{file.name}</span>)}</div>}
             <div className="mt-2 flex items-center justify-between">
-              <span className="text-xs text-ink-3">{busy ? (queuedCount > 0 ? `执行中 · ${queuedCount} 条排队` : "执行中") : "就绪"}</span>
+              <div className="flex items-center gap-2">
+                <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-line px-2 py-1 text-xs text-ink-2 hover:bg-surface-2" title="添加文件">
+                  <Icon name="plus" size={12} />添加文件
+                  <input type="file" multiple accept=".txt,.md,.csv,.json,.ts,.tsx,.js,.jsx,.css,.html,.xml,.yaml,.yml" className="sr-only" onChange={(event) => { const files = Array.from(event.target.files ?? []); setSelectedFiles((current) => [...current, ...files].slice(0, 10)); event.target.value = ""; }} />
+                </label>
+                <span className="text-xs text-ink-3">{uploading ? "上传中…" : busy ? (queuedCount > 0 ? `执行中 · ${queuedCount} 条排队` : "执行中") : "就绪"}</span>
+              </div>
               {busy ? (
                 <Button type="button" variant="secondary" size="sm" onClick={() => void stop()}>
                   停止
                 </Button>
               ) : (
-                <Button type="submit" size="sm" disabled={!prompt.trim() || sending || (!snapshot && !workspaceId)}>
-                  {sending ? "发送中…" : busy ? "排队" : "发送 →"}
+                <Button type="submit" size="sm" disabled={!prompt.trim() || sending || uploading || (!snapshot && !workspaceId)}>
+                  {sending || uploading ? "准备中…" : busy ? "排队" : "发送 →"}
                 </Button>
               )}
             </div>

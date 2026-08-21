@@ -9,7 +9,7 @@ const automationExecutionSchema = new Schema(
     taskId: { type: String, required: true, immutable: true },
     runId: { type: String, required: true, immutable: true },
     sessionId: { type: String, required: true, immutable: true },
-    source: { type: String, enum: ["manual", "schedule", "webhook"], required: true },
+    source: { type: String, enum: ["manual", "schedule", "webhook", "slack", "email"], required: true },
     status: { type: String, enum: ["queued", "running", "succeeded", "failed", "cancelled"], required: true, default: "queued" },
     error: { type: String, default: null, maxlength: 2_000 },
     startedAt: { type: Date, default: null },

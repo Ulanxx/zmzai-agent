@@ -18,6 +18,8 @@ const environmentSchema = z.object({
   SANDBOX_AGENT_URL: z.string().url().default("https://z.zmzai.cloud"),
   SANDBOX_AGENT_SERVICE_SECRET_CURRENT: optionalString,
   AUTOMATION_SCHEDULER_SECRET: optionalString,
+  GITHUB_OAUTH_CLIENT_ID: optionalString,
+  GITHUB_OAUTH_CLIENT_SECRET: optionalString,
 });
 
 export type ServerEnvironment = z.infer<typeof environmentSchema>;

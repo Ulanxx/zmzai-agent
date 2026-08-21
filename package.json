@@ -10,7 +10,10 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "scheduler:tick": "node scripts/scheduler-tick.mjs",
+    "verify:sandbox-contract": "node --env-file=.env.local scripts/verify-sandbox-contract.mjs",
+    "verify:p0-fixtures": "node scripts/verify-p0-fixtures.mjs"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "0.84.1",
@@ -51,5 +54,6 @@
   },
   "optionalDependencies": {
     "@next/swc-linux-x64-gnu": "15.5.21"
-  }
+  },
+  "packageManager": "pnpm@10.34.5+sha512.a4ee05f2f73658255bd6a89859c065a45c28a57daefae2c893a168ee2b73168c37b91e83e57ea67654ad03f03031746430e8bce38e362e042605fb8abc80192e"
 }

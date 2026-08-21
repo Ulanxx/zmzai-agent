@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { importGithubSkill } from "@/lib/github-skills";
 import { WorkspaceSkillModel } from "@/models/workspace-skill";
@@ -51,5 +51,29 @@ export async function addGithubWorkspaceSkill(input: { userId: string; workspace
   const existing = await WorkspaceSkillModel.findOne({ workspaceId: input.workspaceId, repository: imported.repository, commitSha: imported.commitSha, path: imported.path }).lean();
   if (existing) return { skill: summary(existing), reused: true };
   const skill = await WorkspaceSkillModel.create({ skillId: `skl_${randomUUID()}`, userId: input.userId, workspaceId: input.workspaceId, ...imported });
+  return { skill: summary(skill), reused: false };
+}
+
+/** Save a successful task as a pinned local skill. Local skills use a content
+ * hash as their immutable version boundary, matching imported GitHub skills. */
+export async function addTaskWorkspaceSkill(input: { userId: string; workspaceId: string; taskId: string; name: string; description: string; markdown: string }): Promise<{ skill: WorkspaceSkillSummary; reused: boolean }> {
+  const markdown = input.markdown.trim();
+  const commitSha = createHash("sha256").update(markdown).digest("hex").slice(0, 40);
+  const repository = "zmzai/task";
+  const path = `tasks/${input.taskId}.md`;
+  const existing = await WorkspaceSkillModel.findOne({ workspaceId: input.workspaceId, repository, commitSha, path }).lean();
+  if (existing) return { skill: summary(existing), reused: true };
+  const skill = await WorkspaceSkillModel.create({
+    skillId: `skl_${randomUUID()}`,
+    userId: input.userId,
+    workspaceId: input.workspaceId,
+    name: input.name,
+    description: input.description,
+    repository,
+    requestedRef: input.taskId,
+    commitSha,
+    path,
+    markdown,
+  });
   return { skill: summary(skill), reused: false };
 }

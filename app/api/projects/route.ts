@@ -9,6 +9,7 @@ import { IdempotencyError, claimIdempotency } from "@/lib/idempotency";
 import { getWorkspace } from "@/lib/workspaces";
 import { TaskModel } from "@/models/task";
 import { ProjectModel } from "@/models/project";
+import { ProjectMemberModel } from "@/models/project-member";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,11 +20,13 @@ export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return unauthenticated();
   const workspaceId = request.nextUrl.searchParams.get("workspaceId")?.trim();
-  const query: Record<string, unknown> = { userId: user.id };
+  const memberships = await ProjectMemberModel.find({ userId: user.id }).select({ projectId: 1 }).lean();
+  const memberProjectIds = memberships.map((membership) => membership.projectId);
+  const query: Record<string, unknown> = memberProjectIds.length ? { $or: [{ userId: user.id }, { projectId: { $in: memberProjectIds } }] } : { userId: user.id };
   if (workspaceId) query.workspaceId = workspaceId;
   const projects = await ProjectModel.find(query).sort({ updatedAt: -1 }).lean();
   const projectIds = projects.map((project) => project.projectId);
-  const tasks = projectIds.length ? await TaskModel.find({ userId: user.id, projectId: { $in: projectIds } }).select({ taskId: 1, projectId: 1, status: 1, title: 1, updatedAt: 1 }).sort({ updatedAt: -1 }).lean() : [];
+  const tasks = projectIds.length ? await TaskModel.find({ projectId: { $in: projectIds } }).select({ taskId: 1, projectId: 1, status: 1, title: 1, updatedAt: 1 }).sort({ updatedAt: -1 }).lean() : [];
   const byProject = new Map<string, typeof tasks>();
   for (const task of tasks) if (task.projectId) byProject.set(task.projectId, [...(byProject.get(task.projectId) ?? []), task]);
   return NextResponse.json({ projects: projects.map((project) => ({ project, tasks: byProject.get(project.projectId) ?? [] })) }, { headers: { "cache-control": "no-store" } });

@@ -96,6 +96,17 @@ export function mergeToolCallName(current: string, incoming: string): string {
   return `${current}${incoming}`;
 }
 
+/** Preserve malformed arguments for the framework's prepareArguments hook.
+ * Replacing a partial JSON string with {} loses the only recoverable signal. */
+export function parseToolCallArguments(raw: string): unknown {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed;
+  } catch {
+    return raw;
+  }
+}
+
 type OpenAiChunk = {
   choices?: Array<{
     delta?: {
@@ -292,9 +303,8 @@ function streamFromRelay(model: Model<Api>, context: Context, options: SimpleStr
         }
       }
       for (const call of toolCalls.values()) {
-        let argumentsValue: Record<string, unknown> = {};
-        try { argumentsValue = JSON.parse(call.arguments) as Record<string, unknown>; } catch { /* Pi will surface the invalid tool call as an error. */ }
-        const toolCall = { type: "toolCall" as const, id: call.id, name: call.name, arguments: argumentsValue };
+        const argumentsValue = parseToolCallArguments(call.arguments);
+        const toolCall = { type: "toolCall" as const, id: call.id, name: call.name, arguments: argumentsValue as Record<string, unknown> };
         partial.content.push(toolCall);
         stream.push({ type: "toolcall_end", contentIndex: partial.content.length - 1, toolCall, partial });
       }

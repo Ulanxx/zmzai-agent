@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import { maxRunArtifactTotalBytes, storeArtifactBytes } from "@/lib/artifact-storage";
-import { AgentSandboxError, createAgentSandboxRun, getAgentSandboxRun, getAgentSandboxRunArtifact, getAgentSandboxRunArtifacts, streamAgentSandboxEvents } from "@/lib/sandbox-client";
+import { AgentSandboxError, createAgentSandboxRun, getAgentSandboxRun, getAgentSandboxRunArtifact, getAgentSandboxRunArtifacts, streamAgentSandboxEvents, type SandboxRunStatus } from "@/lib/sandbox-client";
 import type { SandboxCommand, SandboxLimits, SandboxSnapshot } from "@/lib/sandbox-types";
 import { SandboxArtifactModel } from "@/models/sandbox-artifact";
 import { buildWebAppZip, isWebAppArtifactSet } from "@/lib/web-app-zip";
@@ -11,13 +11,52 @@ const maxArtifactBytes = 64 * 1024;
 
 export type SandboxCommandRunResult = {
   ok: boolean;
+  outcome: "succeeded" | "failed" | "unknown";
   exitCode: number | null;
   outputText: string;
   durationMs: number;
   sandboxRunId: string | null;
   errorMessage: string | null;
-  artifacts: Array<{ path: string; bytes: number; contentType: string; sha256: string; tooLarge: boolean; artifactId?: string }>;
+  artifacts: Array<{ path: string; bytes: number; contentType: string; sha256: string; tooLarge: boolean; artifactId?: string; workspaceContent?: string }>;
 };
+
+const syncableArtifactExtensions = new Set(["csv", "css", "html", "js", "json", "jsx", "md", "mjs", "ts", "tsx", "txt", "xml", "yaml", "yml"]);
+
+function workspaceContentFor(path: string, content: Buffer): string | undefined {
+  if (content.length > 512 * 1024) return undefined;
+  const extension = path.split(".").pop()?.toLowerCase() ?? "";
+  if (!syncableArtifactExtensions.has(extension)) return undefined;
+  const text = content.toString("utf8");
+  return Buffer.from(text, "utf8").equals(content) ? text : undefined;
+}
+
+export function classifySandboxOutcome(input: { status?: SandboxRunStatus | null; exitCode?: number | null } | null): SandboxCommandRunResult["outcome"] {
+  if (!input) return "unknown";
+  if (input.status !== "succeeded" && input.status !== "failed" && input.status !== "cancelled") return "unknown";
+  return input.status === "succeeded" && (input.exitCode ?? 0) === 0 ? "succeeded" : "failed";
+}
+
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** An SSE connection can be interrupted while an OpenSandbox command keeps
+ * running. Reconcile its durable run record before declaring the side effect
+ * unknown, so a transient stream failure does not discard completed work. */
+export async function waitForSandboxTerminalRun(runId: string, timeoutMs: number, pollIntervalMs = 500) {
+  const deadline = Date.now() + timeoutMs;
+  let latest = null;
+  do {
+    try {
+      latest = await getAgentSandboxRun(runId);
+      if (classifySandboxOutcome(latest) !== "unknown") return latest;
+    } catch {
+      // Keep polling until the command's declared deadline. The final read
+      // below will preserve the unknown-side-effect safeguard if unavailable.
+    }
+    const remaining = deadline - Date.now();
+    if (remaining > 0) await delay(Math.min(pollIntervalMs, remaining));
+  } while (Date.now() < deadline);
+  return latest;
+}
 
 function basename(path: string): string {
   return path.split("/").pop() ?? "artifact";
@@ -78,12 +117,19 @@ export async function runSandboxCommandAndStream(input: {
     });
     sandboxRunId = created.id;
 
-    await streamAgentSandboxEvents(created.id, (event) => {
-      if (event.type === "sandbox.output" && event.text) pushOutput(event.text);
-    });
+    try {
+      await streamAgentSandboxEvents(created.id, (event) => {
+        if (event.type === "sandbox.output" && event.text) pushOutput(event.text);
+      });
+    } catch {
+      // The durable status record below is authoritative when the SSE
+      // transport is interrupted or temporarily unavailable.
+    }
 
-    const final = await getAgentSandboxRun(created.id);
-    const failed = final?.status === "failed" || final?.status === "cancelled" || (final?.exitCode ?? 0) !== 0;
+    const final = await waitForSandboxTerminalRun(created.id, (input.limits?.timeoutMs ?? 60000) + 10_000);
+    const outcome = classifySandboxOutcome(final);
+    if (outcome === "unknown") return { ok: false, outcome, exitCode: final?.exitCode ?? null, outputText: outputParts.join(""), durationMs: Date.now() - startedAt, sandboxRunId: created.id, artifacts: [], errorMessage: "无法确认 Sandbox 命令的最终状态，请确认后再继续。" };
+    const failed = outcome === "failed";
     const exitCode = final?.exitCode ?? (failed ? 1 : 0);
     const outputText = outputParts.join("");
 
@@ -91,10 +137,10 @@ export async function runSandboxCommandAndStream(input: {
     if (!failed) {
       artifacts = await importDeliverables(input, created.id);
     }
-    return { ok: !failed, exitCode, outputText, durationMs: Date.now() - startedAt, sandboxRunId: created.id, artifacts, errorMessage: failed ? `命令以退出码 ${exitCode} 结束` : null };
+    return { ok: !failed, outcome, exitCode, outputText, durationMs: Date.now() - startedAt, sandboxRunId: created.id, artifacts, errorMessage: failed ? `命令以退出码 ${exitCode} 结束` : null };
   } catch (error) {
     const message = error instanceof AgentSandboxError ? error.message : error instanceof Error ? error.message : "沙箱执行失败";
-    return { ok: false, exitCode: 1, outputText: outputParts.join(""), durationMs: Date.now() - startedAt, sandboxRunId, artifacts: [], errorMessage: message };
+    return { ok: false, outcome: sandboxRunId ? "unknown" : "failed", exitCode: 1, outputText: outputParts.join(""), durationMs: Date.now() - startedAt, sandboxRunId, artifacts: [], errorMessage: sandboxRunId ? "无法确认 Sandbox 命令的最终状态，请确认后再继续。" : message };
   }
 }
 
@@ -138,7 +184,16 @@ async function importDeliverables(input: { userId: string; runId: string; toolCa
     }).catch(() => undefined);
     runTotal += meta.bytes;
     contents.push({ path: meta.path, content: fetched.content });
-    imported.push({ path: meta.path, bytes: meta.bytes, contentType: meta.contentType, sha256: meta.sha256, tooLarge: false, artifactId });
+    const workspaceContent = workspaceContentFor(meta.path, fetched.content);
+    imported.push({
+      path: meta.path,
+      bytes: meta.bytes,
+      contentType: meta.contentType,
+      sha256: meta.sha256,
+      tooLarge: false,
+      artifactId,
+      ...(workspaceContent !== undefined ? { workspaceContent } : {}),
+    });
   }
 
   if (isWebAppArtifactSet(contents) && runTotal < maxRunArtifactTotalBytes) {

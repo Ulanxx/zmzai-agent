@@ -7,7 +7,9 @@ import { getFrameworkRunner } from "@/framework/server/context";
 import { apiError, unauthenticated } from "@/lib/api-error";
 import { getCurrentUser } from "@/lib/auth/session";
 import { IdempotencyError, claimIdempotency } from "@/lib/idempotency";
+import { canRunProject, getProjectAccess } from "@/lib/project-access";
 import { SubagentRunModel } from "@/models/subagent-run";
+import { TaskModel } from "@/models/task";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,11 +18,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ta
   const user = await getCurrentUser();
   if (!user) return unauthenticated();
   const { taskId, subagentRunId } = await context.params;
-  const source = await SubagentRunModel.findOne({ subagentRunId, taskId, userId: user.id }).lean();
+  const source = await SubagentRunModel.findOne({ subagentRunId, taskId }).lean();
   if (!source) return apiError("SUBAGENT_NOT_FOUND", 404, "子任务不存在或无权访问");
+  const task = await TaskModel.findOne({ taskId }).select({ projectId: 1, userId: 1 }).lean();
+  const access = task?.projectId ? await getProjectAccess(task.projectId, user.id) : task?.userId === user.id ? { role: "owner" as const } : null;
+  if (!access || !canRunProject(access.role)) return apiError("SUBAGENT_NOT_FOUND", 404, "子任务不存在或无权访问");
   if (source.status !== "failed") return apiError("SUBAGENT_NOT_RETRYABLE", 409, "只有失败的子任务可以局部重试");
   const parent = await defaultStore.getSession(source.parentSessionId);
-  if (!parent || parent.userId !== user.id) return apiError("PARENT_SESSION_NOT_FOUND", 404, "父任务会话不存在或无权访问");
+  if (!parent) return apiError("PARENT_SESSION_NOT_FOUND", 404, "父任务会话不存在或无权访问");
   let claim;
   try {
     claim = await claimIdempotency({ userId: user.id, scope: "subagent.retry", key: request.headers.get("idempotency-key"), body: { taskId, subagentRunId }, resourceId: `ses_${randomUUID().replaceAll("-", "").slice(0, 20)}` });
@@ -29,13 +34,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ta
     throw error;
   }
   if (claim.replayed) {
-    const existing = await SubagentRunModel.findOne({ childSessionId: claim.resourceId, userId: user.id }).lean();
+    const existing = await SubagentRunModel.findOne({ childSessionId: claim.resourceId }).lean();
     if (existing) return NextResponse.json({ subagent: existing, replayed: true }, { status: 202, headers: { "cache-control": "no-store" } });
   }
   const session = await createFrameworkSession({
     id: claim.resourceId,
     store: defaultStore,
-    userId: user.id,
+    userId: source.userId,
     workspaceId: source.workspaceId,
     parentId: source.parentSessionId,
     agent: source.agent,
@@ -51,7 +56,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ta
     parentRunId: source.parentRunId,
     parentSessionId: source.parentSessionId,
     childSessionId: session.id,
-    userId: user.id,
+    userId: source.userId,
     workspaceId: source.workspaceId,
     agent: source.agent,
     description: source.description,

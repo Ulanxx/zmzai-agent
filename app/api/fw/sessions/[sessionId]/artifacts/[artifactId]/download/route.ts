@@ -5,6 +5,8 @@ import { openArtifactStream } from "@/lib/artifact-storage";
 import { getCurrentUser } from "@/lib/auth/session";
 import { defaultStore } from "@/framework/core/runtime/runner";
 import { findArtifactForSession } from "@/lib/artifact-access";
+import { getSessionProjectAccess } from "@/lib/project-access";
+import { recordProductMetric } from "@/lib/product-metrics";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,10 +19,14 @@ export async function GET(_: Request, context: { params: Promise<{ sessionId: st
   if (!user) return unauthenticated();
   const { sessionId, artifactId } = await context.params;
   const session = await defaultStore.getSession(sessionId);
-  if (!session || session.userId !== user.id) return apiError("SESSION_NOT_FOUND", 404, "会话不存在或无权访问");
+  if (!session || (session.userId !== user.id && !(await getSessionProjectAccess(sessionId, user.id)))) return apiError("SESSION_NOT_FOUND", 404, "会话不存在或无权访问");
 
-  const artifact = await findArtifactForSession({ artifactId, sessionId, userId: user.id });
+  const artifact = await findArtifactForSession({ artifactId, sessionId, userId: session?.userId ?? user.id });
   if (!artifact || artifact.tooLarge || !artifact.gridFsFileId) return apiError("ARTIFACT_NOT_FOUND", 404, "产物不存在");
+
+  void recordProductMetric({ kind: "artifact_downloaded", userId: user.id, artifactId: artifact.artifactId }).catch((error) => {
+    console.error("record artifact download metric", error);
+  });
 
   const filename = artifact.sandboxPath.split("/").pop() ?? "artifact";
   const stream = openArtifactStream(artifact.gridFsFileId);

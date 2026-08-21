@@ -7,6 +7,7 @@ import { apiError, unauthenticated } from "@/lib/api-error";
 import { IdempotencyError, claimIdempotency } from "@/lib/idempotency";
 import { launchAutomation } from "@/lib/automation-execution";
 import { AutomationModel } from "@/models/automation";
+import { canRunProject, getProjectAccess } from "@/lib/project-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,8 +16,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ au
   const user = await getCurrentUser();
   if (!user) return unauthenticated();
   const { automationId } = await context.params;
-  const automation = await AutomationModel.findOne({ automationId, userId: user.id }).lean();
+  const automation = await AutomationModel.findOne({ automationId }).lean();
   if (!automation) return apiError("AUTOMATION_NOT_FOUND", 404, "自动化不存在或无权访问");
+  const access = automation.projectId ? await getProjectAccess(automation.projectId, user.id) : automation.userId === user.id ? { role: "owner" as const } : null;
+  if (!access || !canRunProject(access.role)) return apiError("AUTOMATION_NOT_FOUND", 404, "自动化不存在或无权访问");
   if (automation.status !== "active") return apiError("AUTOMATION_PAUSED", 409, "自动化已暂停");
   let claim;
   try {

@@ -19,7 +19,7 @@ function toSessionInfo(record: FrameworkSessionRecord): SessionInfo {
     ...(record.agentId ? { agentId: record.agentId } : {}),
     ...(record.agentVersionId ? { agentVersionId: record.agentVersionId } : {}),
     model,
-    permission: (record.permission ?? []).map((rule) => ({ permission: rule.permission, pattern: rule.pattern, action: rule.action })),
+    permission: (record.permission ?? []).map((rule) => ({ permission: rule.permission, pattern: rule.pattern, action: rule.action, ...(rule.expiresAt ? { expiresAt: rule.expiresAt } : {}) })),
     queuedPrompts: (record.queuedPrompts ?? []).map((prompt) => ({
       text: prompt.text,
       ...(prompt.agent ? { agent: prompt.agent } : {}),

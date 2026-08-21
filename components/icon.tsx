@@ -13,6 +13,7 @@ const paths: Record<string, { d: string; fill?: boolean }> = {
   download: { d: "M8 3v7M5 7.5L8 10.5 11 7.5M4 12.5h8" },
   "arrow-down": { d: "M8 3.5v8M5 8.5L8 11.5 11 8.5" },
   refresh: { d: "M13 8a5 5 0 1 1-1.5-3.6M13 3.5v2.8h-2.8" },
+  skip: { d: "M4 4.5v7M7 4.5l5 3.5-5 3.5z", fill: true },
   retry: { d: "M13 8a5 5 0 1 1-1.5-3.6M13 3.5v2.8h-2.8" },
   "chevron-down": { d: "M4 6l4 4 4-4" },
   logout: { d: "M6 4.5h7a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-.5.5H6M8 8h4.5M10.5 6l2 2-2 2" },

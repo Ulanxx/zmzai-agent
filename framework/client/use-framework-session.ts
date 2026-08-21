@@ -36,7 +36,7 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const fwApi = {
   listSessions: (workspaceId?: string) => requestJson<{ sessions: SessionInfo[] }>(`/api/fw/sessions${workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ""}`),
-  createSession: (input: { workspaceId: string; model: { providerId: string; modelId: string }; prompt?: string }) =>
+  createSession: (input: { workspaceId: string; model: { providerId: string; modelId: string }; prompt?: string; taskId?: string }) =>
     requestJson<{ session: SessionInfo; task?: { taskId: string } }>("/api/fw/sessions", {
       method: "POST",
       headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
@@ -49,6 +49,14 @@ export const fwApi = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
     }),
+  uploadFile: (sessionId: string, file: File) => {
+    const body = new FormData();
+    body.set("file", file);
+    return requestJson<{ file: { path: string; bytes: number; revisionId: string } }>(`/api/fw/sessions/${encodeURIComponent(sessionId)}/files`, {
+      method: "POST",
+      body,
+    });
+  },
   abort: (sessionId: string) => requestJson<{ aborted: boolean }>(`/api/fw/sessions/${encodeURIComponent(sessionId)}/abort`, { method: "POST" }),
   replyPermission: (sessionId: string, requestId: string, reply: Reply, feedback?: string) =>
     requestJson<{ resolved: boolean }>(`/api/fw/sessions/${encodeURIComponent(sessionId)}/permissions/${encodeURIComponent(requestId)}`, {
@@ -106,6 +114,10 @@ function liveFromEvents(events: PersistedFrameworkEvent[] | undefined): LiveStat
     }
   }
   return live;
+}
+
+export function latestFrameworkEventSeq(events: Pick<PersistedFrameworkEvent, "seq">[] | undefined): number {
+  return (events ?? []).reduce((latest, event) => Math.max(latest, event.seq), 0);
 }
 
 /** Applies one framework event to the message/part list (spec §8.2 client
@@ -174,6 +186,9 @@ export function useFrameworkSession(sessionId: string | null) {
       .then((result) => {
         if (cancelled) return;
         setSnapshot(result);
+        // The snapshot already contains every event up to this sequence. Start
+        // SSE after it, otherwise the durable history is folded twice.
+        lastSeqRef.current = latestFrameworkEventSeq(result.events);
         setLive(liveFromEvents(result.events));
         setLoading(false);
       })
@@ -210,7 +225,7 @@ export function useFrameworkSession(sessionId: string | null) {
           const status = (frame as { status: SessionStatus }).status;
           // A session error belongs to one run. Once a new run starts, do not
           // keep rendering the previous run's failure under its new response.
-          const errorCleared = status === "running" || status === "waiting_permission" ? { error: null } : {};
+          const errorCleared = status === "running" || status === "waiting_permission" || status === "waiting_input" ? { error: null } : {};
           // Leftover projection folding: while idle, no run is alive, so a
           // pending permission card or in-flight todos are leftovers from an
           // interrupted run — fold them instead of rendering them forever.
@@ -229,7 +244,10 @@ export function useFrameworkSession(sessionId: string | null) {
         if (type === "todo.updated") return { ...current, todos: (frame as { todos: TodoItem[] }).todos };
         if (type === "permission.asked") return { ...current, pendingPermission: (frame as { request: PermissionRequest }).request };
         if (type === "permission.replied") return { ...current, pendingPermission: null };
-        if (type === "artifact.created") return { ...current, artifacts: [...current.artifacts, frame as unknown as ArtifactCard] };
+        if (type === "artifact.created") {
+          const artifact = frame as unknown as ArtifactCard;
+          return current.artifacts.some((item) => item.artifactId === artifact.artifactId) ? current : { ...current, artifacts: [...current.artifacts, artifact] };
+        }
         if (type === "file.edited") return { ...current, edits: [...current.edits, { ...(frame as unknown as Omit<FileEdit, "at">), at: new Date().toISOString() }] };
         return current;
       });

@@ -13,7 +13,10 @@ const approvalRequestSchema = new Schema(
     decidedBy: { type: String, default: null },
     decidedAt: { type: Date, default: null },
     feedback: { type: String, default: null, maxlength: 2_000 },
-    grantId: { type: String, default: null, immutable: true },
+    // The request is created before a user decides whether this is a one-off
+    // or continuing approval. `projectApprovalReply` assigns this exactly
+    // once when an "always" decision creates its grant.
+    grantId: { type: String, default: null },
   },
   { strict: "throw", timestamps: true },
 );

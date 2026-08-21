@@ -15,7 +15,13 @@ type WorkspaceDetail = {
   approvalMode: "ask" | "auto" | "always";
   prompt: string;
   steps: number;
+  skillIds: string[];
+  pluginIds: string[];
 };
+
+type WorkspaceSkill = { id: string; name: string; description: string; repository: string; path: string };
+type WorkspacePlugin = { id: string; name: string; description: string; version: string; skillCount: number; errors: string[] };
+type WorkspaceBudget = { maxConcurrentRuns: number; monthlyTokenBudget: number; usedTokens: number; reservedRuns: number; usagePeriod: string };
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...init, cache: "no-store" });
@@ -36,11 +42,18 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
   const [prompt, setPrompt] = useState("");
   const [steps, setSteps] = useState(12);
   const [approvalMode, setApprovalMode] = useState<"ask" | "auto">("ask");
+  const [skills, setSkills] = useState<WorkspaceSkill[]>([]);
+  const [plugins, setPlugins] = useState<WorkspacePlugin[]>([]);
+  const [repository, setRepository] = useState("");
+  const [sourcePath, setSourcePath] = useState("");
+  const [capabilityBusy, setCapabilityBusy] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [budget, setBudget] = useState<WorkspaceBudget | null>(null);
+  const [budgetBusy, setBudgetBusy] = useState(false);
 
   const remove = useCallback(async () => {
     if (!detail || deleting) return;
@@ -69,8 +82,68 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
     void Promise.all([
       json<{ workspace: WorkspaceDetail }>(`/api/workspaces/${encodeURIComponent(workspaceId)}`).then((body) => applyDetail(body.workspace)),
       fetch("/api/models", { cache: "no-store" }).then((r) => r.ok ? r.json() as Promise<{ modelSelectorData: ModelSelectorData }> : Promise.reject(new Error("failed"))).then((body) => setModelSelectorData(body.modelSelectorData)),
+      json<{ skills: WorkspaceSkill[] }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/skills`).then((body) => setSkills(body.skills)),
+      json<{ plugins: WorkspacePlugin[] }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/plugins`).then((body) => setPlugins(body.plugins)),
+      json<{ budget: WorkspaceBudget }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/budget`).then((body) => setBudget(body.budget)),
     ]).catch((cause) => setError(cause instanceof Error ? cause.message : "无法加载智能体配置"));
   }, [workspaceId, applyDetail]);
+
+  const saveBudget = useCallback(async () => {
+    if (!budget || budgetBusy) return;
+    setBudgetBusy(true);
+    setError(null);
+    try {
+      const result = await json<{ budget: WorkspaceBudget }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/budget`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ maxConcurrentRuns: budget.maxConcurrentRuns, monthlyTokenBudget: budget.monthlyTokenBudget }) });
+      setBudget(result.budget);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "保存预算失败"); }
+    finally { setBudgetBusy(false); }
+  }, [budget, budgetBusy, workspaceId]);
+
+  const updateCapabilities = useCallback(async (patch: Partial<Pick<WorkspaceDetail, "skillIds" | "pluginIds">>) => {
+    const body = await json<{ workspace: WorkspaceDetail }>(`/api/workspaces/${encodeURIComponent(workspaceId)}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) });
+    applyDetail(body.workspace);
+  }, [applyDetail, workspaceId]);
+
+  const toggleCapability = useCallback(async (kind: "skill" | "plugin", id: string, enabled: boolean) => {
+    if (!detail) return;
+    const key = `${kind}:${id}`;
+    setCapabilityBusy(key);
+    setError(null);
+    try {
+      const current = kind === "skill" ? detail.skillIds : detail.pluginIds;
+      const ids = enabled ? [...current, id] : current.filter((value) => value !== id);
+      await updateCapabilities(kind === "skill" ? { skillIds: ids } : { pluginIds: ids });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "更新能力失败");
+    } finally {
+      setCapabilityBusy(null);
+    }
+  }, [detail, updateCapabilities]);
+
+  const importCapability = useCallback(async (kind: "skill" | "plugin") => {
+    if (!repository.trim() || capabilityBusy) return;
+    setCapabilityBusy(`import:${kind}`);
+    setError(null);
+    try {
+      const endpoint = `/api/workspaces/${encodeURIComponent(workspaceId)}/${kind === "skill" ? "skills" : "plugins"}`;
+      const payload = kind === "skill" ? { repository: repository.trim(), path: sourcePath.trim() } : { repository: repository.trim(), path: sourcePath.trim() };
+      const result = await json<{ skill?: WorkspaceSkill; plugin?: WorkspacePlugin }>(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+      if (kind === "skill" && result.skill) {
+        setSkills((current) => current.some((item) => item.id === result.skill!.id) ? current : [result.skill!, ...current]);
+        await updateCapabilities({ skillIds: detail?.skillIds.includes(result.skill.id) ? detail.skillIds : [...(detail?.skillIds ?? []), result.skill.id] });
+      }
+      if (kind === "plugin" && result.plugin) {
+        setPlugins((current) => current.some((item) => item.id === result.plugin!.id) ? current : [result.plugin!, ...current]);
+        await updateCapabilities({ pluginIds: detail?.pluginIds.includes(result.plugin.id) ? detail.pluginIds : [...(detail?.pluginIds ?? []), result.plugin.id] });
+      }
+      setRepository("");
+      setSourcePath("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "导入失败");
+    } finally {
+      setCapabilityBusy(null);
+    }
+  }, [capabilityBusy, detail, repository, sourcePath, updateCapabilities, workspaceId]);
 
   const save = useCallback(async () => {
     if (!detail || saving) return;
@@ -80,7 +153,7 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
       const response = await fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, description, prompt, steps, defaultModel: model, approvalMode }),
+        body: JSON.stringify({ name, description, prompt, steps, defaultModel: model, approvalMode, skillIds: detail.skillIds, pluginIds: detail.pluginIds }),
       });
       const body = (await response.json()) as { workspace?: WorkspaceDetail; error?: string };
       if (!response.ok) throw new Error(body.error ?? "保存失败");
@@ -143,6 +216,22 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
             <span className="eyebrow">智能体</span>
             <strong>{detail.name}</strong>
             <small>创建于 {new Date(detail.id ? "" : "").toLocaleDateString("zh-CN") || "—"}</small>
+          </section>
+          {budget && <section className="workspace-budget-panel">
+            <div className="mb-3 flex items-center justify-between"><div><span className="eyebrow">运行预算</span><strong className="mt-1 block text-ink">Workspace 限制</strong></div><span className="font-mono text-xs text-ink-3">{budget.usagePeriod}</span></div>
+            <div className="workspace-budget-grid"><label>最大并发<input type="number" min="1" max="64" value={budget.maxConcurrentRuns} onChange={(event) => setBudget((current) => current ? { ...current, maxConcurrentRuns: Math.min(64, Math.max(1, Number(event.target.value) || 1)) } : current)} /></label><label>月度 Token 上限<input type="number" min="0" max="1000000000" value={budget.monthlyTokenBudget} onChange={(event) => setBudget((current) => current ? { ...current, monthlyTokenBudget: Math.min(1_000_000_000, Math.max(0, Number(event.target.value) || 0)) } : current)} /></label></div>
+            <div className="workspace-budget-stats"><span>本月已用 <strong>{budget.usedTokens.toLocaleString()}</strong></span><span>当前运行 <strong>{budget.reservedRuns}</strong></span></div>
+            <Button type="button" size="sm" variant="secondary" disabled={budgetBusy} onClick={() => void saveBudget()}><Icon name="check" size={13} />{budgetBusy ? "保存中" : "保存预算"}</Button>
+            <small className="workspace-budget-note">月度上限为 0 表示不限制。项目预算仍可设置更严格的限制。</small>
+          </section>}
+          <section className="mt-5 border-t border-line pt-4 text-sm">
+            <div className="mb-3 flex items-center justify-between"><div><span className="eyebrow">可用能力</span><strong className="mt-1 block text-ink">Skills 与 Plugins</strong></div><span className="font-mono text-xs text-ink-3">{detail.skillIds.length + detail.pluginIds.length} 已启用</span></div>
+            <div className="space-y-2">
+              {skills.map((skill) => <label className="flex cursor-pointer items-start gap-2 border-b border-line pb-2" key={skill.id}><input className="mt-1" type="checkbox" checked={detail.skillIds.includes(skill.id)} disabled={capabilityBusy === `skill:${skill.id}`} onChange={(event) => void toggleCapability("skill", skill.id, event.target.checked)} /><span className="min-w-0 flex-1"><strong className="block truncate text-xs text-ink">{skill.name}</strong><small className="block truncate text-ink-3">{skill.description || `${skill.repository}/${skill.path}`}</small></span></label>)}
+              {plugins.map((plugin) => <label className="flex cursor-pointer items-start gap-2 border-b border-line pb-2" key={plugin.id}><input className="mt-1" type="checkbox" checked={detail.pluginIds.includes(plugin.id)} disabled={capabilityBusy === `plugin:${plugin.id}`} onChange={(event) => void toggleCapability("plugin", plugin.id, event.target.checked)} /><span className="min-w-0 flex-1"><strong className="block truncate text-xs text-ink">{plugin.name}</strong><small className="block truncate text-ink-3">Plugin · {plugin.skillCount} Skills{plugin.version ? ` · v${plugin.version}` : ""}</small></span></label>)}
+              {!skills.length && !plugins.length && <p className="text-xs text-ink-3">还没有导入能力。</p>}
+            </div>
+            <div className="mt-3 grid gap-2"><input value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="owner/repository" aria-label="GitHub 仓库" /><input value={sourcePath} onChange={(event) => setSourcePath(event.target.value)} placeholder="Skill 或 Plugin 路径" aria-label="仓库路径" /><div className="flex gap-2"><Button type="button" size="sm" variant="secondary" disabled={!repository.trim() || !sourcePath.trim() || Boolean(capabilityBusy)} onClick={() => void importCapability("skill")}>导入 Skill</Button><Button type="button" size="sm" variant="secondary" disabled={!repository.trim() || Boolean(capabilityBusy)} onClick={() => void importCapability("plugin")}>导入 Plugin</Button></div></div>
           </section>
           <button type="button" className="agent-back-button" onClick={() => router.push("/fw")}><Icon name="arrow-down" size={12} />返回任务</button>
           <div className="mt-6 border-t border-line pt-4">

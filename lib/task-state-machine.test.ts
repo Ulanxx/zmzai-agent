@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { InvalidRunTransitionError, canTransitionRun, isActiveRunStatus, taskStatusForRun, transitionRun } from "@/lib/task-state-machine";
+import { InvalidRunTransitionError, canStartContinuationRun, canSupersedeActiveRun, canTransitionRun, isActiveRunStatus, taskStatusForRun, transitionRun } from "@/lib/task-state-machine";
 
 describe("Task/Run state machine", () => {
   it("allows only the product-defined Run transitions", () => {
@@ -27,5 +27,16 @@ describe("Task/Run state machine", () => {
     expect(taskStatusForRun("succeeded")).toBe("succeeded");
     expect(taskStatusForRun("failed")).toBe("failed");
     expect(taskStatusForRun("cancelled")).toBe("cancelled");
+  });
+
+  it("only permits continuation after an inert or terminal source Run", () => {
+    expect(canStartContinuationRun("resume", "paused")).toBe(true);
+    expect(canStartContinuationRun("resume", "waiting_input")).toBe(true);
+    expect(canStartContinuationRun("resume", "running")).toBe(false);
+    expect(canStartContinuationRun("retry", "failed")).toBe(true);
+    expect(canStartContinuationRun("follow_up", "succeeded")).toBe(true);
+    expect(canStartContinuationRun("retry", "waiting_approval")).toBe(false);
+    expect(canSupersedeActiveRun("paused")).toBe(true);
+    expect(canSupersedeActiveRun("running")).toBe(false);
   });
 });

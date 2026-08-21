@@ -82,6 +82,7 @@ export function MessageView({ entry: source, hideTools = false, sessionIdle = fa
   const parts = entries.flatMap((item) => item.parts);
   const errorEntry = assistantEntries.find((item) => "error" in item.info && item.info.error);
   const error = errorEntry && "error" in errorEntry.info ? errorEntry.info.error : undefined;
+  const uncertainTool = parts.some((part) => part.type === "tool" && part.state.status === "error" && part.state.metadata?.outcome === "unknown");
   // 把连续的 tool parts 折叠为一组（G1）；其它 part 正常渲染。
   const rendered: ReactNode[] = [];
   let pendingTools: ToolPart[] = [];
@@ -124,6 +125,7 @@ export function MessageView({ entry: source, hideTools = false, sessionIdle = fa
   return (
     <MessageItem role="assistant" avatar="使" name="ZMZAI Agent" status={{ active }} time={timeLabel} noMotion>
       <div className="fw-execution-tree">{rendered}</div>
+      {uncertainTool && <div className="run-unknown-note" role="alert">执行结果暂时无法确认，任务已暂停。请先确认外部动作是否已经生效，再发送消息继续。</div>}
       {error && <div className="run-note">出错了：{error.message}</div>}
     </MessageItem>
   );

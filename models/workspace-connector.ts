@@ -8,7 +8,7 @@ const workspaceConnectorSchema = new Schema(
     workspaceId: { type: String, required: true, immutable: true, index: true },
     userId: { type: String, required: true, immutable: true, index: true },
     name: { type: String, required: true, trim: true, maxlength: 96 },
-    transport: { type: String, required: true, enum: ["streamable-http", "sse"] },
+    transport: { type: String, required: true, enum: ["streamable-http", "sse", "github"] },
     url: { type: String, required: true, maxlength: 2_000 },
     encryptedHeaders: { type: String, required: true, select: false },
     status: { type: String, required: true, enum: ["untested", "ready", "error"], default: "untested" },

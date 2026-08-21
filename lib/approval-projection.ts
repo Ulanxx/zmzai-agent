@@ -19,7 +19,11 @@ function approvalDescription(request: PermissionRequest): string {
 }
 
 function scope(request: PermissionRequest): string[] {
-  return request.patterns.map((pattern) => pattern.slice(0, 512));
+  // `always` is the exact ruleset that PermissionEngine persists after a
+  // continuing approval. Project that scope into the audit grant too, so a
+  // later revoke removes every rule the user actually approved.
+  const granted = request.always.length ? request.always : request.patterns;
+  return [...new Set(granted.map((pattern) => pattern.slice(0, 512)))];
 }
 
 /** Turns ephemeral PermissionEngine requests into task-owned audit records.
@@ -58,7 +62,7 @@ export async function projectApprovalReply(input: { sessionId: string; requestId
   }
   const grantId = input.reply === "always" ? `apg_${randomUUID().replaceAll("-", "").slice(0, 20)}` : null;
   const updated = await ApprovalRequestModel.findOneAndUpdate(
-    { requestId: input.requestId, status: "pending" },
+    { requestId: input.requestId, status: "pending", ...(grantId ? { grantId: null } : {}) },
     { $set: { status: "approved", decidedBy: input.decidedBy ?? request.requesterId, decidedAt: now, feedback: input.feedback?.slice(0, 2_000) ?? null, ...(grantId ? { grantId } : {}) } },
     { new: true },
   ).lean();
@@ -74,7 +78,7 @@ export async function projectApprovalReply(input: { sessionId: string; requestId
         grantedBy: updated.decidedBy ?? updated.requesterId,
         action: updated.action,
         resourceScope: updated.resourceScope,
-        allowContinuation: false,
+        allowContinuation: true,
         expiresAt: new Date(now.getTime() + 24 * 60 * 60_000),
         revokedAt: null,
       },

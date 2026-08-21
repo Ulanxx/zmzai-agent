@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { AutomationModel, type AutomationRecord } from "@/models/automation";
 import { nextScheduledAt } from "@/lib/automation-schedule";
 import { launchAutomation } from "@/lib/automation-execution";
+import { dispatchPendingEmailEvents } from "@/lib/email-queue";
 
 const leaseDurationMs = 5 * 60_000;
 
@@ -51,7 +52,8 @@ export async function dispatchDueAutomations(input: { owner: string; now?: Date;
       results.push({ automationId: automation.automationId, ok: false, error: message });
     }
   }
-  return { claimed: claimed.length, results };
+  const email = await dispatchPendingEmailEvents({ owner: `${input.owner}:email`, now, limit: input.limit });
+  return { claimed: claimed.length, results, email };
 }
 
 export async function initializeAutomationSchedule(automation: { schedule: string; timezone: string }, now = new Date()): Promise<Date | null> {
