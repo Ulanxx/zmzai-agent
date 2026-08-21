@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 
-import { Button, Icon, IconButton } from "@zmzai/theme";
+import { Badge, Button, Card, EmptyState, Icon, IconButton, Navbar, navItemClass } from "@zmzai/theme";
 
 type ResearchSummary = {
   researchJobId: string;
@@ -49,6 +50,13 @@ function statusLabel(status: ResearchDetail["status"] | ResearchDetail["synthesi
   return { queued: "排队中", running: "执行中", succeeded: "已完成", failed: "需要处理" }[status];
 }
 
+function statusVariant(status: "queued" | "running" | "succeeded" | "failed") {
+  if (status === "succeeded") return "success" as const;
+  if (status === "failed") return "danger" as const;
+  if (status === "running") return "accent" as const;
+  return "outline" as const;
+}
+
 function dateLabel(value: string): string {
   return new Date(value).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
@@ -58,6 +66,15 @@ export function ResearchWorkbench({ researchJobId }: { researchJobId: string | n
   const [detail, setDetail] = useState<ResearchDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isNarrow, setIsNarrow] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 48rem)");
+    const update = () => setIsNarrow(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,36 +97,113 @@ export function ResearchWorkbench({ researchJobId }: { researchJobId: string | n
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [researchJobId]);
 
-  return <main className="research-shell">
-    <aside className="research-rail">
-      <div className="task-rail-head"><Link href="/fw" className="task-brand"><span className="task-brand-mark">z</span><span>zmzai</span></Link><IconButton size="md" label="新对话" onClick={() => { window.location.href = "/fw"; }}><Icon name="plus" size={15} /></IconButton></div>
-      <div className="task-rail-section">
-        <span className="task-rail-label">工作</span>
-        <Link href="/fw" className="task-rail-link"><Icon name="message" size={14} />新对话</Link>
-        <Link href="/fw" className="task-rail-link"><Icon name="list" size={14} />任务</Link>
-        <Link href="/fw/research" className="task-rail-link active"><Icon name="search" size={14} />广泛研究</Link>
-        <Link href="/projects" className="task-rail-link"><Icon name="folder" size={14} />项目</Link>
-        <Link href="/artifacts" className="task-rail-link"><Icon name="archive" size={14} />成果</Link>
+  return (
+    <main className="workbench fw-workbench">
+      <Navbar sublabel="agent" badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>}>
+        <Link href="/fw" className={navItemClass(false)} title="返回工作台">
+          <Icon name="chevron-left" size={12} />返回
+        </Link>
+        <Link href="/fw" className={navItemClass(false)}>新任务</Link>
+        <Link href="/fw/research" className={navItemClass(true)}>广泛研究</Link>
+      </Navbar>
+
+      <div className="fw-grid">
+        <div className="fw-main">
+        <PanelGroup
+          key={isNarrow ? "research-split-vertical" : "research-split-horizontal"}
+          direction={isNarrow ? "vertical" : "horizontal"}
+          autoSaveId={isNarrow ? "research-list-detail-split-v" : "research-list-detail-split"}
+        >
+          <Panel defaultSize={38} minSize={24} className="fw-panel">
+            <section className="fw-conversation">
+              <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-3">
+                <div className="min-w-0">
+                  <small className="block text-[10px] font-semibold uppercase tracking-wide text-ink-3">多视角执行</small>
+                  <h1 className="text-lg font-semibold tracking-tight">广泛研究</h1>
+                </div>
+                <Badge variant="outline" size="sm">{items.length} 项</Badge>
+              </div>
+              <div className="conversation-scroll">
+                {error && <div className="mb-3 rounded-sm border-l-2 border-danger bg-danger/10 px-3 py-2 text-sm text-ink" role="alert">{error}</div>}
+                {loading && !items.length ? (
+                  <p className="text-sm text-ink-3">正在加载…</p>
+                ) : items.length ? (
+                  <div className="flex flex-col gap-2">
+                    {items.map((item) => (
+                      <Card key={item.researchJobId} padding="sm" variant={item.researchJobId === researchJobId ? "interactive" : "default"} className={item.researchJobId === researchJobId ? "border-ink" : undefined}>
+                        <Link href={`/fw/research/${item.researchJobId}`} className="block">
+                          <div className="flex items-start justify-between gap-2">
+                            <strong className="min-w-0 text-sm font-medium text-ink">{item.question}</strong>
+                            <Badge variant={statusVariant(item.status)} size="sm">{statusLabel(item.status)}</Badge>
+                          </div>
+                          <small className="mt-1 block text-xs text-ink-3">{item.completedChildren}/{item.childCount} 个角色完成 · {dateLabel(item.updatedAt)}</small>
+                        </Link>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState icon={<Icon name="search" size={24} />} title="还没有研究" description="从一条需要比较、核验或综合的问题开始。" action={<Link href="/fw"><Button variant="secondary" size="sm"><Icon name="plus" size={13} />开始研究</Button></Link>} />
+                )}
+              </div>
+            </section>
+          </Panel>
+          <PanelResizeHandle className="fw-resizer" />
+          <Panel defaultSize={62} minSize={24} className="fw-panel">
+            <aside className="fw-canvas">
+              {detail ? (
+                <div className="fw-canvas-body">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <small className="block text-[10px] font-semibold uppercase tracking-wide text-ink-3">研究详情</small>
+                      <h2 className="truncate text-base font-semibold text-ink">{detail.question}</h2>
+                      <small className="text-xs text-ink-3">{dateLabel(detail.createdAt)} · 并行度 {detail.maxConcurrency}</small>
+                    </div>
+                    <Link href={`/fw/t/${detail.taskId}`}><Button variant="secondary" size="sm"><Icon name="arrow-up-right" size={14} />打开任务</Button></Link>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 rounded-sm border border-line bg-surface p-3">
+                    <div><small className="block text-xs text-ink-3">整体状态</small><Badge variant={statusVariant(detail.status)} size="sm" className="mt-1">{statusLabel(detail.status)}</Badge></div>
+                    <div><small className="block text-xs text-ink-3">研究角色</small><Badge variant="outline" size="sm" className="mt-1">{detail.completedChildren}/{detail.childCount} 完成</Badge></div>
+                    <div><small className="block text-xs text-ink-3">综合结果</small><Badge variant={statusVariant(detail.synthesisStatus)} size="sm" className="mt-1">{statusLabel(detail.synthesisStatus)}</Badge></div>
+                  </div>
+                  {detail.error && (
+                    <div className="flex items-center gap-2 rounded-sm border-l-2 border-danger bg-danger/10 px-3 py-2 text-sm text-ink" role="alert">
+                      <Icon name="warning" size={14} /><span className="min-w-0 flex-1">{detail.error}</span>
+                      <Button type="button" variant="secondary" size="sm" onClick={() => { window.location.href = `/fw/t/${detail.taskId}`; }}><Icon name="refresh" size={13} />去任务处理</Button>
+                    </div>
+                  )}
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <strong className="text-sm font-semibold text-ink">研究角色</strong>
+                      <span className="text-xs text-ink-3">最多 {detail.maxConcurrency} 个并行</span>
+                    </div>
+                    <div className="mt-2 flex flex-col gap-2">
+                      {detail.children.map((child) => (
+                        <Card key={child.runId} padding="sm">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <strong className="block text-sm text-ink">{child.role}</strong>
+                              <small className="text-xs text-ink-3">{statusLabel(child.status)}{child.finishedAt ? ` · ${dateLabel(child.finishedAt)}` : ""}</small>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={statusVariant(child.status)} size="sm">{statusLabel(child.status)}</Badge>
+                              <Link href={`/fw/t/${child.taskId}`} title="打开子任务" className="text-ink-3 hover:text-ink"><Icon name="arrow-up-right" size={14} /></Link>
+                            </div>
+                          </div>
+                          {child.summary && <p className="mt-1 text-sm text-ink-2">{child.summary}</p>}
+                          {child.error && <p className="mt-1 text-sm text-danger">{child.error}</p>}
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <EmptyState icon={<Icon name="search" size={28} />} title="选择一项研究" description="在左侧查看研究进度、角色结果和失败信息。" />
+              )}
+            </aside>
+          </Panel>
+        </PanelGroup>
+        </div>
       </div>
-      <div className="task-rail-foot"><Link href="/audit"><Icon name="activity" size={13} />运行记录</Link></div>
-    </aside>
-    <section className="research-main">
-      <header className="research-header"><div><span className="eyebrow">多视角执行</span><h1>广泛研究</h1><p>每项研究都会保留问题、研究角色、过程状态和最终综合结果。</p></div><Link href="/fw" className="product-action-link"><Icon name="plus" size={14} />新研究</Link></header>
-      {error && <div className="product-error" role="alert">{error}</div>}
-      <div className="research-layout">
-        <section className="research-list" aria-label="研究历史">
-          <div className="research-list-head"><strong>研究历史</strong><span>{items.length}</span></div>
-          {loading && !items.length ? <div className="product-empty">正在加载…</div> : items.length ? items.map((item) => <Link href={`/fw/research/${item.researchJobId}`} className={`research-list-item ${item.researchJobId === researchJobId ? "selected" : ""}`} key={item.researchJobId}><span className={`research-status-dot ${item.status}`} /><span className="research-list-copy"><strong>{item.question}</strong><small>{statusLabel(item.status)} · {item.completedChildren}/{item.childCount} 个角色完成 · {dateLabel(item.updatedAt)}</small></span><Icon name="chevron-right" size={14} /></Link>) : <div className="product-empty"><Icon name="search" size={22} /><strong>还没有研究</strong><p>从一条需要比较、核验或综合的问题开始。</p><Link href="/fw" className="product-action-link">开始研究</Link></div>}
-        </section>
-        <section className="research-detail">
-          {detail ? <>
-            <div className="research-detail-head"><div><span className="eyebrow">研究详情</span><h2>{detail.question}</h2><small>{dateLabel(detail.createdAt)} · 并行度 {detail.maxConcurrency}</small></div><Link href={`/fw/t/${detail.taskId}`} className="product-action-link"><Icon name="arrow-up-right" size={14} />打开任务</Link></div>
-            <div className="research-summary-strip"><div><span>整体状态</span><strong>{statusLabel(detail.status)}</strong></div><div><span>研究角色</span><strong>{detail.completedChildren}/{detail.childCount} 完成</strong></div><div><span>综合结果</span><strong>{statusLabel(detail.synthesisStatus)}</strong></div></div>
-            {detail.error && <div className="research-error"><Icon name="warning" size={14} /><span>{detail.error}</span><Button type="button" variant="secondary" size="sm" onClick={() => { window.location.href = `/fw/t/${detail.taskId}`; }}><Icon name="refresh" size={13} />去任务处理</Button></div>}
-            <div className="research-children"><div className="research-section-title"><strong>研究角色</strong><span>最多 {detail.maxConcurrency} 个并行</span></div>{detail.children.map((child) => <article className="research-child" key={child.runId}><div className="research-child-top"><span className={`research-status-dot ${child.status}`} /><div><strong>{child.role}</strong><small>{statusLabel(child.status)}{child.finishedAt ? ` · ${dateLabel(child.finishedAt)}` : ""}</small></div><Link href={`/fw/t/${child.taskId}`} title="打开子任务"><Icon name="arrow-up-right" size={14} /></Link></div>{child.summary && <p>{child.summary}</p>}{child.error && <p className="research-child-error">{child.error}</p>}</article>)}</div>
-          </> : <div className="research-detail-empty"><Icon name="search" size={28} /><h2>选择一项研究</h2><p>在左侧查看研究进度、角色结果和失败信息。</p></div>}
-        </section>
-      </div>
-    </section>
-  </main>;
+    </main>
+  );
 }
