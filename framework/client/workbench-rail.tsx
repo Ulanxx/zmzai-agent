@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-import { Badge, Button, EmptyState, Icon, IconButton, Logo, Wordmark } from "@zmzai/theme";
+import { Badge, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, Icon, IconButton, Logo, Wordmark } from "@zmzai/theme";
 
 export type RailTask = { task: { taskId: string; title: string; status: "draft" | "active" | "succeeded" | "failed" | "cancelled" }; latestRun: { status: string } | null };
 
@@ -129,17 +129,30 @@ export function WorkbenchRail({ tasks, activeTaskId, onNew, onOpen }: { tasks: R
 
       <div className="border-t border-line px-3 py-3">
         {loggedIn && user ? (
-          <div className="flex items-center gap-2">
-            <span className="grid size-8 place-items-center rounded-sm border border-line bg-bg font-mono text-xs text-ink-2">{user.name.slice(0, 1).toUpperCase()}</span>
-            <span className="min-w-0 flex-1"><strong className="block truncate text-xs font-medium text-ink">{user.name}</strong><small className="block truncate text-[11px] text-ink-3">{user.email}</small></span>
-            <IconButton size="sm" label="退出登录" onClick={() => void logout()}><Icon name="logout" size={13} /></IconButton>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="flex w-full cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-bg" title="用户中心">
+                <span className="grid size-8 place-items-center rounded-sm border border-line bg-bg font-mono text-xs text-ink-2">{user.name.slice(0, 1).toUpperCase()}</span>
+                <span className="min-w-0 flex-1"><strong className="block truncate text-xs font-medium text-ink">{user.name}</strong><small className="block truncate text-[11px] text-ink-3">{user.email}</small></span>
+                <Icon name="chevron-up" size={12} className="text-ink-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top" className="w-56">
+              <DropdownMenuLabel className="font-mono text-[11px] text-ink-3">{user.email}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => window.open("https://zmzai.cloud", "_blank", "noreferrer")}><Icon name="home" size={13} />主站 zmzai.cloud</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => window.open("https://m.zmzai.cloud", "_blank", "noreferrer")}><Icon name="message" size={13} />模型服务 m.zmzai.cloud</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => window.open("https://muzhi.zmzai.cloud", "_blank", "noreferrer")}><Icon name="book" size={13} />课程站 muzhi</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => router.push("/audit")}><Icon name="activity" size={13} />运行记录</DropdownMenuItem>
+              <DropdownMenuItem destructive onSelect={() => void logout()}><Icon name="logout" size={13} />退出登录</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : (
           <a href={process.env.NODE_ENV === "development" ? "/dev/login" : "https://auth.zmzai.cloud/login"} className="flex items-center justify-center gap-2 rounded-md border border-line bg-bg px-3 py-2 text-xs font-medium text-ink hover:bg-surface-2">
             <Icon name="user" size={13} />登录 zmzai cloud
           </a>
         )}
-        <Link href="/audit" className="mt-2 flex items-center gap-2 px-1 text-[11px] text-ink-3 hover:text-ink"><Icon name="activity" size={12} />运行记录</Link>
       </div>
     </aside>
     </>
