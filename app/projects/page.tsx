@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Button, Icon } from "@zmzai/theme";
+import { Badge, Button, Card, EmptyState, Icon, Input, Navbar, Select as ThemeSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@zmzai/theme";
 
 type Workspace = { id: string; name: string };
 type Project = { projectId: string; workspaceId: string; name: string; description: string; instructions: string; updatedAt: string };
@@ -16,6 +16,9 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
   if (!response.ok) throw new Error(body && typeof body === "object" && body !== null && "error" in body ? String(body.error) : "请求失败");
   return body as T;
 }
+
+const taskStatusVariant = (status: string): "success" | "danger" | "accent" | "outline" => (status === "succeeded" ? "success" : status === "failed" ? "danger" : status === "active" || status === "running" ? "accent" : "outline");
+const taskStatusLabel = (status: string) => ({ succeeded: "已完成", failed: "需要处理", active: "进行中", draft: "草稿", cancelled: "已取消" }[status] ?? status);
 
 export default function ProjectsPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -54,10 +57,62 @@ export default function ProjectsPage() {
     finally { setCreating(false); }
   };
 
-  return <main className="product-page">
-    <header className="product-page-head"><div><Link href="/fw" className="product-back"><Icon name="arrow-left" size={14} />返回工作台</Link><span className="eyebrow">长期上下文</span><h1>项目</h1><p>把任务、资料和持续目标放在同一个工作空间里。</p></div><Link href="/fw" className="product-action-link">新对话 <Icon name="arrow-up-right" size={14} /></Link></header>
-    {error && <div className="product-error" role="status">{error}</div>}
-    <section className="project-create-line"><div><strong>创建项目</strong><span>为一组持续任务保存目标和指令。</span></div><div className="project-create-form"><select value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} aria-label="选择 Workspace">{workspaces.map((workspace) => <option value={workspace.id} key={workspace.id}>{workspace.name}</option>)}</select><input value={name} onChange={(event) => setName(event.target.value)} placeholder="项目名称" /><input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="一句话描述（可选）" /><Button type="button" onClick={() => void create()} disabled={!workspaceId || !name.trim() || creating}><Icon name="plus" size={14} />{creating ? "创建中" : "创建项目"}</Button></div></section>
-    <section className="project-list">{items.length ? items.map(({ project, tasks }) => <article className="project-row" key={project.projectId}><Link href={`/projects/${project.projectId}`} className="project-row-open" aria-label={`打开项目 ${project.name}`}><div className="project-row-main"><div className="project-row-title"><span className="project-mark"><Icon name="folder" size={15} /></span><div><h2>{project.name}</h2><p>{project.description || "尚未添加项目描述"}</p></div></div><span className="project-workspace">{workspaces.find((workspace) => workspace.id === project.workspaceId)?.name ?? "Workspace"}</span></div></Link><div className="project-row-tasks">{tasks.length ? tasks.slice(0, 4).map((task) => <Link href={`/fw/t/${task.taskId}`} key={task.taskId}><span data-status={task.status} />{task.title || "未命名任务"}</Link>) : <span className="project-empty">还没有归属任务</span>}<Link href={`/projects/${project.projectId}`} className="project-open-icon" title="打开项目" aria-label={`打开项目 ${project.name}`}><Icon name="arrow-right" size={13} /></Link></div></article>) : <div className="product-empty"><Icon name="folder" size={22} /><strong>还没有项目</strong><p>创建一个项目，给长期任务保留上下文。</p></div>}</section>
+  return <main className="min-h-dvh bg-bg">
+    <Navbar sublabel="agent" badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>}>
+      <Link href="/fw" className="text-xs text-ink-3 transition-colors hover:text-ink"><Icon name="arrow-left" size={12} className="mr-1 inline" />返回工作台</Link>
+    </Navbar>
+    <div className="mx-auto w-[min(100%-2rem,74rem)] py-8">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <small className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-3">长期上下文</small>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">项目</h1>
+          <p className="mt-1 text-sm text-ink-3">把任务、资料和持续目标放在同一个工作空间里。</p>
+        </div>
+        <Link href="/fw"><Button variant="secondary" size="sm">新对话 <Icon name="arrow-up-right" size={14} /></Button></Link>
+      </header>
+      {error && <div className="mb-4 rounded-sm border-l-2 border-danger bg-danger/10 px-3 py-2 text-sm text-ink" role="status">{error}</div>}
+
+      <Card padding="md" className="mb-6">
+        <div className="mb-3"><strong className="text-sm font-semibold text-ink">创建项目</strong><span className="ml-2 text-xs text-ink-3">为一组持续任务保存目标和指令。</span></div>
+        <div className="flex flex-wrap items-center gap-2">
+          <ThemeSelect value={workspaceId || undefined} onValueChange={(value: string) => setWorkspaceId(value)}>
+            <SelectTrigger className="w-auto" aria-label="选择 Workspace"><SelectValue placeholder="选择 Workspace" /></SelectTrigger>
+            <SelectContent>
+              {workspaces.map((workspace) => <SelectItem value={workspace.id} key={workspace.id}>{workspace.name}</SelectItem>)}
+            </SelectContent>
+          </ThemeSelect>
+          <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="项目名称" className="min-w-0 flex-1" />
+          <Input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="一句话描述（可选）" className="min-w-0 flex-1" />
+          <Button type="button" onClick={() => void create()} disabled={!workspaceId || !name.trim() || creating}><Icon name="plus" size={14} />{creating ? "创建中" : "创建项目"}</Button>
+        </div>
+      </Card>
+
+      <section className="flex flex-col gap-3">
+        {items.length ? items.map(({ project, tasks }) => (
+          <Card key={project.projectId} padding="md" variant="interactive">
+            <Link href={`/projects/${project.projectId}`} aria-label={`打开项目 ${project.name}`}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="grid size-8 place-items-center rounded-sm border border-line bg-surface text-ink-2"><Icon name="folder" size={15} /></span>
+                  <div className="min-w-0">
+                    <h2 className="truncate text-base font-semibold text-ink">{project.name}</h2>
+                    <p className="truncate text-sm text-ink-3">{project.description || "尚未添加项目描述"}</p>
+                  </div>
+                </div>
+                <Badge variant="outline" size="sm">{workspaces.find((workspace) => workspace.id === project.workspaceId)?.name ?? "Workspace"}</Badge>
+              </div>
+            </Link>
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+              {tasks.length ? tasks.slice(0, 4).map((task) => (
+                <Link href={`/fw/t/${task.taskId}`} key={task.taskId} className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink-2 hover:bg-surface-2">
+                  <Badge variant={taskStatusVariant(task.status)} size="sm">{taskStatusLabel(task.status)}</Badge>
+                  <span className="max-w-[12rem] truncate">{task.title || "未命名任务"}</span>
+                </Link>
+              )) : <span className="text-xs text-ink-3">还没有归属任务</span>}
+            </div>
+          </Card>
+        )) : <EmptyState icon={<Icon name="folder" size={24} />} title="还没有项目" description="创建一个项目，给长期任务保留上下文。" />}
+      </section>
+    </div>
   </main>;
 }

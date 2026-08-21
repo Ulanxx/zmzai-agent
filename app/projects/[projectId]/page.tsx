@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { Button, Icon } from "@zmzai/theme";
+import { Badge, Button, Card, EmptyState, Icon, IconButton, Input, Navbar, Select as ThemeSelect, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea } from "@zmzai/theme";
 
 type Project = { projectId: string; workspaceId: string; name: string; description: string; instructions: string; updatedAt: string };
 type Task = { taskId: string; title: string; goal: string; status: "draft" | "active" | "succeeded" | "failed" | "cancelled"; updatedAt: string };
@@ -30,6 +30,29 @@ function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function statusVariant(status: string) {
+  if (status === "succeeded" || status === "delivered") return "success" as const;
+  if (status === "failed") return "danger" as const;
+  if (status === "active" || status === "running") return "accent" as const;
+  return "outline" as const;
+}
+function statusText(status: string) {
+  return ({ succeeded: "已完成", failed: "需要处理", active: "进行中", draft: "草稿", cancelled: "已取消", paused: "已暂停", created: "准备中", running: "执行中", waiting_input: "等待补充", waiting_approval: "等待审批", queued: "排队中", idle: "就绪" } as Record<string, string>)[status] ?? status;
+}
+const roleText = (role: string) => role === "owner" ? "所有者" : role === "editor" ? "编辑者" : role === "member" ? "成员" : "查看者";
+
+function SectionHead({ eyebrow, title, right }: { eyebrow: string; title: string; right?: React.ReactNode }) {
+  return (
+    <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+      <div>
+        <small className="block text-[10px] font-semibold uppercase tracking-wide text-ink-3">{eyebrow}</small>
+        <h2 className="text-lg font-semibold tracking-tight text-ink">{title}</h2>
+      </div>
+      {right}
+    </div>
+  );
 }
 
 export default function ProjectDetailPage() {
@@ -172,20 +195,177 @@ export default function ProjectDetailPage() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : "移除项目成员失败"); }
   };
 
-  if (!project && !error) return <main className="product-page"><div className="product-loading">正在打开项目…</div></main>;
-  return <main className="product-page project-detail-page">
-    <header className="product-page-head"><div><Link href="/projects" className="product-back"><Icon name="arrow-left" size={14} />返回项目</Link><span className="eyebrow">长期上下文</span><h1>{project?.name ?? "项目"}</h1><p>{project?.description || "把持续目标、任务和成果放在同一个工作空间里。"}</p></div><Link href="/fw" className="product-action-link">新对话 <Icon name="arrow-up-right" size={14} /></Link></header>
-    {error && <div className="product-error" role="status">{error}</div>}
+  if (!project && !error) return <main className="grid min-h-dvh place-items-center bg-bg"><p className="text-sm text-ink-3">正在打开项目…</p></main>;
+  return <main className="min-h-dvh bg-bg">
+    <Navbar sublabel="agent" badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>}>
+      <Link href="/projects" className="text-xs text-ink-3 transition-colors hover:text-ink"><Icon name="arrow-left" size={12} className="mr-1 inline" />返回项目</Link>
+      <Link href="/fw" className="text-xs text-ink-3 transition-colors hover:text-ink">新对话</Link>
+    </Navbar>
+    <div className="mx-auto w-[min(100%-2rem,74rem)] py-8">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <small className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-3">长期上下文</small>
+          <h1 className="truncate text-2xl font-semibold tracking-tight text-ink">{project?.name ?? "项目"}</h1>
+          <p className="mt-1 text-sm text-ink-3">{project?.description || "把持续目标、任务和成果放在同一个工作空间里。"}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" size="sm">你的角色：{roleText(role)}</Badge>
+          {canEdit && <Button type="button" variant="secondary" size="sm" onClick={() => setEditing((current) => !current)}><Icon name={editing ? "cross" : "edit"} size={13} />{editing ? "关闭编辑" : "编辑项目"}</Button>}
+        </div>
+      </header>
+      {error && <div className="mb-4 rounded-sm border-l-2 border-danger bg-danger/10 px-3 py-2 text-sm text-ink" role="status">{error}</div>}
+
       {project && <>
-      <section className="project-overview"><div><span className="eyebrow">项目概览</span><div className="project-stat-row"><span><strong>{tasks.length}</strong>任务</span><span><strong>{counts.active}</strong>进行中</span><span><strong>{counts.done}</strong>已完成</span><span><strong>{artifacts.length}</strong>成果</span></div></div>{canEdit && <Button type="button" variant="secondary" size="sm" onClick={() => setEditing((current) => !current)}><Icon name={editing ? "cross" : "edit"} size={13} />{editing ? "关闭编辑" : "编辑项目"}</Button>}</section>
-      {budget && <section className="project-budget-section"><div className="section-heading"><div><span className="eyebrow">资源边界</span><h2>项目预算</h2></div><span className="section-caption">{budget.reservedRuns} / {budget.maxConcurrentRuns} 个运行中</span></div><div className="project-budget-grid"><label>最大并发运行<input type="number" min={1} max={32} value={budget.maxConcurrentRuns} disabled={!canEdit || budgetBusy} onChange={(event) => setBudget((current) => current ? { ...current, maxConcurrentRuns: Math.max(1, Math.min(32, Number(event.target.value) || 1)) } : current)} onBlur={() => { if (budget) void saveBudget({ maxConcurrentRuns: budget.maxConcurrentRuns, monthlyTokenBudget: budget.monthlyTokenBudget }); }} /></label><label>月度 Token 上限<input type="number" min={0} max={10000000000} value={budget.monthlyTokenBudget} disabled={!canEdit || budgetBusy} onChange={(event) => setBudget((current) => current ? { ...current, monthlyTokenBudget: Math.max(0, Number(event.target.value) || 0) } : current)} onBlur={() => { if (budget) void saveBudget({ maxConcurrentRuns: budget.maxConcurrentRuns, monthlyTokenBudget: budget.monthlyTokenBudget }); }} /></label><div className="project-budget-usage"><span>本月已用</span><strong>{budget.usedTokens.toLocaleString("zh-CN")}</strong><small>{budget.monthlyTokenBudget > 0 ? `上限 ${budget.monthlyTokenBudget.toLocaleString("zh-CN")}` : "未设置 Token 上限"}</small></div></div></section>}
-      {canEdit && editing && <section className="project-editor"><label>项目名称<input value={name} onChange={(event) => setName(event.target.value)} /></label><label>项目描述<input value={description} onChange={(event) => setDescription(event.target.value)} /></label><label>执行指令<textarea value={instructions} onChange={(event) => setInstructions(event.target.value)} rows={5} placeholder="告诉 Agent 在这个项目里应该遵循的长期规则" /></label><div><Button type="button" onClick={() => void save()} disabled={busy || !name.trim()}><Icon name="check" size={13} />{busy ? "保存中" : "保存更改"}</Button></div></section>}
-      <section className="project-detail-section project-context-section"><div className="section-heading"><div><span className="eyebrow">长期资料</span><h2>项目上下文</h2></div><span className="section-caption">{contextItems.filter((item) => item.enabled).length} 项启用</span></div><p className="project-section-note">把品牌规范、业务背景或参考链接放在这里。启用的资料会随项目任务提供给 Agent。</p>{canEdit && <div className="project-context-form"><select aria-label="上下文类型" value={contextType} onChange={(event) => setContextType(event.target.value as ContextItem["type"])}><option value="note">笔记</option><option value="link">链接</option></select><input aria-label="上下文标题" value={contextTitle} onChange={(event) => setContextTitle(event.target.value)} placeholder="标题" />{contextType === "note" ? <textarea aria-label="上下文内容" value={contextContent} onChange={(event) => setContextContent(event.target.value)} rows={3} placeholder="记录 Agent 需要长期知道的事实" /> : <input aria-label="上下文链接" value={contextUrl} onChange={(event) => setContextUrl(event.target.value)} placeholder="https://..." inputMode="url" />}<Button type="button" size="sm" onClick={() => void addContext()} disabled={contextBusy || !contextTitle.trim() || (contextType === "note" ? !contextContent.trim() : !contextUrl.trim())}><Icon name="plus" size={13} />{contextBusy ? "添加中" : "添加资料"}</Button></div>}{contextItems.length ? <div className="project-context-list">{contextItems.map((item) => <div className={`project-context-row ${item.enabled ? "" : "disabled"}`} key={item.contextId}><span className="project-context-kind"><Icon name={item.type === "note" ? "file-text" : "link"} size={14} /></span><span className="project-context-copy"><strong>{item.title}</strong>{item.type === "note" ? <small>{item.content}</small> : <a href={item.url} target="_blank" rel="noreferrer">{item.url}</a>}</span>{canEdit && <><Button type="button" variant="secondary" size="sm" onClick={() => void updateContext(item, { enabled: !item.enabled })}><Icon name={item.enabled ? "eye" : "eye-off"} size={13} />{item.enabled ? "停用" : "启用"}</Button><button className="project-context-delete" type="button" onClick={() => void removeContext(item)} aria-label={`删除 ${item.title}`} title="删除"><Icon name="trash" size={13} /></button></>}</div>)}</div> : <div className="project-section-empty">还没有项目资料。</div>}</section>
-      <section className="project-detail-section project-members-section"><div className="section-heading"><div><span className="eyebrow">协作</span><h2>项目成员</h2></div><span className="section-caption">你的角色：{role === "owner" ? "所有者" : role === "editor" ? "编辑者" : role === "member" ? "成员" : "查看者"}</span></div>{role === "owner" && <div className="project-member-form"><input type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="成员邮箱" aria-label="成员邮箱" /><select value={memberRole} onChange={(event) => setMemberRole(event.target.value as Member["role"])} aria-label="成员角色"><option value="viewer">查看者</option><option value="member">成员</option><option value="editor">编辑者</option></select><Button type="button" size="sm" onClick={() => void addMember()} disabled={memberBusy || !memberEmail.trim()}><Icon name="plus" size={13} />{memberBusy ? "添加中" : "添加成员"}</Button></div>}<div className="project-member-list"><div className="project-member-row project-member-owner"><span className="project-member-avatar"><Icon name="user" size={13} /></span><span><strong>项目所有者</strong><small>Owner</small></span><em>所有者</em></div>{members.map((member) => <div className="project-member-row" key={member.memberId}><span className="project-member-avatar"><Icon name="user" size={13} /></span><span><strong>{member.user?.name || member.user?.email || member.userId}</strong><small>{member.user?.email || "成员"}</small></span>{role === "owner" ? <><select value={member.role} onChange={(event) => void updateMember(member, event.target.value as Member["role"])} aria-label={`${member.user?.email || member.userId} 的角色`}><option value="viewer">查看者</option><option value="member">成员</option><option value="editor">编辑者</option></select><button className="project-context-delete" type="button" onClick={() => void removeMember(member)} aria-label={`移除 ${member.user?.email || member.userId}`} title="移除"><Icon name="trash" size={13} /></button></> : <em>{member.role === "editor" ? "编辑者" : member.role === "member" ? "成员" : "查看者"}</em>}</div>)}</div></section>
-      <div className="project-detail-grid"><section className="project-detail-section"><div className="section-heading"><div><span className="eyebrow">任务</span><h2>项目任务</h2></div><Link href="/fw" className="text-link">开始新任务 <Icon name="arrow-up-right" size={13} /></Link></div>{tasks.length ? <div className="project-task-list">{tasks.map((task) => <Link href={`/fw/t/${task.taskId}`} className="project-task-row" key={task.taskId}><span className="project-task-status" data-status={task.status} /><span className="project-task-copy"><strong>{task.title || "未命名任务"}</strong><small>{task.goal}</small></span><span className="project-task-date">{formatDate(task.updatedAt)}</span><Icon name="arrow-right" size={13} /></Link>)}</div> : <div className="project-section-empty">还没有任务。<Link href="/fw">从对话开始</Link></div>}</section>
-        <section className="project-detail-section"><div className="section-heading"><div><span className="eyebrow">交付</span><h2>项目成果</h2></div><Link href="/artifacts" className="text-link">查看全部 <Icon name="arrow-up-right" size={13} /></Link></div>{artifacts.length ? <div className="project-artifact-list">{artifacts.slice(0, 8).map((artifact) => <div className="project-artifact-row" key={artifact.artifactId}><Icon name="file" size={14} /><span><strong>{artifact.title}</strong><small>{artifact.taskTitle || artifact.path} · v{artifact.version} · {formatBytes(artifact.bytes)}</small></span>{artifact.previewUrl && <a href={artifact.previewUrl} target="_blank" rel="noreferrer" title="预览" aria-label={`预览 ${artifact.title}`}><Icon name="eye" size={13} /></a>}{artifact.downloadUrl && <a href={artifact.downloadUrl} title="下载" aria-label={`下载 ${artifact.title}`}><Icon name="download" size={13} /></a>}</div>)}</div> : <div className="project-section-empty">完成任务后，交付文件会出现在这里。</div>}</section></div>
-      <section className="project-detail-section"><div className="section-heading"><div><span className="eyebrow">重复工作</span><h2>项目自动化</h2></div><Link href="/automations" className="text-link">管理自动化 <Icon name="arrow-up-right" size={13} /></Link></div>{automations.length ? <div className="project-run-list">{automations.map((automation) => <Link href="/automations" className="project-run-row" key={automation.automationId}><span className="project-task-status" data-status={automation.lastRunStatus === "failed" ? "failed" : automation.status === "paused" ? "cancelled" : "active"} /><span><strong>{automation.name}</strong><small>{automation.schedule}{automation.lastRunTaskId ? ` · 最近任务 ${automation.lastRunTaskId}` : ""}{automation.lastError ? ` · ${automation.lastError}` : ""}</small></span><em data-status={automation.lastRunStatus}>{automation.lastRunStatus === "failed" ? "需要重试" : automation.status === "paused" ? "已暂停" : "已启用"}</em><Icon name="arrow-right" size={13} /></Link>)}</div> : <div className="project-section-empty">成功任务可保存为该项目的自动化模板。</div>}</section>
-      <section className="project-detail-section project-runs-section"><div className="section-heading"><div><span className="eyebrow">运行记录</span><h2>最近运行</h2></div><span className="section-caption">{runs.length} 次运行</span></div>{runs.length ? <div className="project-run-list">{runs.slice(0, 12).map((run) => <Link href={`/fw/t/${run.taskId}`} className="project-run-row" key={run.runId}><span className="project-task-status" data-status={run.status} /><span><strong>{tasks.find((task) => task.taskId === run.taskId)?.title || "任务运行"}</strong><small>第 {run.attempt} 次尝试 · {formatDate(run.createdAt)}</small></span><em data-status={run.status}>{run.status}</em><Icon name="arrow-right" size={13} /></Link>)}</div> : <div className="project-section-empty">项目还没有运行记录。</div>}</section>
-    </>}
+      <div className="mb-6 flex flex-wrap gap-2">
+        <Badge variant="outline" size="md">{tasks.length} 任务</Badge>
+        <Badge variant="accent" size="md">{counts.active} 进行中</Badge>
+        <Badge variant="success" size="md">{counts.done} 已完成</Badge>
+        {counts.failed > 0 && <Badge variant="danger" size="md">{counts.failed} 需要处理</Badge>}
+        <Badge variant="outline" size="md">{artifacts.length} 成果</Badge>
+      </div>
+
+      {budget && (
+        <Card padding="md" className="mb-6">
+          <SectionHead eyebrow="资源边界" title="项目预算" right={<Badge variant="outline" size="sm">{budget.reservedRuns} / {budget.maxConcurrentRuns} 个运行中</Badge>} />
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="text-xs text-ink-3">最大并发运行<Input type="number" min={1} max={32} value={budget.maxConcurrentRuns} disabled={!canEdit || budgetBusy} onChange={(event) => setBudget((current) => current ? { ...current, maxConcurrentRuns: Math.max(1, Math.min(32, Number(event.target.value) || 1)) } : current)} onBlur={() => { if (budget) void saveBudget({ maxConcurrentRuns: budget.maxConcurrentRuns, monthlyTokenBudget: budget.monthlyTokenBudget }); }} className="mt-1 w-36" /></label>
+            <label className="text-xs text-ink-3">月度 Token 上限<Input type="number" min={0} max={10000000000} value={budget.monthlyTokenBudget} disabled={!canEdit || budgetBusy} onChange={(event) => setBudget((current) => current ? { ...current, monthlyTokenBudget: Math.max(0, Number(event.target.value) || 0) } : current)} onBlur={() => { if (budget) void saveBudget({ maxConcurrentRuns: budget.maxConcurrentRuns, monthlyTokenBudget: budget.monthlyTokenBudget }); }} className="mt-1 w-44" /></label>
+            <div className="rounded-sm border border-line bg-surface px-3 py-2"><small className="block text-xs text-ink-3">本月已用</small><strong className="font-mono text-sm text-ink">{budget.usedTokens.toLocaleString("zh-CN")}</strong><small className="ml-2 text-ink-3">{budget.monthlyTokenBudget > 0 ? `上限 ${budget.monthlyTokenBudget.toLocaleString("zh-CN")}` : "未设置 Token 上限"}</small></div>
+          </div>
+        </Card>
+      )}
+
+      {canEdit && editing && (
+        <Card padding="md" className="mb-6">
+          <SectionHead eyebrow="编辑" title="项目设置" />
+          <div className="flex flex-col gap-3">
+            <label className="text-xs text-ink-3">项目名称<Input value={name} onChange={(event) => setName(event.target.value)} className="mt-1" /></label>
+            <label className="text-xs text-ink-3">项目描述<Input value={description} onChange={(event) => setDescription(event.target.value)} className="mt-1" /></label>
+            <label className="text-xs text-ink-3">执行指令<Textarea value={instructions} onChange={(event) => setInstructions(event.target.value)} rows={5} placeholder="告诉 Agent 在这个项目里应该遵循的长期规则" className="mt-1" /></label>
+            <div><Button type="button" onClick={() => void save()} disabled={busy || !name.trim()}><Icon name="check" size={13} />{busy ? "保存中" : "保存更改"}</Button></div>
+          </div>
+        </Card>
+      )}
+
+      <Card padding="md" className="mb-6">
+        <SectionHead eyebrow="长期资料" title="项目上下文" right={<Badge variant="outline" size="sm">{contextItems.filter((item) => item.enabled).length} 项启用</Badge>} />
+        <p className="mb-3 text-sm text-ink-3">把品牌规范、业务背景或参考链接放在这里。启用的资料会随项目任务提供给 Agent。</p>
+        {canEdit && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-line pb-4">
+            <ThemeSelect value={contextType} onValueChange={(value: string) => setContextType(value === "link" ? "link" : "note")}>
+              <SelectTrigger className="w-auto" aria-label="上下文类型"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="note">笔记</SelectItem><SelectItem value="link">链接</SelectItem></SelectContent>
+            </ThemeSelect>
+            <Input aria-label="上下文标题" value={contextTitle} onChange={(event) => setContextTitle(event.target.value)} placeholder="标题" className="min-w-0 flex-1" />
+            {contextType === "note"
+              ? <Textarea aria-label="上下文内容" value={contextContent} onChange={(event) => setContextContent(event.target.value)} rows={2} placeholder="记录 Agent 需要长期知道的事实" className="min-w-0 flex-1" />
+              : <Input aria-label="上下文链接" value={contextUrl} onChange={(event) => setContextUrl(event.target.value)} placeholder="https://..." inputMode="url" className="min-w-0 flex-1" />}
+            <Button type="button" size="sm" onClick={() => void addContext()} disabled={contextBusy || !contextTitle.trim() || (contextType === "note" ? !contextContent.trim() : !contextUrl.trim())}><Icon name="plus" size={13} />{contextBusy ? "添加中" : "添加资料"}</Button>
+          </div>
+        )}
+        {contextItems.length ? <div className="flex flex-col gap-2">
+          {contextItems.map((item) => (
+            <div className={`flex items-center gap-2 rounded-sm border border-line px-3 py-2 ${item.enabled ? "bg-bg" : "bg-surface opacity-60"}`} key={item.contextId}>
+              <span className="grid size-7 place-items-center rounded-sm border border-line bg-surface text-ink-2"><Icon name={item.type === "note" ? "file-text" : "link"} size={14} /></span>
+              <div className="min-w-0 flex-1">
+                <strong className="block truncate text-sm text-ink">{item.title}</strong>
+                {item.type === "note" ? <small className="block truncate text-xs text-ink-3">{item.content}</small> : <a href={item.url} target="_blank" rel="noreferrer" className="block truncate text-xs text-ink-3 underline">{item.url}</a>}
+              </div>
+              {canEdit && <>
+                <Button type="button" variant="secondary" size="sm" onClick={() => void updateContext(item, { enabled: !item.enabled })}><Icon name={item.enabled ? "eye" : "eye-off"} size={13} />{item.enabled ? "停用" : "启用"}</Button>
+                <IconButton size="sm" label={`删除 ${item.title}`} onClick={() => void removeContext(item)}><Icon name="trash" size={13} /></IconButton>
+              </>}
+            </div>
+          ))}
+        </div> : <EmptyState title="还没有项目资料" description="把长期有效的背景信息添加到这里。" />}
+      </Card>
+
+      <Card padding="md" className="mb-6">
+        <SectionHead eyebrow="协作" title="项目成员" right={<Badge variant="outline" size="sm">你的角色：{roleText(role)}</Badge>} />
+        {role === "owner" && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-line pb-4">
+            <Input type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="成员邮箱" aria-label="成员邮箱" className="min-w-0 flex-1" />
+            <ThemeSelect value={memberRole} onValueChange={(value: string) => setMemberRole(value as Member["role"])}>
+              <SelectTrigger className="w-auto" aria-label="成员角色"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="viewer">查看者</SelectItem><SelectItem value="member">成员</SelectItem><SelectItem value="editor">编辑者</SelectItem></SelectContent>
+            </ThemeSelect>
+            <Button type="button" size="sm" onClick={() => void addMember()} disabled={memberBusy || !memberEmail.trim()}><Icon name="plus" size={13} />{memberBusy ? "添加中" : "添加成员"}</Button>
+          </div>
+        )}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 rounded-sm border border-line bg-surface px-3 py-2">
+            <span className="grid size-7 place-items-center rounded-sm border border-line bg-bg text-ink-2"><Icon name="user" size={13} /></span>
+            <div className="min-w-0 flex-1"><strong className="block text-sm text-ink">项目所有者</strong><small className="text-xs text-ink-3">Owner</small></div>
+            <Badge variant="accent" size="sm">所有者</Badge>
+          </div>
+          {members.map((member) => (
+            <div className="flex items-center gap-2 rounded-sm border border-line px-3 py-2" key={member.memberId}>
+              <span className="grid size-7 place-items-center rounded-sm border border-line bg-surface text-ink-2"><Icon name="user" size={13} /></span>
+              <div className="min-w-0 flex-1"><strong className="block truncate text-sm text-ink">{member.user?.name || member.user?.email || member.userId}</strong><small className="text-xs text-ink-3">{member.user?.email || "成员"}</small></div>
+              {role === "owner" ? <>
+                <ThemeSelect value={member.role} onValueChange={(value: string) => void updateMember(member, value as Member["role"])} >
+                  <SelectTrigger className="w-auto" aria-label={`${member.user?.email || member.userId} 的角色`}><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="viewer">查看者</SelectItem><SelectItem value="member">成员</SelectItem><SelectItem value="editor">编辑者</SelectItem></SelectContent>
+                </ThemeSelect>
+                <IconButton size="sm" label={`移除 ${member.user?.email || member.userId}`} onClick={() => void removeMember(member)}><Icon name="trash" size={13} /></IconButton>
+              </> : <Badge variant="outline" size="sm">{roleText(member.role)}</Badge>}
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <div className="mb-6 grid gap-6 lg:grid-cols-2">
+        <Card padding="md">
+          <SectionHead eyebrow="任务" title="项目任务" right={<Link href="/fw" className="text-xs text-ink-3 underline hover:text-ink">开始新任务 <Icon name="arrow-up-right" size={12} className="inline" /></Link>} />
+          {tasks.length ? <div className="flex flex-col gap-1">
+            {tasks.map((task) => (
+              <Link href={`/fw/t/${task.taskId}`} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface" key={task.taskId}>
+                <Badge variant={statusVariant(task.status)} size="sm">{statusText(task.status)}</Badge>
+                <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-ink">{task.title || "未命名任务"}</strong><small className="block truncate text-xs text-ink-3">{task.goal}</small></span>
+                <small className="flex-shrink-0 text-xs text-ink-3">{formatDate(task.updatedAt)}</small>
+              </Link>
+            ))}
+          </div> : <EmptyState title="还没有任务" description="从对话开始第一个任务。" />}
+        </Card>
+        <Card padding="md">
+          <SectionHead eyebrow="交付" title="项目成果" right={<Link href="/artifacts" className="text-xs text-ink-3 underline hover:text-ink">查看全部 <Icon name="arrow-up-right" size={12} className="inline" /></Link>} />
+          {artifacts.length ? <div className="flex flex-col gap-1">
+            {artifacts.slice(0, 8).map((artifact) => (
+              <div className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface" key={artifact.artifactId}>
+                <Icon name="file" size={14} className="flex-shrink-0 text-ink-3" />
+                <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-ink">{artifact.title}</strong><small className="block truncate text-xs text-ink-3">{artifact.taskTitle || artifact.path} · v{artifact.version} · {formatBytes(artifact.bytes)}</small></span>
+                {artifact.previewUrl && <a href={artifact.previewUrl} target="_blank" rel="noreferrer" title="预览" aria-label={`预览 ${artifact.title}`} className="text-ink-3 hover:text-ink"><Icon name="eye" size={13} /></a>}
+                {artifact.downloadUrl && <a href={artifact.downloadUrl} title="下载" aria-label={`下载 ${artifact.title}`} className="text-ink-3 hover:text-ink"><Icon name="download" size={13} /></a>}
+              </div>
+            ))}
+          </div> : <EmptyState title="还没有成果" description="完成任务后，交付文件会出现在这里。" />}
+        </Card>
+      </div>
+
+      <Card padding="md" className="mb-6">
+        <SectionHead eyebrow="重复工作" title="项目自动化" right={<Link href="/automations" className="text-xs text-ink-3 underline hover:text-ink">管理自动化 <Icon name="arrow-up-right" size={12} className="inline" /></Link>} />
+        {automations.length ? <div className="flex flex-col gap-1">
+          {automations.map((automation) => (
+            <Link href="/automations" className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface" key={automation.automationId}>
+              <Badge variant={statusVariant(automation.lastRunStatus === "failed" ? "failed" : automation.status === "paused" ? "cancelled" : "active")} size="sm">{automation.lastRunStatus === "failed" ? "需要重试" : automation.status === "paused" ? "已暂停" : "已启用"}</Badge>
+              <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-ink">{automation.name}</strong><small className="block truncate text-xs text-ink-3">{automation.schedule}{automation.lastRunTaskId ? ` · 最近任务 ${automation.lastRunTaskId}` : ""}{automation.lastError ? ` · ${automation.lastError}` : ""}</small></span>
+            </Link>
+          ))}
+        </div> : <EmptyState title="还没有项目自动化" description="成功任务可保存为该项目的自动化模板。" />}
+      </Card>
+
+      <Card padding="md">
+        <SectionHead eyebrow="运行记录" title="最近运行" right={<Badge variant="outline" size="sm">{runs.length} 次运行</Badge>} />
+        {runs.length ? <div className="flex flex-col gap-1">
+          {runs.slice(0, 12).map((run) => (
+            <Link href={`/fw/t/${run.taskId}`} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface" key={run.runId}>
+              <Badge variant={statusVariant(run.status)} size="sm">{statusText(run.status)}</Badge>
+              <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-ink">{tasks.find((task) => task.taskId === run.taskId)?.title || "任务运行"}</strong><small className="text-xs text-ink-3">第 {run.attempt} 次尝试 · {formatDate(run.createdAt)}</small></span>
+            </Link>
+          ))}
+        </div> : <EmptyState title="还没有运行记录" description="项目任务运行后会出现在这里。" />}
+      </Card>
+      </>}
+    </div>
   </main>;
 }

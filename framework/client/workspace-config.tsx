@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-import { Button, Icon, ModelSelector, Navbar, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, navItemClass, type ModelSelectorData, type ModelSelectorValue } from "@zmzai/theme";
+import { Button, Icon, Input, ModelSelector, Navbar, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, navItemClass, type ModelSelectorData, type ModelSelectorValue } from "@zmzai/theme";
 
 type WorkspaceDetail = {
   id: string;
@@ -190,8 +190,8 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
             </div>
           </div>
           <div className="agent-form">
-            <label><span>名称</span><input value={name} maxLength={120} onChange={(event) => setName(event.target.value)} /></label>
-            <label><span>描述</span><input value={description} maxLength={2_000} onChange={(event) => setDescription(event.target.value)} /></label>
+            <label><span>名称</span><Input value={name} maxLength={120} onChange={(event) => setName(event.target.value)} /></label>
+            <label><span>描述</span><Input value={description} maxLength={2_000} onChange={(event) => setDescription(event.target.value)} /></label>
             <div className="agent-form-row">
               <label><span>默认模型</span><ModelSelector data={modelSelectorData ?? { featured: [], channels: [] }} value={modelValue} onChange={setModelValue} placeholder="跟随任务选择" /></label>
               <label>
@@ -204,10 +204,10 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
                   </SelectContent>
                 </Select>
               </label>
-              <label><span>最大步骤</span><input type="number" min="1" max="64" value={steps} onChange={(event) => setSteps(Math.min(64, Math.max(1, Number(event.target.value) || 1)))} /></label>
+              <label><span>最大步骤</span><Input type="number" min="1" max="64" value={steps} onChange={(event) => setSteps(Math.min(64, Math.max(1, Number(event.target.value) || 1)))} /></label>
             </div>
             <p className="agent-approval-hint">{approvalMode === "auto" ? "自动执行：任务内的命令不再逐项询问，适合可信任的沙箱任务。" : "逐项确认：执行命令前会弹出审批，可随时在会话中放行。"}</p>
-            <label className="agent-prompt-label"><span>系统提示词（AGENT.md）</span><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} spellCheck={false} /></label>
+            <label className="agent-prompt-label"><span>系统提示词（AGENT.md）</span><Textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} spellCheck={false} rows={10} /></label>
           </div>
         </section>
 
@@ -217,12 +217,12 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
             <strong>{detail.name}</strong>
             <small>创建于 {new Date(detail.id ? "" : "").toLocaleDateString("zh-CN") || "—"}</small>
           </section>
-          {budget && <section className="workspace-budget-panel">
+          {budget && <section className="mt-5 rounded-sm border border-line bg-surface p-4">
             <div className="mb-3 flex items-center justify-between"><div><span className="eyebrow">运行预算</span><strong className="mt-1 block text-ink">Workspace 限制</strong></div><span className="font-mono text-xs text-ink-3">{budget.usagePeriod}</span></div>
-            <div className="workspace-budget-grid"><label>最大并发<input type="number" min="1" max="64" value={budget.maxConcurrentRuns} onChange={(event) => setBudget((current) => current ? { ...current, maxConcurrentRuns: Math.min(64, Math.max(1, Number(event.target.value) || 1)) } : current)} /></label><label>月度 Token 上限<input type="number" min="0" max="1000000000" value={budget.monthlyTokenBudget} onChange={(event) => setBudget((current) => current ? { ...current, monthlyTokenBudget: Math.min(1_000_000_000, Math.max(0, Number(event.target.value) || 0)) } : current)} /></label></div>
-            <div className="workspace-budget-stats"><span>本月已用 <strong>{budget.usedTokens.toLocaleString()}</strong></span><span>当前运行 <strong>{budget.reservedRuns}</strong></span></div>
+            <div className="mb-3 flex flex-wrap gap-2"><label className="text-xs text-ink-3">最大并发<Input type="number" min="1" max="64" value={budget.maxConcurrentRuns} onChange={(event) => setBudget((current) => current ? { ...current, maxConcurrentRuns: Math.min(64, Math.max(1, Number(event.target.value) || 1)) } : current)} className="mt-1 w-28" /></label><label className="text-xs text-ink-3">月度 Token 上限<Input type="number" min="0" max="1000000000" value={budget.monthlyTokenBudget} onChange={(event) => setBudget((current) => current ? { ...current, monthlyTokenBudget: Math.min(1_000_000_000, Math.max(0, Number(event.target.value) || 0)) } : current)} className="mt-1 w-40" /></label></div>
+            <div className="mb-3 flex flex-wrap gap-3 font-mono text-xs text-ink-3"><span>本月已用 <strong className="font-sans text-sm text-ink">{budget.usedTokens.toLocaleString()}</strong></span><span>当前运行 <strong className="font-sans text-sm text-ink">{budget.reservedRuns}</strong></span></div>
             <Button type="button" size="sm" variant="secondary" disabled={budgetBusy} onClick={() => void saveBudget()}><Icon name="check" size={13} />{budgetBusy ? "保存中" : "保存预算"}</Button>
-            <small className="workspace-budget-note">月度上限为 0 表示不限制。项目预算仍可设置更严格的限制。</small>
+            <small className="mt-2 block text-xs leading-relaxed text-ink-3">月度上限为 0 表示不限制。项目预算仍可设置更严格的限制。</small>
           </section>}
           <section className="mt-5 border-t border-line pt-4 text-sm">
             <div className="mb-3 flex items-center justify-between"><div><span className="eyebrow">可用能力</span><strong className="mt-1 block text-ink">Skills 与 Plugins</strong></div><span className="font-mono text-xs text-ink-3">{detail.skillIds.length + detail.pluginIds.length} 已启用</span></div>
@@ -231,7 +231,7 @@ export function WorkspaceConfig({ workspaceId }: { workspaceId: string }) {
               {plugins.map((plugin) => <label className="flex cursor-pointer items-start gap-2 border-b border-line pb-2" key={plugin.id}><input className="mt-1" type="checkbox" checked={detail.pluginIds.includes(plugin.id)} disabled={capabilityBusy === `plugin:${plugin.id}`} onChange={(event) => void toggleCapability("plugin", plugin.id, event.target.checked)} /><span className="min-w-0 flex-1"><strong className="block truncate text-xs text-ink">{plugin.name}</strong><small className="block truncate text-ink-3">Plugin · {plugin.skillCount} Skills{plugin.version ? ` · v${plugin.version}` : ""}</small></span></label>)}
               {!skills.length && !plugins.length && <p className="text-xs text-ink-3">还没有导入能力。</p>}
             </div>
-            <div className="mt-3 grid gap-2"><input value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="owner/repository" aria-label="GitHub 仓库" /><input value={sourcePath} onChange={(event) => setSourcePath(event.target.value)} placeholder="Skill 或 Plugin 路径" aria-label="仓库路径" /><div className="flex gap-2"><Button type="button" size="sm" variant="secondary" disabled={!repository.trim() || !sourcePath.trim() || Boolean(capabilityBusy)} onClick={() => void importCapability("skill")}>导入 Skill</Button><Button type="button" size="sm" variant="secondary" disabled={!repository.trim() || Boolean(capabilityBusy)} onClick={() => void importCapability("plugin")}>导入 Plugin</Button></div></div>
+            <div className="mt-3 grid gap-2"><Input value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="owner/repository" aria-label="GitHub 仓库" /><Input value={sourcePath} onChange={(event) => setSourcePath(event.target.value)} placeholder="Skill 或 Plugin 路径" aria-label="仓库路径" /><div className="flex gap-2"><Button type="button" size="sm" variant="secondary" disabled={!repository.trim() || !sourcePath.trim() || Boolean(capabilityBusy)} onClick={() => void importCapability("skill")}>导入 Skill</Button><Button type="button" size="sm" variant="secondary" disabled={!repository.trim() || Boolean(capabilityBusy)} onClick={() => void importCapability("plugin")}>导入 Plugin</Button></div></div>
           </section>
           <button type="button" className="agent-back-button" onClick={() => router.push("/fw")}><Icon name="arrow-down" size={12} />返回任务</button>
           <div className="mt-6 border-t border-line pt-4">

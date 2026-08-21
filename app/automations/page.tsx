@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { Button, Icon, IconButton } from "@zmzai/theme";
+import { Badge, Button, Card, EmptyState, Icon, IconButton, Input, Navbar, Select as ThemeSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@zmzai/theme";
 
 type Workspace = { id: string; name: string };
 type Automation = { automationId: string; workspaceId: string; projectId?: string | null; sourceTaskId?: string | null; name: string; goal: string; schedule: string; timezone: string; status: "active" | "paused"; lastRunAt: string | null; nextRunAt: string | null; lastRunStatus: "idle" | "running" | "succeeded" | "failed"; lastError: string | null; webhookSecretPrefix?: string | null };
@@ -12,6 +12,15 @@ type AutomationExecution = { executionId: string; taskId: string; source: "manua
 type TriggerSecret = { secret: string; prefix: string; webhookUrl: string; emailUrl: string };
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> { const response = await fetch(url, { ...init, cache: "no-store" }); const body = await response.json().catch(() => null) as { error?: string } | T | null; if (!response.ok) throw new Error(body && typeof body === "object" && body !== null && "error" in body ? String(body.error) : "请求失败"); return body as T; }
+
+function executionVariant(status: AutomationExecution["status"]) {
+  if (status === "succeeded") return "success" as const;
+  if (status === "failed") return "danger" as const;
+  if (status === "running" || status === "queued") return "accent" as const;
+  return "outline" as const;
+}
+
+const schedulePresets = ["手动运行", "每天 09:00", "工作日 09:00", "每小时", "*/15 * * * *"];
 
 export default function AutomationsPage() {
   const router = useRouter();
@@ -27,5 +36,87 @@ export default function AutomationsPage() {
   const copyValue = async (value: string) => { try { await navigator.clipboard.writeText(value); } catch { setError("复制失败，请手动选择内容"); } };
   const duplicate = async (item: Automation) => { setBusy(item.automationId); try { await json("/api/automations", { method: "POST", headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() }, body: JSON.stringify({ workspaceId: item.workspaceId, ...(item.projectId ? { projectId: item.projectId } : {}), name: `${item.name} · 副本`, goal: item.goal, schedule: "手动运行", timezone: item.timezone }) }); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : "复制失败"); } finally { setBusy(null); } };
   const remove = async (item: Automation) => { if (!window.confirm(`删除自动化“${item.name}”？`)) return; setBusy(item.automationId); try { await json(`/api/automations/${item.automationId}`, { method: "DELETE" }); setItems((current) => current.filter((candidate) => candidate.automationId !== item.automationId)); } catch (cause) { setError(cause instanceof Error ? cause.message : "删除失败"); } finally { setBusy(null); } };
-  return <main className="product-page"><header className="product-page-head"><div><Link href="/fw" className="product-back"><Icon name="arrow-left" size={14} />返回工作台</Link><span className="eyebrow">重复工作</span><h1>自动化</h1><p>把成功的任务保存成可手动或定时运行的模板。</p></div><Link href="/fw" className="product-action-link">新对话 <Icon name="arrow-up-right" size={14} /></Link></header>{error && <div className="product-error">{error}</div>}<section className="automation-create"><select value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} aria-label="选择 Workspace">{workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}</select><input value={name} onChange={(event) => setName(event.target.value)} placeholder="自动化名称" /><input value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="每次运行要完成什么" /><input value={schedule} list="automation-schedules" onChange={(event) => setSchedule(event.target.value)} placeholder="运行计划" aria-label="运行计划" /><datalist id="automation-schedules"><option value="手动运行" /><option value="每天 09:00" /><option value="工作日 09:00" /><option value="每小时" /><option value="*/15 * * * *" /></datalist><Button type="button" onClick={() => void create()} disabled={busy === "create" || !name.trim() || !goal.trim()}><Icon name="plus" size={14} />保存模板</Button></section><section className="automation-list">{items.length ? items.map((item) => <article className="automation-row" key={item.automationId}><div className="automation-copy"><div className="automation-title"><span className={`automation-status ${item.status}`} /> <h2>{item.name}</h2></div><p>{item.goal}</p><small>{item.projectId ? "项目自动化" : "个人自动化"}{item.sourceTaskId ? ` · 来源任务 ${item.sourceTaskId}` : ""} · {item.schedule}{item.nextRunAt && item.status === "active" ? ` · 下次运行 ${new Date(item.nextRunAt).toLocaleString("zh-CN")}` : ""}{item.lastRunAt ? ` · 上次运行 ${new Date(item.lastRunAt).toLocaleString("zh-CN")}` : ""}</small>{item.lastRunStatus === "failed" && <em>{item.lastError ?? "上次运行失败"}</em>}<details className="automation-history" onToggle={(event) => { if ((event.target as HTMLDetailsElement).open) void loadHistory(item.automationId); }}><summary>运行记录</summary>{histories[item.automationId]?.map((execution) => <Link href={`/fw/t/${execution.taskId}`} key={execution.executionId}><span data-status={execution.status} />{execution.source === "schedule" ? "定时" : "手动"} · {execution.status} · {new Date(execution.createdAt).toLocaleString("zh-CN")}{execution.error ? ` · ${execution.error}` : ""}</Link>)}</details>{openTrigger === item.automationId && <div className="automation-trigger-panel"><strong>外部接入</strong><small>{secrets[item.automationId] ? `密钥 ${secrets[item.automationId]!.prefix} · 完整密钥仅本次显示` : `当前密钥前缀：${item.webhookSecretPrefix ?? "尚未生成"}`}</small>{secrets[item.automationId] && <><label>Webhook 地址<input readOnly value={secrets[item.automationId]!.webhookUrl} /></label><label>Email 地址<input readOnly value={secrets[item.automationId]!.emailUrl} /></label><label>签名密钥<input readOnly value={secrets[item.automationId]!.secret} /></label><IconButton size="sm" label="复制签名密钥" onClick={() => void copyValue(secrets[item.automationId]!.secret)}><Icon name="copy" size={13} /></IconButton></>}</div>}</div><div className="automation-actions"><Button type="button" variant="secondary" size="sm" disabled={busy === item.automationId || item.status === "paused"} onClick={() => void run(item.automationId)}><Icon name="play" size={13} />{item.lastRunStatus === "failed" ? "重试" : "运行"}</Button><Button type="button" variant="secondary" size="sm" disabled={busy === `secret:${item.automationId}`} onClick={() => void generateSecret(item)}><Icon name="key" size={13} />接入</Button><IconButton size="sm" label={item.status === "active" ? "暂停" : "恢复"} onClick={() => void toggle(item)}><Icon name={item.status === "active" ? "pause" : "play"} size={13} /></IconButton><IconButton size="sm" label="复制自动化" disabled={busy === item.automationId} onClick={() => void duplicate(item)}><Icon name="copy" size={13} /></IconButton><IconButton size="sm" label="删除自动化" disabled={busy === item.automationId} onClick={() => void remove(item)}><Icon name="trash" size={13} /></IconButton></div></article>) : <div className="product-empty"><Icon name="clock" size={22} /><strong>还没有自动化</strong><p>先完成一次任务，再把它保存为模板。</p></div>}</section></main>;
+
+  return <main className="min-h-dvh bg-bg">
+    <Navbar sublabel="agent" badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>}>
+      <Link href="/fw" className="text-xs text-ink-3 transition-colors hover:text-ink"><Icon name="arrow-left" size={12} className="mr-1 inline" />返回工作台</Link>
+    </Navbar>
+    <div className="mx-auto w-[min(100%-2rem,74rem)] py-8">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <small className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-3">重复工作</small>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">自动化</h1>
+          <p className="mt-1 text-sm text-ink-3">把成功的任务保存成可手动或定时运行的模板。</p>
+        </div>
+        <Link href="/fw"><Button variant="secondary" size="sm">新对话 <Icon name="arrow-up-right" size={14} /></Button></Link>
+      </header>
+      {error && <div className="mb-4 rounded-sm border-l-2 border-danger bg-danger/10 px-3 py-2 text-sm text-ink" role="status">{error}</div>}
+
+      <Card padding="md" className="mb-6">
+        <div className="mb-3"><strong className="text-sm font-semibold text-ink">保存模板</strong><span className="ml-2 text-xs text-ink-3">每次运行会以新任务执行同一目标。</span></div>
+        <div className="flex flex-wrap items-center gap-2">
+          <ThemeSelect value={workspaceId} onValueChange={(value: string) => setWorkspaceId(value)}>
+            <SelectTrigger className="w-auto" aria-label="选择 Workspace"><SelectValue placeholder="选择 Workspace" /></SelectTrigger>
+            <SelectContent>{workspaces.map((workspace) => <SelectItem key={workspace.id} value={workspace.id}>{workspace.name}</SelectItem>)}</SelectContent>
+          </ThemeSelect>
+          <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="自动化名称" className="min-w-0 flex-1" />
+          <Input value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="每次运行要完成什么" className="min-w-0 flex-1" />
+          <Input value={schedule} list="automation-schedules" onChange={(event) => setSchedule(event.target.value)} placeholder="运行计划" aria-label="运行计划" className="w-44" />
+          <datalist id="automation-schedules">{schedulePresets.map((preset) => <option key={preset} value={preset} />)}</datalist>
+          <Button type="button" onClick={() => void create()} disabled={busy === "create" || !name.trim() || !goal.trim()}><Icon name="plus" size={14} />保存模板</Button>
+        </div>
+      </Card>
+
+      <section className="flex flex-col gap-3">
+        {items.length ? items.map((item) => (
+          <Card key={item.automationId} padding="md">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-base font-semibold text-ink">{item.name}</h2>
+                  <Badge variant={item.status === "active" ? "success" : "outline"} size="sm">{item.status === "active" ? "已启用" : "已暂停"}</Badge>
+                  {item.lastRunStatus === "failed" && <Badge variant="danger" size="sm">上次失败</Badge>}
+                </div>
+                <p className="mt-1 text-sm text-ink-2">{item.goal}</p>
+                <small className="mt-1 block text-xs text-ink-3">{item.projectId ? "项目自动化" : "个人自动化"}{item.sourceTaskId ? ` · 来源任务 ${item.sourceTaskId}` : ""} · {item.schedule}{item.nextRunAt && item.status === "active" ? ` · 下次运行 ${new Date(item.nextRunAt).toLocaleString("zh-CN")}` : ""}{item.lastRunAt ? ` · 上次运行 ${new Date(item.lastRunAt).toLocaleString("zh-CN")}` : ""}</small>
+                {item.lastRunStatus === "failed" && <p className="mt-1 text-sm text-danger">{item.lastError ?? "上次运行失败"}</p>}
+                <details className="mt-2" onToggle={(event) => { if ((event.target as HTMLDetailsElement).open) void loadHistory(item.automationId); }}>
+                  <summary className="cursor-pointer text-xs text-ink-3 hover:text-ink-2">运行记录</summary>
+                  <div className="mt-2 flex flex-col gap-1">
+                    {histories[item.automationId]?.map((execution) => (
+                      <Link href={`/fw/t/${execution.taskId}`} key={execution.executionId} className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-ink-2 hover:bg-surface">
+                        <Badge variant={executionVariant(execution.status)} size="sm">{execution.status === "succeeded" ? "成功" : execution.status === "failed" ? "失败" : execution.status}</Badge>
+                        <span>{execution.source === "schedule" ? "定时" : "手动"} · {new Date(execution.createdAt).toLocaleString("zh-CN")}{execution.error ? ` · ${execution.error}` : ""}</span>
+                      </Link>
+                    ))}
+                  </div>
+                </details>
+                {openTrigger === item.automationId && (
+                  <div className="mt-3 rounded-sm border border-line bg-surface p-3">
+                    <strong className="text-sm font-semibold text-ink">外部接入</strong>
+                    <small className="mt-1 block text-xs text-ink-3">{secrets[item.automationId] ? `密钥 ${secrets[item.automationId]!.prefix} · 完整密钥仅本次显示` : `当前密钥前缀：${item.webhookSecretPrefix ?? "尚未生成"}`}</small>
+                    {secrets[item.automationId] && <div className="mt-2 flex flex-col gap-1.5">
+                      <label className="text-xs text-ink-3">Webhook 地址<Input readOnly value={secrets[item.automationId]!.webhookUrl} className="mt-0.5 font-mono text-xs" /></label>
+                      <label className="text-xs text-ink-3">Email 地址<Input readOnly value={secrets[item.automationId]!.emailUrl} className="mt-0.5 font-mono text-xs" /></label>
+                      <div className="flex items-end gap-2">
+                        <label className="min-w-0 flex-1 text-xs text-ink-3">签名密钥<Input readOnly value={secrets[item.automationId]!.secret} className="mt-0.5 font-mono text-xs" /></label>
+                        <IconButton size="sm" label="复制签名密钥" onClick={() => void copyValue(secrets[item.automationId]!.secret)}><Icon name="copy" size={13} /></IconButton>
+                      </div>
+                    </div>}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+                <Button type="button" variant="secondary" size="sm" disabled={busy === item.automationId || item.status === "paused"} onClick={() => void run(item.automationId)}><Icon name="play" size={13} />{item.lastRunStatus === "failed" ? "重试" : "运行"}</Button>
+                <Button type="button" variant="secondary" size="sm" disabled={busy === `secret:${item.automationId}`} onClick={() => void generateSecret(item)}><Icon name="key" size={13} />接入</Button>
+                <IconButton size="md" label={item.status === "active" ? "暂停" : "恢复"} onClick={() => void toggle(item)}><Icon name={item.status === "active" ? "pause" : "play"} size={13} /></IconButton>
+                <IconButton size="md" label="复制自动化" disabled={busy === item.automationId} onClick={() => void duplicate(item)}><Icon name="copy" size={13} /></IconButton>
+                <IconButton size="md" label="删除自动化" disabled={busy === item.automationId} onClick={() => void remove(item)}><Icon name="trash" size={13} /></IconButton>
+              </div>
+            </div>
+          </Card>
+        )) : <EmptyState icon={<Icon name="clock" size={24} />} title="还没有自动化" description="先完成一次任务，再把它保存为模板。" />}
+      </section>
+    </div>
+  </main>;
 }

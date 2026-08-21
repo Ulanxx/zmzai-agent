@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { Button, Icon, IconButton } from "@zmzai/theme";
+import { Badge, Button, Card, EmptyState, Icon, IconButton, Input, Navbar, Select as ThemeSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@zmzai/theme";
 
 type Workspace = { id: string; name: string };
 type ApiKeyScope = "tasks:write" | "tasks:read" | "artifacts:read" | "webhooks:write";
@@ -37,6 +37,12 @@ function time(value: string | null) {
 
 function scopeLabel(scope: ApiKeyScope) {
   return scopeOptions.find((option) => option.id === scope)?.label ?? scope;
+}
+
+function deliveryVariant(status: Delivery["status"]) {
+  if (status === "delivered") return "success" as const;
+  if (status === "failed") return "danger" as const;
+  return "warning" as const;
 }
 
 export default function DevelopersPage() {
@@ -151,19 +157,148 @@ export default function DevelopersPage() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : "无法加载投递记录"); }
   };
 
-  return <main className="product-page developer-page">
-    <header className="product-page-head"><div><Link href="/fw" className="product-back"><Icon name="arrow-left" size={14} />返回工作台</Link><span className="eyebrow">集成与 API</span><h1>开发者</h1><p>让内部服务或外部系统安全地创建任务、接收结果。</p></div><Link href="/fw" className="product-action-link">新对话 <Icon name="arrow-up-right" size={14} /></Link></header>
-    {error && <div className="product-error" role="status">{error}</div>}
-    {revealedSecret && <section className="developer-secret" aria-live="polite"><div><span className="eyebrow">仅显示一次</span><strong>{revealedSecret.kind}</strong><p>请立即保存。离开此页面后无法再次查看完整值。</p></div><div className="developer-secret-value"><code>{revealedSecret.value}</code><IconButton size="sm" label={`复制${revealedSecret.kind}`} onClick={() => void copy(revealedSecret.value)}><Icon name="copy" size={13} /></IconButton></div><IconButton size="sm" label="关闭密钥提示" onClick={() => setRevealedSecret(null)}><Icon name="cross" size={13} /></IconButton></section>}
+  return <main className="min-h-dvh bg-bg">
+    <Navbar sublabel="agent" badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>}>
+      <Link href="/fw" className="text-xs text-ink-3 transition-colors hover:text-ink"><Icon name="arrow-left" size={12} className="mr-1 inline" />返回工作台</Link>
+    </Navbar>
+    <div className="mx-auto w-[min(100%-2rem,74rem)] py-8">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <small className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-3">集成与 API</small>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">开发者</h1>
+          <p className="mt-1 text-sm text-ink-3">让内部服务或外部系统安全地创建任务、接收结果。</p>
+        </div>
+        <Link href="/fw"><Button variant="secondary" size="sm">新对话 <Icon name="arrow-up-right" size={14} /></Button></Link>
+      </header>
+      {error && <div className="mb-4 rounded-sm border-l-2 border-danger bg-danger/10 px-3 py-2 text-sm text-ink" role="status">{error}</div>}
 
-    <section className="developer-section"><div className="developer-section-head"><div><span className="eyebrow">认证</span><h2>API Key</h2><p>每个 Key 都限定工作区与权限范围，可随时撤销。</p></div></div>
-      <div className="developer-form developer-key-form"><input value={keyName} onChange={(event) => setKeyName(event.target.value)} placeholder="例如：数据同步服务" aria-label="API Key 名称" /><div className="developer-check-grid" role="group" aria-label="允许访问的工作区">{workspaces.map((workspace) => <label key={workspace.id}><input type="checkbox" checked={keyWorkspaces.includes(workspace.id)} onChange={() => setKeyWorkspaces((current) => toggle(current, workspace.id))} /><span>{workspace.name}</span></label>)}</div><div className="developer-scope-grid" role="group" aria-label="API Key 权限范围">{scopeOptions.map((scope) => <label key={scope.id}><input type="checkbox" checked={keyScopes.includes(scope.id)} onChange={() => setKeyScopes((current) => toggle(current, scope.id))} /><span><strong>{scope.label}</strong><small>{scope.detail}</small></span></label>)}</div><Button type="button" disabled={busy === "create-key" || !keyName.trim() || !keyWorkspaces.length || !keyScopes.length} onClick={() => void createKey()}><Icon name="key" size={14} />{busy === "create-key" ? "创建中" : "创建 API Key"}</Button></div>
-      <div className="developer-list">{keys.length ? keys.map((key) => <article className="developer-row" key={key.id}><div className="developer-row-copy"><div className="developer-row-title"><Icon name="key" size={14} /><h3>{key.name}</h3><span className={`developer-state ${key.status}`}>{key.status === "active" ? "有效" : "已撤销"}</span></div><code>{key.prefix}...</code><p>{key.workspaceIds.map((id) => workspaceNames.get(id) ?? id).join(" · ")} · {key.scopes.map(scopeLabel).join(" · ")}</p><small>创建于 {time(key.createdAt)} · 最近使用 {time(key.lastUsedAt)}</small></div>{key.status === "active" && <IconButton size="sm" label={`撤销 ${key.name}`} disabled={busy === key.id} onClick={() => void revokeKey(key)}><Icon name="trash" size={13} /></IconButton>}</article>) : <div className="developer-empty">还没有 API Key。</div>}</div>
-    </section>
+      {revealedSecret && (
+        <Card padding="sm" className="mb-6 border-warning/60">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2"><Badge variant="warning" size="sm">仅显示一次</Badge><strong className="text-sm font-semibold text-ink">{revealedSecret.kind}</strong></div>
+              <p className="mt-1 text-xs text-ink-3">请立即保存。离开此页面后无法再次查看完整值。</p>
+            </div>
+            <div className="flex min-w-0 items-center gap-2">
+              <code className="min-w-0 flex-1 truncate rounded-sm border border-line bg-surface px-2 py-1 font-mono text-xs text-ink">{revealedSecret.value}</code>
+              <IconButton size="sm" label={`复制${revealedSecret.kind}`} onClick={() => void copy(revealedSecret.value)}><Icon name="copy" size={13} /></IconButton>
+              <IconButton size="sm" label="关闭密钥提示" onClick={() => setRevealedSecret(null)}><Icon name="cross" size={13} /></IconButton>
+            </div>
+          </div>
+        </Card>
+      )}
 
-    <section className="developer-section"><div className="developer-section-head"><div><span className="eyebrow">事件通知</span><h2>Webhook</h2><p>任务完成、失败或取消时，向你的服务发送已签名事件。</p></div><select value={workspaceId} onChange={(event) => selectWorkspace(event.target.value)} aria-label="选择 Webhook 工作区">{workspaces.map((workspace) => <option value={workspace.id} key={workspace.id}>{workspace.name}</option>)}</select></div>
-      <div className="developer-form developer-webhook-form"><input value={webhookName} onChange={(event) => setWebhookName(event.target.value)} placeholder="Webhook 名称" aria-label="Webhook 名称" /><input value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://example.com/hooks/zmzai" aria-label="Webhook 地址" /><div className="developer-event-row" role="group" aria-label="Webhook 事件">{eventOptions.map((event) => <label key={event.id}><input type="checkbox" checked={webhookEvents.includes(event.id)} onChange={() => setWebhookEvents((current) => toggle(current, event.id))} />{event.label}</label>)}</div><Button type="button" disabled={busy === "create-webhook" || !workspaceId || !webhookName.trim() || !webhookUrl.trim() || !webhookEvents.length} onClick={() => void createWebhook()}><Icon name="link" size={14} />{busy === "create-webhook" ? "创建中" : "添加 Webhook"}</Button></div>
-      <div className="developer-list">{subscriptions.length ? subscriptions.map((subscription) => <article className="developer-row developer-webhook-row" key={subscription.id}><div className="developer-row-copy"><div className="developer-row-title"><span className={`developer-dot ${subscription.status}`} /><h3>{subscription.name}</h3><span className={`developer-state ${subscription.status}`}>{subscription.status === "active" ? "启用中" : "已暂停"}</span></div><code>{subscription.url}</code><p>{subscription.events.map((event) => eventOptions.find((option) => option.id === event)?.label ?? event).join(" · ")} · 签名 {subscription.secretPrefix}...</p><small>最近投递 {time(subscription.lastDeliveredAt)}</small>{subscription.lastError && <em>{subscription.lastError}</em>}{openDeliveries === subscription.id && <div className="developer-deliveries">{deliveries[subscription.id] ? deliveries[subscription.id].length ? deliveries[subscription.id].map((delivery) => <div className="developer-delivery" key={delivery.deliveryId}><span className={`developer-dot ${delivery.status}`} /><div><strong>{eventOptions.find((option) => option.id === delivery.eventType)?.label ?? delivery.eventType}</strong><small>{delivery.status === "delivered" ? `已投递 · HTTP ${delivery.responseStatus ?? "-"}` : `${delivery.status} · 第 ${delivery.attempts} 次尝试`}{delivery.lastError ? ` · ${delivery.lastError}` : ""}</small></div><time>{time(delivery.createdAt)}</time></div>) : <div className="developer-empty">还没有投递记录。</div> : <div className="developer-empty">正在加载投递记录…</div>}</div>}</div><div className="developer-row-actions"><Button type="button" variant="secondary" size="sm" disabled={busy === subscription.id} onClick={() => void toggleDeliveries(subscription)}><Icon name="activity" size={13} />投递记录</Button><IconButton size="sm" label={subscription.status === "active" ? "暂停 Webhook" : "恢复 Webhook"} disabled={busy === subscription.id} onClick={() => void updateWebhook(subscription)}><Icon name={subscription.status === "active" ? "pause" : "play"} size={13} /></IconButton><IconButton size="sm" label={`删除 ${subscription.name}`} disabled={busy === subscription.id} onClick={() => void deleteWebhook(subscription)}><Icon name="trash" size={13} /></IconButton></div></article>) : <div className="developer-empty">当前工作区还没有 Webhook。</div>}</div>
-    </section>
+      <section className="mb-8">
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <small className="block text-[10px] font-semibold uppercase tracking-wide text-ink-3">认证</small>
+            <h2 className="text-lg font-semibold tracking-tight text-ink">API Key</h2>
+            <p className="text-sm text-ink-3">每个 Key 都限定工作区与权限范围，可随时撤销。</p>
+          </div>
+        </div>
+        <Card padding="md" className="mb-3">
+          <div className="flex flex-col gap-3">
+            <Input value={keyName} onChange={(event) => setKeyName(event.target.value)} placeholder="例如：数据同步服务" aria-label="API Key 名称" />
+            <div role="group" aria-label="允许访问的工作区">
+              <small className="mb-1.5 block text-xs font-semibold text-ink-3">工作区范围</small>
+              <div className="flex flex-wrap gap-2">
+                {workspaces.map((workspace) => {
+                  const active = keyWorkspaces.includes(workspace.id);
+                  return <Button key={workspace.id} type="button" size="sm" variant={active ? "primary" : "secondary"} onClick={() => setKeyWorkspaces((current) => toggle(current, workspace.id))}><Icon name={active ? "check" : "plus"} size={12} />{workspace.name}</Button>;
+                })}
+              </div>
+            </div>
+            <div role="group" aria-label="API Key 权限范围">
+              <small className="mb-1.5 block text-xs font-semibold text-ink-3">权限范围</small>
+              <div className="flex flex-wrap gap-2">
+                {scopeOptions.map((scope) => {
+                  const active = keyScopes.includes(scope.id);
+                  return <Button key={scope.id} type="button" size="sm" variant={active ? "primary" : "secondary"} title={scope.detail} onClick={() => setKeyScopes((current) => toggle(current, scope.id))}><Icon name={active ? "check" : "plus"} size={12} />{scope.label}</Button>;
+                })}
+              </div>
+            </div>
+            <div><Button type="button" disabled={busy === "create-key" || !keyName.trim() || !keyWorkspaces.length || !keyScopes.length} onClick={() => void createKey()}><Icon name="key" size={14} />{busy === "create-key" ? "创建中" : "创建 API Key"}</Button></div>
+          </div>
+        </Card>
+        <div className="flex flex-col gap-3">
+          {keys.length ? keys.map((key) => (
+            <Card key={key.id} padding="md">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2"><Icon name="key" size={14} className="text-ink-3" /><h3 className="text-base font-semibold text-ink">{key.name}</h3><Badge variant={key.status === "active" ? "success" : "outline"} size="sm">{key.status === "active" ? "有效" : "已撤销"}</Badge></div>
+                  <code className="mt-1 block font-mono text-xs text-ink-3">{key.prefix}...</code>
+                  <p className="mt-1 text-sm text-ink-2">{key.workspaceIds.map((id) => workspaceNames.get(id) ?? id).join(" · ")} · {key.scopes.map(scopeLabel).join(" · ")}</p>
+                  <small className="text-xs text-ink-3">创建于 {time(key.createdAt)} · 最近使用 {time(key.lastUsedAt)}</small>
+                </div>
+                {key.status === "active" && <IconButton size="md" label={`撤销 ${key.name}`} disabled={busy === key.id} onClick={() => void revokeKey(key)}><Icon name="trash" size={13} /></IconButton>}
+              </div>
+            </Card>
+          )) : <EmptyState icon={<Icon name="key" size={24} />} title="还没有 API Key" description="创建一个限定范围的 Key 开始集成。" />}
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <small className="block text-[10px] font-semibold uppercase tracking-wide text-ink-3">事件通知</small>
+            <h2 className="text-lg font-semibold tracking-tight text-ink">Webhook</h2>
+            <p className="text-sm text-ink-3">任务完成、失败或取消时，向你的服务发送已签名事件。</p>
+          </div>
+          <ThemeSelect value={workspaceId} onValueChange={(value: string) => selectWorkspace(value)}>
+            <SelectTrigger className="w-auto" aria-label="选择 Webhook 工作区"><SelectValue placeholder="选择工作区" /></SelectTrigger>
+            <SelectContent>{workspaces.map((workspace) => <SelectItem value={workspace.id} key={workspace.id}>{workspace.name}</SelectItem>)}</SelectContent>
+          </ThemeSelect>
+        </div>
+        <Card padding="md" className="mb-3">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap gap-2">
+              <Input value={webhookName} onChange={(event) => setWebhookName(event.target.value)} placeholder="Webhook 名称" aria-label="Webhook 名称" className="min-w-0 flex-1" />
+              <Input value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://example.com/hooks/zmzai" aria-label="Webhook 地址" className="min-w-0 flex-1" />
+            </div>
+            <div role="group" aria-label="Webhook 事件">
+              <small className="mb-1.5 block text-xs font-semibold text-ink-3">订阅事件</small>
+              <div className="flex flex-wrap gap-2">
+                {eventOptions.map((event) => {
+                  const active = webhookEvents.includes(event.id);
+                  return <Button key={event.id} type="button" size="sm" variant={active ? "primary" : "secondary"} onClick={() => setWebhookEvents((current) => toggle(current, event.id))}><Icon name={active ? "check" : "plus"} size={12} />{event.label}</Button>;
+                })}
+              </div>
+            </div>
+            <div><Button type="button" disabled={busy === "create-webhook" || !workspaceId || !webhookName.trim() || !webhookUrl.trim() || !webhookEvents.length} onClick={() => void createWebhook()}><Icon name="link" size={14} />{busy === "create-webhook" ? "创建中" : "添加 Webhook"}</Button></div>
+          </div>
+        </Card>
+        <div className="flex flex-col gap-3">
+          {subscriptions.length ? subscriptions.map((subscription) => (
+            <Card key={subscription.id} padding="md">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2"><h3 className="text-base font-semibold text-ink">{subscription.name}</h3><Badge variant={subscription.status === "active" ? "success" : "outline"} size="sm">{subscription.status === "active" ? "启用中" : "已暂停"}</Badge></div>
+                  <code className="mt-1 block truncate font-mono text-xs text-ink-3">{subscription.url}</code>
+                  <p className="mt-1 text-sm text-ink-2">{subscription.events.map((event) => eventOptions.find((option) => option.id === event)?.label ?? event).join(" · ")} · 签名 {subscription.secretPrefix}...</p>
+                  <small className="text-xs text-ink-3">最近投递 {time(subscription.lastDeliveredAt)}</small>
+                  {subscription.lastError && <p className="mt-1 text-sm text-danger">{subscription.lastError}</p>}
+                  {openDeliveries === subscription.id && (
+                    <div className="mt-2 flex flex-col gap-1.5 rounded-sm border border-line bg-surface p-3">
+                      {deliveries[subscription.id] ? deliveries[subscription.id].length ? deliveries[subscription.id].map((delivery) => (
+                        <div className="flex items-center gap-2 text-xs text-ink-2" key={delivery.deliveryId}>
+                          <Badge variant={deliveryVariant(delivery.status)} size="sm">{delivery.status === "delivered" ? "已投递" : delivery.status === "failed" ? "失败" : "投递中"}</Badge>
+                          <div className="min-w-0"><strong className="block text-ink">{eventOptions.find((option) => option.id === delivery.eventType)?.label ?? delivery.eventType}</strong><small>{delivery.status === "delivered" ? `HTTP ${delivery.responseStatus ?? "-"}` : `第 ${delivery.attempts} 次尝试`}{delivery.lastError ? ` · ${delivery.lastError}` : ""}</small></div>
+                          <time className="ml-auto flex-shrink-0 text-ink-3">{time(delivery.createdAt)}</time>
+                        </div>
+                      )) : <p className="text-xs text-ink-3">还没有投递记录。</p> : <p className="text-xs text-ink-3">正在加载投递记录…</p>}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-shrink-0 items-center gap-2">
+                  <Button type="button" variant="secondary" size="sm" disabled={busy === subscription.id} onClick={() => void toggleDeliveries(subscription)}><Icon name="activity" size={13} />投递记录</Button>
+                  <IconButton size="md" label={subscription.status === "active" ? "暂停 Webhook" : "恢复 Webhook"} disabled={busy === subscription.id} onClick={() => void updateWebhook(subscription)}><Icon name={subscription.status === "active" ? "pause" : "play"} size={13} /></IconButton>
+                  <IconButton size="md" label={`删除 ${subscription.name}`} disabled={busy === subscription.id} onClick={() => void deleteWebhook(subscription)}><Icon name="trash" size={13} /></IconButton>
+                </div>
+              </div>
+            </Card>
+          )) : <EmptyState icon={<Icon name="link" size={24} />} title="当前工作区还没有 Webhook" description="添加一个接收端点，任务事件会签名后推送。" />}
+        </div>
+      </section>
+    </div>
   </main>;
 }
