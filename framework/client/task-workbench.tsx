@@ -287,6 +287,7 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
   const [actionError, setActionError] = useState<string | null>(null);
   const [workspaceLoading, setWorkspaceLoading] = useState(true);
   const [preview, setPreview] = useState<ArtifactCard | null>(null);
+  const [suggestions, setSuggestions] = useState<Array<{ label: string; prompt: string }>>([]);
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("artifacts");
   const [isNarrow, setIsNarrow] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -367,6 +368,16 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
     const element = scrollRef.current;
     if (element && followScroll) element.scrollTop = element.scrollHeight;
   }, [snapshot?.messages, live.todos, followScroll]);
+
+  // 状态驱动的快捷指令：失败原因/质量检查失败项/审批状态变了就重新生成。
+  useEffect(() => {
+    if (!taskId) { setSuggestions([]); return; }
+    let cancelled = false;
+    void json<{ suggestions: Array<{ label: string; prompt: string }> }>(`/api/tasks/${encodeURIComponent(taskId)}/suggestions`)
+      .then((result) => { if (!cancelled) setSuggestions(result.suggestions); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [taskId, latestRun?.status, latestRun?.terminalReason, taskDetail?.approvals?.length]);
 
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === (snapshot?.session.workspaceId ?? task?.workspaceId)) ?? workspaces[0];
 
@@ -626,6 +637,15 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
             </div>
           </div>
 
+          {suggestions.length > 0 && (
+            <div className="flex flex-wrap gap-2 border-t border-line px-5 pt-3">
+              {suggestions.map((suggestion) => (
+                <Button key={suggestion.label} type="button" variant="secondary" size="sm" title={suggestion.prompt} onClick={() => { setPrompt(suggestion.prompt); }}>
+                  <Icon name="sparkle" size={12} />{suggestion.label}
+                </Button>
+              ))}
+            </div>
+          )}
           <form className="mt-auto flex flex-col gap-2 border-t border-line px-5 py-3" onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}>
             <Textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={handleKeyDown} placeholder={busy ? "补充要求会在当前步骤完成后处理…" : "继续这条任务…"} rows={3} />
             <FileAttachments files={selectedFiles} onRemove={(index) => setSelectedFiles((current) => current.filter((_, item) => item !== index))} />
