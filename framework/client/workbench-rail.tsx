@@ -137,7 +137,7 @@ export function WorkbenchRail({ tasks, activeTaskId, onNew, onOpen }: { tasks: R
                 <Icon name="chevron-up" size={12} className="text-ink-3" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="top" className="w-56">
+            <DropdownMenuContent align="start" className="w-56">
               <DropdownMenuLabel className="font-mono text-[11px] text-ink-3">{user.email}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => window.open("https://zmzai.cloud", "_blank", "noreferrer")}><Icon name="home" size={13} />主站 zmzai.cloud</DropdownMenuItem>
