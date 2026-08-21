@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 
-import { Badge, Button, Card, EmptyState, Icon, IconButton, Navbar, navItemClass } from "@zmzai/theme";
+import { Badge, Button, Card, EmptyState, Icon } from "@zmzai/theme";
+
+import { WorkbenchRail } from "@/framework/client/workbench-rail";
 
 type ResearchSummary = {
   researchJobId: string;
@@ -98,15 +100,9 @@ export function ResearchWorkbench({ researchJobId }: { researchJobId: string | n
   }, [researchJobId]);
 
   return (
-    <main className="workbench fw-workbench">
-      <Navbar sublabel="agent" badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>}>
-        <Link href="/fw" className={navItemClass(false)} title="返回工作台">
-          <Icon name="chevron-left" size={12} />返回
-        </Link>
-        <Link href="/fw" className={navItemClass(false)}>新任务</Link>
-        <Link href="/fw/research" className={navItemClass(true)}>广泛研究</Link>
-      </Navbar>
-
+    <main className="flex h-dvh overflow-hidden bg-bg">
+      <WorkbenchRail tasks={[]} activeTaskId={null} onNew={() => { window.location.href = "/fw"; }} onOpen={() => undefined} />
+      <div className="flex h-full min-w-0 flex-1 flex-col">
       <div className="fw-grid">
         <div className="fw-main">
         <PanelGroup
@@ -203,6 +199,7 @@ export function ResearchWorkbench({ researchJobId }: { researchJobId: string | n
           </Panel>
         </PanelGroup>
         </div>
+      </div>
       </div>
     </main>
   );

@@ -1,0 +1,111 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+
+import { Badge, Icon, IconButton, Logo, Wordmark } from "@zmzai/theme";
+
+export type RailTask = { task: { taskId: string; title: string; status: "draft" | "active" | "succeeded" | "failed" | "cancelled" }; latestRun: { status: string } | null };
+
+function railStatusLabel(status: string) {
+  return ({ succeeded: "已完成", failed: "需要处理", active: "进行中", running: "执行中", waiting_input: "等待补充", waiting_approval: "等待审批", paused: "已暂停", cancelled: "已取消", draft: "草稿", created: "准备中" } as Record<string, string>)[status] ?? status;
+}
+function railStatusVariant(status: string) {
+  if (status === "succeeded") return "success" as const;
+  if (status === "failed") return "danger" as const;
+  if (status === "active" || status === "running" || status === "waiting_input" || status === "waiting_approval") return "accent" as const;
+  return "outline" as const;
+}
+
+const NAV_LINKS = [
+  { href: "/fw", label: "新任务", icon: "message", match: (path: string) => path === "/fw" || path.startsWith("/fw/s") || path.startsWith("/fw/t") },
+  { href: "/fw/research", label: "广泛研究", icon: "search", match: (path: string) => path.startsWith("/fw/research") },
+  { href: "/projects", label: "项目", icon: "folder", match: (path: string) => path.startsWith("/projects") },
+  { href: "/artifacts", label: "成果", icon: "archive", match: (path: string) => path.startsWith("/artifacts") },
+  { href: "/automations", label: "自动化", icon: "clock", match: (path: string) => path.startsWith("/automations") },
+  { href: "/connectors", label: "连接器", icon: "link", match: (path: string) => path.startsWith("/connectors") },
+  { href: "/developers", label: "开发者", icon: "key", match: (path: string) => path.startsWith("/developers") },
+] as const;
+
+/** 工作台统一左侧栏：品牌 + 导航 + 最近任务 + 登录状态。
+ *  结构自由、控件全部走 @zmzai/theme（Logo/Wordmark/Badge/Icon/IconButton）。 */
+export function WorkbenchRail({ tasks, activeTaskId, onNew, onOpen }: { tasks: RailTask[]; activeTaskId: string | null; onNew: () => void; onOpen: (taskId: string) => void }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const [loggedIn, setLoggedIn] = useState(true);
+
+  useEffect(() => {
+    void fetch("/api/fw/me", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) { setLoggedIn(false); setUser(null); return null; }
+        return response.json() as Promise<{ user: { name: string; email: string } }>;
+      })
+      .then((body) => { if (body?.user) setUser(body.user); })
+      .catch(() => setLoggedIn(false));
+  }, []);
+
+  const logout = useCallback(async () => {
+    await fetch("/api/fw/logout", { method: "POST" }).catch(() => undefined);
+    router.push("/fw");
+    router.refresh();
+  }, [router]);
+
+  return (
+    <aside className="sticky top-0 flex h-dvh w-60 shrink-0 flex-col border-r border-line bg-surface">
+      <div className="flex items-center justify-between px-4 py-4">
+        <Link href="/fw" className="flex items-center gap-2" title="zmzai cloud">
+          <Logo size={24} />
+          <Wordmark size={15} sublabel="agent" />
+        </Link>
+        <IconButton size="md" label="新对话" onClick={onNew}><Icon name="plus" size={15} /></IconButton>
+      </div>
+
+      <nav className="flex flex-col gap-0.5 px-2" aria-label="主导航">
+        {NAV_LINKS.map((item) => {
+          const active = item.match(pathname);
+          return (
+            <Link key={item.href} href={item.href} className={`flex items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-colors ${active ? "bg-bg font-medium text-ink shadow-xs" : "text-ink-2 hover:bg-bg hover:text-ink"}`}>
+              <Icon name={item.icon} size={14} />
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="mt-5 flex min-h-0 flex-1 flex-col px-2">
+        <div className="flex items-center justify-between px-2.5 pb-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-3">最近任务</span>
+          {tasks.length > 0 && <Badge variant="outline" size="sm">{tasks.length}</Badge>}
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {tasks.length ? tasks.slice(0, 20).map(({ task, latestRun }) => {
+            const status = latestRun?.status ?? task.status;
+            return (
+              <button key={task.taskId} type="button" className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${activeTaskId === task.taskId ? "bg-bg shadow-xs" : "hover:bg-bg"}`} onClick={() => onOpen(task.taskId)}>
+                <span className="min-w-0 flex-1"><strong className="block truncate text-xs font-medium text-ink">{task.title || "未命名任务"}</strong><small className="text-[10px] text-ink-3">{railStatusLabel(status)}</small></span>
+                <Badge variant={railStatusVariant(status)} size="sm" />
+              </button>
+            );
+          }) : <p className="px-2.5 py-2 text-xs text-ink-3">完成的任务会出现在这里。</p>}
+        </div>
+      </div>
+
+      <div className="border-t border-line px-3 py-3">
+        {loggedIn && user ? (
+          <div className="flex items-center gap-2">
+            <span className="grid size-8 place-items-center rounded-sm border border-line bg-bg font-mono text-xs text-ink-2">{user.name.slice(0, 1).toUpperCase()}</span>
+            <span className="min-w-0 flex-1"><strong className="block truncate text-xs font-medium text-ink">{user.name}</strong><small className="block truncate text-[10px] text-ink-3">{user.email}</small></span>
+            <IconButton size="sm" label="退出登录" onClick={() => void logout()}><Icon name="logout" size={13} /></IconButton>
+          </div>
+        ) : (
+          <a href={process.env.NODE_ENV === "development" ? "/dev/login" : "https://auth.zmzai.cloud/login"} className="flex items-center justify-center gap-2 rounded-md border border-line bg-bg px-3 py-2 text-xs font-medium text-ink hover:bg-surface-2">
+            <Icon name="user" size={13} />登录 zmzai cloud
+          </a>
+        )}
+        <Link href="/audit" className="mt-2 flex items-center gap-2 px-1 text-[11px] text-ink-3 hover:text-ink"><Icon name="activity" size={12} />运行记录</Link>
+      </div>
+    </aside>
+  );
+}

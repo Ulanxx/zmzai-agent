@@ -5,8 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 
-import { Badge, Button, Card, EmptyState, Icon, IconButton, Input, MovingBorder, Navbar, navItemClass, Select as ThemeSelect, SelectContent, SelectItem, SelectTrigger, SelectValue, Tabs, Textarea, type BadgeProps } from "@zmzai/theme";
+import { Badge, Button, Card, EmptyState, Icon, IconButton, Input, MovingBorder, Select as ThemeSelect, SelectContent, SelectItem, SelectTrigger, SelectValue, Tabs, Textarea, type BadgeProps } from "@zmzai/theme";
 
+import { WorkbenchRail } from "@/framework/client/workbench-rail";
 import { ArtifactPreviewCard, EditCard, groupAssistantMessages, MessageView, PermissionCard, PptxPreview } from "@/framework/client/parts";
 import { fwApi, useFrameworkSession, type ArtifactCard, type Part, type PermissionRequest, type Reply } from "@/framework/client/use-framework-session";
 
@@ -506,28 +507,18 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
   if (loading && !snapshot && sessionId) return <main className="workbench-loading">正在恢复任务…</main>;
   if (loadError) return <main className="workbench-loading">{loadError}</main>;
 
-  return (
-    <main className="workbench fw-workbench">
-      <Navbar sublabel="agent" badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>}>
-        {(sessionId || taskId) && (
-          <Link href="/fw" className={navItemClass(false)} title="返回工作台">
-            <Icon name="chevron-left" size={12} />返回
-          </Link>
-        )}
-        <Link href="/fw" className={navItemClass(pathname === "/fw" && !sessionId && !taskId)}>新任务</Link>
-        <Link href="/fw/research" className={navItemClass(pathname.startsWith("/fw/research"))}>广泛研究</Link>
-        <Link href="/projects" className={navItemClass(pathname.startsWith("/projects"))}>项目</Link>
-        <Link href="/artifacts" className={navItemClass(pathname.startsWith("/artifacts"))}>成果</Link>
-        <Link href="/automations" className={navItemClass(pathname.startsWith("/automations"))}>自动化</Link>
-        <Link href="/developers" className={navItemClass(pathname.startsWith("/developers"))}>开发者</Link>
-      </Navbar>
+  const loginHref = process.env.NODE_ENV === "development" ? "/dev/login" : "https://auth.zmzai.cloud/login";
 
+  return (
+    <main className="flex h-dvh overflow-hidden bg-bg">
+      <WorkbenchRail tasks={tasks} activeTaskId={taskId} onNew={newTask} onOpen={(id) => router.push(`/fw/t/${id}`)} />
+      <div className="flex h-full min-w-0 flex-1 flex-col">
       {!sessionId && !taskId ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-10">
+        <div className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-12">
           <div className="w-full max-w-2xl text-center">
-            <small className="mb-2 block text-[10px] font-semibold uppercase tracking-wide text-ink-3">通用智能体</small>
-            <h1 className="text-2xl font-semibold tracking-tight text-ink">把想做的事交给它。</h1>
-            <p className="mt-2 text-sm text-ink-3">从一句自然语言开始。Agent 会理解目标、拆解步骤、调用工具，并把可用成果交付给你。</p>
+            <Badge variant="outline" size="sm" className="mb-3">通用智能体</Badge>
+            <h1 className="text-4xl font-semibold leading-tight tracking-tight text-ink">把想做的事<span className="text-accent">交给它</span>。</h1>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-ink-3">从一句自然语言开始。Agent 会理解目标、拆解步骤、调用工具，并把可预览、可下载的成果交付给你。</p>
           </div>
           <MovingBorder className="w-full max-w-3xl" duration={6} borderColor="var(--color-accent)" backgroundColor="var(--color-bg)" borderRadius="var(--radius-xl)">
             <form className="w-full rounded-xl bg-bg p-6 shadow-sm" onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}>
@@ -546,30 +537,21 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
               </div>
             </form>
           </MovingBorder>
-          <div className="w-full max-w-2xl">
-            <span className="mb-3 block text-xs font-semibold uppercase tracking-wide text-ink-3">可以从这里开始</span>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={() => { setPrompt("读取 sales.csv，生成一个可预览的销售数据看板，并检查桌面和移动端布局"); setResearchMode(false); }}>生成数据看板</Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => { setPrompt("分析当前资料，整理成一份带结论和行动建议的报告"); setResearchMode(false); }}>整理一份报告</Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => { setPrompt("检查当前项目中的代码，找出最需要优先修复的问题"); setResearchMode(false); }}>检查代码问题</Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => { setPrompt("比较主流 AI Agent 平台的能力、交互和商业模式，并给出可执行结论"); setResearchMode(true); }}>广泛研究</Button>
-            </div>
+          <div className="grid w-full max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4">
+            {([
+              { icon: "activity", title: "生成数据看板", prompt: "读取 sales.csv，生成一个可预览的销售数据看板，并检查桌面和移动端布局", research: false },
+              { icon: "file-text", title: "整理一份报告", prompt: "分析当前资料，整理成一份带结论和行动建议的报告", research: false },
+              { icon: "edit", title: "检查代码问题", prompt: "检查当前项目中的代码，找出最需要优先修复的问题", research: false },
+              { icon: "search", title: "广泛研究", prompt: "比较主流 AI Agent 平台的能力、交互和商业模式，并给出可执行结论", research: true },
+            ] as const).map((example) => (
+              <Card key={example.title} padding="sm" variant="interactive" className="cursor-pointer">
+                <button type="button" className="flex w-full flex-col items-start gap-2 text-left" onClick={() => { setPrompt(example.prompt); setResearchMode(example.research); }}>
+                  <span className="grid size-8 place-items-center rounded-sm border border-line bg-surface text-ink-2"><Icon name={example.icon} size={15} /></span>
+                  <strong className="text-sm font-medium text-ink">{example.title}</strong>
+                </button>
+              </Card>
+            ))}
           </div>
-          {tasks.length > 0 && (
-            <div className="w-full max-w-2xl">
-              <span className="mb-3 block text-xs font-semibold uppercase tracking-wide text-ink-3">最近任务</span>
-              <div className="flex w-full flex-col gap-0.5">
-                {tasks.slice(0, 6).map(({ task: item, latestRun: run }) => (
-                  <Button type="button" key={item.taskId} variant="ghost" className="h-auto w-full min-w-0 justify-start rounded-md px-3 py-2.5 text-left hover:bg-surface-2" onClick={() => router.push(`/fw/t/${item.taskId}`)}>
-                    <span className="flex w-full min-w-0 items-center justify-between gap-2">
-                      <strong className="block w-full truncate text-sm font-medium text-ink">{item.title || "未命名任务"}</strong>
-                      <StatusBadge status={run?.status ?? item.status} />
-                    </span>
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       ) : (
       <div className="fw-grid">
@@ -647,7 +629,8 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
         </div>
       </div>
       )}
-      {actionError && <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-md border border-line bg-surface px-4 py-2 text-sm text-ink shadow-sm" role="status">{actionError}</div>}
+      {actionError && <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-md border border-line bg-surface px-4 py-2 text-sm text-ink shadow-sm" role="status">{actionError}{actionError === "请先登录" && <a href={loginHref} className="ml-2 underline">去登录</a>}</div>}
+      </div>
     </main>
   );
 }
