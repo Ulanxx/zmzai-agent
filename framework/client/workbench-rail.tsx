@@ -44,11 +44,11 @@ export function LoginGate({ title = "登录后继续" }: { title?: string }) {
 function railStatusLabel(status: string) {
   return ({ succeeded: "已完成", failed: "需要处理", active: "进行中", running: "执行中", waiting_input: "等待补充", waiting_approval: "等待审批", paused: "已暂停", cancelled: "已取消", draft: "草稿", created: "准备中" } as Record<string, string>)[status] ?? status;
 }
-function railStatusVariant(status: string) {
-  if (status === "succeeded") return "success" as const;
-  if (status === "failed") return "danger" as const;
-  if (status === "active" || status === "running" || status === "waiting_input" || status === "waiting_approval") return "accent" as const;
-  return "outline" as const;
+function railDotClass(status: string) {
+  if (status === "succeeded") return "bg-success";
+  if (status === "failed") return "bg-danger";
+  if (status === "active" || status === "running" || status === "waiting_input" || status === "waiting_approval") return "bg-accent";
+  return "bg-ink-3";
 }
 
 const NAV_LINKS = [
@@ -120,7 +120,7 @@ export function WorkbenchRail({ tasks, activeTaskId, onNew, onOpen }: { tasks: R
             return (
               <button key={task.taskId} type="button" className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${activeTaskId === task.taskId ? "bg-bg shadow-xs" : "hover:bg-bg"}`} onClick={() => onOpen(task.taskId)}>
                 <span className="min-w-0 flex-1"><strong className="block truncate text-xs font-medium text-ink">{task.title || "未命名任务"}</strong><small className="text-[11px] text-ink-3">{railStatusLabel(status)}</small></span>
-                <Badge variant={railStatusVariant(status)} size="sm" />
+                <span className={`size-1.5 flex-shrink-0 rounded-full ${railDotClass(status)}`} title={railStatusLabel(status)} aria-label={railStatusLabel(status)} />
               </button>
             );
           }) : <p className="px-2.5 py-2 text-xs text-ink-3">完成的任务会出现在这里。</p>}
