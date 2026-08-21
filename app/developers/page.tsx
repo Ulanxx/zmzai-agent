@@ -164,7 +164,7 @@ export default function DevelopersPage() {
     <div className="mx-auto w-[min(100%-2rem,74rem)] py-8">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <small className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-3">集成与 API</small>
+          <small className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-3">集成与 API</small>
           <h1 className="text-2xl font-semibold tracking-tight text-ink">开发者</h1>
           <p className="mt-1 text-sm text-ink-3">让内部服务或外部系统安全地创建任务、接收结果。</p>
         </div>
@@ -191,7 +191,7 @@ export default function DevelopersPage() {
       <section className="mb-8">
         <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <small className="block text-[10px] font-semibold uppercase tracking-wide text-ink-3">认证</small>
+            <small className="block text-xs font-semibold uppercase tracking-wide text-ink-3">认证</small>
             <h2 className="text-lg font-semibold tracking-tight text-ink">API Key</h2>
             <p className="text-sm text-ink-3">每个 Key 都限定工作区与权限范围，可随时撤销。</p>
           </div>
@@ -240,7 +240,7 @@ export default function DevelopersPage() {
       <section>
         <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <small className="block text-[10px] font-semibold uppercase tracking-wide text-ink-3">事件通知</small>
+            <small className="block text-xs font-semibold uppercase tracking-wide text-ink-3">事件通知</small>
             <h2 className="text-lg font-semibold tracking-tight text-ink">Webhook</h2>
             <p className="text-sm text-ink-3">任务完成、失败或取消时，向你的服务发送已签名事件。</p>
           </div>

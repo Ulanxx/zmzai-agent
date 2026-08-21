@@ -53,7 +53,20 @@ export function WorkbenchRail({ tasks, activeTaskId, onNew, onOpen }: { tasks: R
   }, [router]);
 
   return (
-    <aside className="sticky top-0 flex h-dvh w-60 shrink-0 flex-col border-r border-line bg-surface">
+    <>
+    {/* 移动端（<md）：侧栏收起为顶部横条——品牌 + 横向导航 + 登录态 */}
+    <header className="flex items-center gap-2 border-b border-line bg-surface px-3 py-2 md:hidden">
+      <Link href="/fw" className="flex flex-shrink-0 items-center gap-1.5"><Logo size={20} /><Wordmark size={13} sublabel="agent" /></Link>
+      <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" aria-label="主导航">
+        {NAV_LINKS.map((item) => (
+          <Link key={item.href} href={item.href} className={`flex-shrink-0 rounded-md px-2 py-1.5 text-xs ${item.match(pathname) ? "bg-bg font-medium text-ink" : "text-ink-2"}`}>{item.label}</Link>
+        ))}
+      </nav>
+      {loggedIn && user
+        ? <IconButton size="sm" label="退出登录" onClick={() => void logout()}><Icon name="logout" size={12} /></IconButton>
+        : <a className="flex-shrink-0 rounded-md border border-line px-2 py-1.5 text-xs text-ink-2" href={process.env.NODE_ENV === "development" ? "/dev/login" : "https://auth.zmzai.cloud/login"}>登录</a>}
+    </header>
+    <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line bg-surface md:flex">
       <div className="flex items-center justify-between px-4 py-4">
         <Link href="/fw" className="flex items-center gap-2" title="zmzai cloud">
           <Logo size={24} />
@@ -76,7 +89,7 @@ export function WorkbenchRail({ tasks, activeTaskId, onNew, onOpen }: { tasks: R
 
       <div className="mt-5 flex min-h-0 flex-1 flex-col px-2">
         <div className="flex items-center justify-between px-2.5 pb-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-3">最近任务</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-ink-3">最近任务</span>
           {tasks.length > 0 && <Badge variant="outline" size="sm">{tasks.length}</Badge>}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -84,7 +97,7 @@ export function WorkbenchRail({ tasks, activeTaskId, onNew, onOpen }: { tasks: R
             const status = latestRun?.status ?? task.status;
             return (
               <button key={task.taskId} type="button" className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${activeTaskId === task.taskId ? "bg-bg shadow-xs" : "hover:bg-bg"}`} onClick={() => onOpen(task.taskId)}>
-                <span className="min-w-0 flex-1"><strong className="block truncate text-xs font-medium text-ink">{task.title || "未命名任务"}</strong><small className="text-[10px] text-ink-3">{railStatusLabel(status)}</small></span>
+                <span className="min-w-0 flex-1"><strong className="block truncate text-xs font-medium text-ink">{task.title || "未命名任务"}</strong><small className="text-[11px] text-ink-3">{railStatusLabel(status)}</small></span>
                 <Badge variant={railStatusVariant(status)} size="sm" />
               </button>
             );
@@ -96,7 +109,7 @@ export function WorkbenchRail({ tasks, activeTaskId, onNew, onOpen }: { tasks: R
         {loggedIn && user ? (
           <div className="flex items-center gap-2">
             <span className="grid size-8 place-items-center rounded-sm border border-line bg-bg font-mono text-xs text-ink-2">{user.name.slice(0, 1).toUpperCase()}</span>
-            <span className="min-w-0 flex-1"><strong className="block truncate text-xs font-medium text-ink">{user.name}</strong><small className="block truncate text-[10px] text-ink-3">{user.email}</small></span>
+            <span className="min-w-0 flex-1"><strong className="block truncate text-xs font-medium text-ink">{user.name}</strong><small className="block truncate text-[11px] text-ink-3">{user.email}</small></span>
             <IconButton size="sm" label="退出登录" onClick={() => void logout()}><Icon name="logout" size={13} /></IconButton>
           </div>
         ) : (
@@ -107,5 +120,6 @@ export function WorkbenchRail({ tasks, activeTaskId, onNew, onOpen }: { tasks: R
         <Link href="/audit" className="mt-2 flex items-center gap-2 px-1 text-[11px] text-ink-3 hover:text-ink"><Icon name="activity" size={12} />运行记录</Link>
       </div>
     </aside>
+    </>
   );
 }

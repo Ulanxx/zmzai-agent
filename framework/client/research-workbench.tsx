@@ -100,9 +100,9 @@ export function ResearchWorkbench({ researchJobId }: { researchJobId: string | n
   }, [researchJobId]);
 
   return (
-    <main className="flex h-dvh overflow-hidden bg-bg">
+    <main className="flex h-dvh flex-col overflow-hidden bg-bg md:flex-row">
       <WorkbenchRail tasks={[]} activeTaskId={null} onNew={() => { window.location.href = "/fw"; }} onOpen={() => undefined} />
-      <div className="flex h-full min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="fw-grid">
         <div className="fw-main">
         <PanelGroup
@@ -114,7 +114,7 @@ export function ResearchWorkbench({ researchJobId }: { researchJobId: string | n
             <section className="fw-conversation">
               <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-3">
                 <div className="min-w-0">
-                  <small className="block text-[10px] font-semibold uppercase tracking-wide text-ink-3">多视角执行</small>
+                  <small className="block text-xs font-semibold uppercase tracking-wide text-ink-3">多视角执行</small>
                   <h1 className="text-lg font-semibold tracking-tight">广泛研究</h1>
                 </div>
                 <Badge variant="outline" size="sm">{items.length} 项</Badge>
@@ -150,7 +150,7 @@ export function ResearchWorkbench({ researchJobId }: { researchJobId: string | n
                 <div className="fw-canvas-body">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <small className="block text-[10px] font-semibold uppercase tracking-wide text-ink-3">研究详情</small>
+                      <small className="block text-xs font-semibold uppercase tracking-wide text-ink-3">研究详情</small>
                       <h2 className="truncate text-base font-semibold text-ink">{detail.question}</h2>
                       <small className="text-xs text-ink-3">{dateLabel(detail.createdAt)} · 并行度 {detail.maxConcurrency}</small>
                     </div>

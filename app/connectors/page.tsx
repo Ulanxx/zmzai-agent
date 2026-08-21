@@ -37,7 +37,7 @@ export default function ConnectorsPage() {
     <div className="mx-auto w-[min(100%-2rem,74rem)] py-8">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <small className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-3">外部能力</small>
+          <small className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-3">外部能力</small>
           <h1 className="text-2xl font-semibold tracking-tight text-ink">连接器</h1>
           <p className="mt-1 text-sm text-ink-3">管理 Agent 可以访问的 MCP 服务和授权范围。</p>
         </div>

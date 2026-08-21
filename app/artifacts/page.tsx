@@ -112,7 +112,7 @@ export default function ArtifactsPage() {
     <div className="mx-auto w-[min(100%-2rem,74rem)] py-8">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <small className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-3">可复用交付物</small>
+          <small className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-3">可复用交付物</small>
           <h1 className="text-2xl font-semibold tracking-tight text-ink">成果</h1>
           <p className="mt-1 text-sm text-ink-3">从任务中生成的文件、网页和报告都会保留在这里。</p>
         </div>
@@ -124,7 +124,7 @@ export default function ArtifactsPage() {
         <Card padding="md">
           <div className="mb-3 flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <small className="block text-[10px] font-semibold uppercase tracking-wide text-ink-3">预览</small>
+              <small className="block text-xs font-semibold uppercase tracking-wide text-ink-3">预览</small>
               <h2 className="truncate text-lg font-semibold tracking-tight text-ink">{preview.title} <small className="font-mono text-xs text-ink-3">v{preview.version}</small></h2>
             </div>
             <IconButton size="md" label="关闭预览" onClick={() => setPreview(null)}><Icon name="cross" size={13} /></IconButton>

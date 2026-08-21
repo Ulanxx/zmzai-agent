@@ -237,7 +237,7 @@ function WorkspacePanel({ artifacts, edits, files, tools, preview, activeTab, on
     <section className="flex h-full min-h-0 flex-col">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <small className="block text-[10px] font-semibold uppercase tracking-wide text-ink-3">工作区</small>
+          <small className="block text-xs font-semibold uppercase tracking-wide text-ink-3">工作区</small>
           <h2 className="truncate text-sm font-semibold text-ink">{showPreview ? "成果预览" : "任务工作区"}</h2>
         </div>
         {preview && <IconButton size="sm" label="关闭预览" onClick={onClose}><Icon name="cross" size={13} /></IconButton>}
@@ -528,9 +528,9 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
   const loginHref = process.env.NODE_ENV === "development" ? "/dev/login" : "https://auth.zmzai.cloud/login";
 
   return (
-    <main className="flex h-dvh overflow-hidden bg-bg">
+    <main className="flex h-dvh flex-col overflow-hidden bg-bg md:flex-row">
       <WorkbenchRail tasks={tasks} activeTaskId={taskId} onNew={newTask} onOpen={(id) => router.push(`/fw/t/${id}`)} />
-      <div className="flex h-full min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {!sessionId && !taskId ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-12">
           <div className="w-full max-w-2xl text-center">
@@ -583,7 +583,7 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
         <section className="fw-conversation">
           <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-3">
             <div className="min-w-0">
-              <small className="block text-[10px] font-semibold uppercase tracking-wide text-ink-3">{pathname === "/fw" ? "新的工作" : selectedWorkspace?.name ?? "任务"}</small>
+              <small className="block text-xs font-semibold uppercase tracking-wide text-ink-3">{pathname === "/fw" ? "新的工作" : selectedWorkspace?.name ?? "任务"}</small>
               <h1 className="truncate text-lg font-semibold tracking-tight">{task?.title ?? snapshot?.session.title ?? "开始一个新任务"}</h1>
             </div>
             <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
