@@ -7,7 +7,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 
 import { Badge, Button, Card, EmptyState, Icon, IconButton, Input, MovingBorder, Select as ThemeSelect, SelectContent, SelectItem, SelectTrigger, SelectValue, Tabs, Textarea, type BadgeProps } from "@zmzai/theme";
 
-import { WorkbenchRail } from "@/framework/client/workbench-rail";
+import { LoginGate, useLoggedIn, WorkbenchRail } from "@/framework/client/workbench-rail";
 import { ArtifactPreviewCard, EditCard, groupAssistantMessages, MessageView, PermissionCard, PptxPreview } from "@/framework/client/parts";
 import { fwApi, useFrameworkSession, type ArtifactCard, type Part, type PermissionRequest, type Reply } from "@/framework/client/use-framework-session";
 
@@ -521,6 +521,9 @@ export function TaskWorkbench({ taskId: routeTaskId, sessionId: routeSessionId }
   };
 
   const newTask = () => { setResolvedTaskId(null); setTaskDetail(null); setPrompt(""); setResearchMode(false); router.push("/fw"); };
+
+  const { loggedIn: meLoggedIn, loading: meLoading } = useLoggedIn();
+  if (!meLoading && !meLoggedIn && (routeTaskId || routeSessionId)) return <LoginGate title="登录后查看任务" />;
 
   if (loading && !snapshot && sessionId) return <main className="workbench-loading">正在恢复任务…</main>;
   if (loadError) return <main className="workbench-loading">{loadError}</main>;

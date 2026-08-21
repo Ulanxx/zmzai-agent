@@ -4,9 +4,42 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-import { Badge, Icon, IconButton, Logo, Wordmark } from "@zmzai/theme";
+import { Badge, Button, EmptyState, Icon, IconButton, Logo, Wordmark } from "@zmzai/theme";
 
 export type RailTask = { task: { taskId: string; title: string; status: "draft" | "active" | "succeeded" | "failed" | "cancelled" }; latestRun: { status: string } | null };
+
+/** 当前登录用户（me 401 → loggedIn=false）。 */
+export function useLoggedIn() {
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const [loggedIn, setLoggedIn] = useState(true);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    void fetch("/api/fw/me", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) { setLoggedIn(false); setUser(null); return null; }
+        return response.json() as Promise<{ user: { name: string; email: string } }>;
+      })
+      .then((body) => { if (body?.user) setUser(body.user); })
+      .catch(() => setLoggedIn(false))
+      .finally(() => setLoading(false));
+  }, []);
+  return { user, loggedIn, loading };
+}
+
+/** 未登录门帘：整页登录引导，代替残缺的"假空态/可交互表单"。 */
+export function LoginGate({ title = "登录后继续" }: { title?: string }) {
+  const href = process.env.NODE_ENV === "development" ? "/dev/login" : "https://auth.zmzai.cloud/login";
+  return (
+    <div className="grid min-h-dvh place-items-center bg-bg px-4">
+      <EmptyState
+        icon={<Icon name="user" size={28} />}
+        title={title}
+        description="此页面需要 zmzai cloud 账号。登录后任务、项目和成果都会在这里。"
+        action={<a href={href}><Button><Icon name="arrow-up-right" size={14} />登录 zmzai cloud</Button></a>}
+      />
+    </div>
+  );
+}
 
 function railStatusLabel(status: string) {
   return ({ succeeded: "已完成", failed: "需要处理", active: "进行中", running: "执行中", waiting_input: "等待补充", waiting_approval: "等待审批", paused: "已暂停", cancelled: "已取消", draft: "草稿", created: "准备中" } as Record<string, string>)[status] ?? status;
@@ -33,18 +66,7 @@ const NAV_LINKS = [
 export function WorkbenchRail({ tasks, activeTaskId, onNew, onOpen }: { tasks: RailTask[]; activeTaskId: string | null; onNew: () => void; onOpen: (taskId: string) => void }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
-  const [loggedIn, setLoggedIn] = useState(true);
-
-  useEffect(() => {
-    void fetch("/api/fw/me", { cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) { setLoggedIn(false); setUser(null); return null; }
-        return response.json() as Promise<{ user: { name: string; email: string } }>;
-      })
-      .then((body) => { if (body?.user) setUser(body.user); })
-      .catch(() => setLoggedIn(false));
-  }, []);
+  const { user, loggedIn } = useLoggedIn();
 
   const logout = useCallback(async () => {
     await fetch("/api/fw/logout", { method: "POST" }).catch(() => undefined);

@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { Badge, Button, Card, EmptyState, Icon, IconButton, Input, Navbar, Select as ThemeSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@zmzai/theme";
+import { Badge, Button, Card, EmptyState, Icon, IconButton, Input, Select as ThemeSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@zmzai/theme";
+import { LoginGate, useLoggedIn, WorkbenchRail } from "@/framework/client/workbench-rail";
 
 type Workspace = { id: string; name: string };
 type ApiKeyScope = "tasks:write" | "tasks:read" | "artifacts:read" | "webhooks:write";
@@ -157,11 +158,13 @@ export default function DevelopersPage() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : "无法加载投递记录"); }
   };
 
-  return <main className="min-h-dvh bg-bg">
-    <Navbar sublabel="agent" badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>}>
-      <Link href="/fw" className="text-xs text-ink-3 transition-colors hover:text-ink"><Icon name="arrow-left" size={12} className="mr-1 inline" />返回工作台</Link>
-    </Navbar>
-    <div className="mx-auto w-[min(100%-2rem,74rem)] py-8">
+  const { loggedIn, loading } = useLoggedIn();
+  if (!loading && !loggedIn) return <LoginGate title="登录后管理开发者集成" />;
+
+  return <main className="flex min-h-dvh flex-col bg-bg md:flex-row">
+    <WorkbenchRail tasks={[]} activeTaskId={null} onNew={() => { window.location.href = "/fw"; }} onOpen={() => undefined} />
+    <div className="flex min-w-0 flex-1 flex-col">
+    <div className="mx-auto flex w-[min(100%-2rem,74rem)] flex-1 flex-col py-8">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <small className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-3">集成与 API</small>
@@ -299,6 +302,7 @@ export default function DevelopersPage() {
           )) : <EmptyState icon={<Icon name="link" size={24} />} title="当前工作区还没有 Webhook" description="添加一个接收端点，任务事件会签名后推送。" />}
         </div>
       </section>
+    </div>
     </div>
   </main>;
 }

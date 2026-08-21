@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { Navbar, navItemClass } from "@zmzai/theme";
+import { LoginGate, useLoggedIn, WorkbenchRail } from "@/framework/client/workbench-rail";
 
 /** FW 会话审计：左列会话清单，右列工具时间线 + 事件流。数据源是
  *  fw_sessions + fw_events（framework/core/events/bus.readFrameworkEvents），
@@ -98,18 +98,13 @@ export function FrameworkAudit() {
     })();
   }, [selected]);
 
+  const { loggedIn, loading: meLoading } = useLoggedIn();
+  if (!meLoading && !loggedIn) return <LoginGate title="登录后查看运行审计" />;
   if (loading) return <main className="workbench-loading">正在读取审计…</main>;
 
   return (
-    <main className="audit-page">
-      <Navbar
-        sublabel="agent"
-        brandHref="/"
-        badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>}
-      >
-        <Link href="/fw" className={navItemClass(pathname === "/fw")}>工作台</Link>
-        <Link href="/audit" className={navItemClass(pathname === "/audit")}>运行审计</Link>
-      </Navbar>
+    <main className="flex h-dvh flex-col overflow-hidden bg-bg md:flex-row audit-page">
+      <WorkbenchRail tasks={[]} activeTaskId={null} onNew={() => { window.location.href = "/fw"; }} onOpen={() => undefined} />
       {error && <div className="workbench-alert">{error}</div>}
 
       <div className="audit-grid">

@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Badge, Button, Card, EmptyState, Icon, IconButton, Input, Navbar, Select as ThemeSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@zmzai/theme";
+import { Badge, Button, Card, EmptyState, Icon, IconButton, Input, Select as ThemeSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@zmzai/theme";
+import { LoginGate, useLoggedIn, WorkbenchRail } from "@/framework/client/workbench-rail";
 
 type Workspace = { id: string; name: string };
 type Connector = { id: string; name: string; transport: string; url: string; status: "untested" | "ready" | "error"; enabled: boolean; lastError: string | null };
@@ -30,11 +31,13 @@ export default function ConnectorsPage() {
   const toggle = async (item: Connector) => { setBusy(item.id); try { const connectorIds = items.filter((candidate) => candidate.enabled !== (candidate.id === item.id)).map((candidate) => candidate.id); await json(`/api/workspaces/${workspaceId}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ connectorIds }) }); await load(workspaceId); } catch (cause) { setError(cause instanceof Error ? cause.message : "更新失败"); } finally { setBusy(null); } };
   const remove = async (item: Connector) => { setBusy(item.id); try { await json(`/api/workspaces/${workspaceId}/connectors/${item.id}`, { method: "DELETE" }); await load(workspaceId); } catch (cause) { setError(cause instanceof Error ? cause.message : "撤销连接失败"); } finally { setBusy(null); } };
 
-  return <main className="min-h-dvh bg-bg">
-    <Navbar sublabel="agent" badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>}>
-      <Link href="/fw" className="text-xs text-ink-3 transition-colors hover:text-ink"><Icon name="arrow-left" size={12} className="mr-1 inline" />返回工作台</Link>
-    </Navbar>
-    <div className="mx-auto w-[min(100%-2rem,74rem)] py-8">
+  const { loggedIn, loading } = useLoggedIn();
+  if (!loading && !loggedIn) return <LoginGate title="登录后管理连接器" />;
+
+  return <main className="flex min-h-dvh flex-col bg-bg md:flex-row">
+    <WorkbenchRail tasks={[]} activeTaskId={null} onNew={() => { window.location.href = "/fw"; }} onOpen={() => undefined} />
+    <div className="flex min-w-0 flex-1 flex-col">
+    <div className="mx-auto flex w-[min(100%-2rem,74rem)] flex-1 flex-col py-8">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <small className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-3">外部能力</small>
@@ -100,6 +103,7 @@ export default function ConnectorsPage() {
           </Card>
         )) : <EmptyState icon={<Icon name="link" size={24} />} title="还没有连接器" description="添加一个公开 HTTPS MCP 地址，或连接 GitHub。" />}
       </section>
+    </div>
     </div>
   </main>;
 }

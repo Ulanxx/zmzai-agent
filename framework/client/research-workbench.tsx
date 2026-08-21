@@ -6,7 +6,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 
 import { Badge, Button, Card, EmptyState, Icon } from "@zmzai/theme";
 
-import { WorkbenchRail } from "@/framework/client/workbench-rail";
+import { LoginGate, useLoggedIn, WorkbenchRail } from "@/framework/client/workbench-rail";
 
 type ResearchSummary = {
   researchJobId: string;
@@ -98,6 +98,9 @@ export function ResearchWorkbench({ researchJobId }: { researchJobId: string | n
     const timer = window.setInterval(load, 3000);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [researchJobId]);
+
+  const { loggedIn, loading: meLoading } = useLoggedIn();
+  if (!meLoading && !loggedIn) return <LoginGate title="登录后进行广泛研究" />;
 
   return (
     <main className="flex h-dvh flex-col overflow-hidden bg-bg md:flex-row">

@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Badge, Button, Card, EmptyState, Icon, IconButton, Input, Navbar, Select as ThemeSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@zmzai/theme";
+import { Badge, Button, Card, EmptyState, Icon, IconButton, Input, Select as ThemeSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@zmzai/theme";
+import { LoginGate, useLoggedIn, WorkbenchRail } from "@/framework/client/workbench-rail";
 
 type Artifact = { artifactId: string; title: string; path: string; tags: string[]; version: number; qualityStatus: "not_applicable" | "pending" | "passed" | "failed"; shared: boolean; shareExpiresAt: string | null; bytes: number; contentType: string; createdAt: string; taskId: string | null; taskTitle: string | null; projectIds?: string[]; downloadUrl: string | null; previewUrl: string | null };
 type ProjectOption = { projectId: string; name: string };
@@ -105,11 +106,13 @@ export default function ArtifactsPage() {
   for (const artifact of artifacts) latestByPath.set(artifact.path, Math.max(latestByPath.get(artifact.path) ?? 0, artifact.version));
   const isLatest = (artifact: Artifact) => artifact.version >= (latestByPath.get(artifact.path) ?? 0);
 
-  return <main className="min-h-dvh bg-bg">
-    <Navbar sublabel="agent" badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>}>
-      <Link href="/fw" className="text-xs text-ink-3 transition-colors hover:text-ink"><Icon name="arrow-left" size={12} className="mr-1 inline" />返回工作台</Link>
-    </Navbar>
-    <div className="mx-auto w-[min(100%-2rem,74rem)] py-8">
+  const { loggedIn, loading } = useLoggedIn();
+  if (!loading && !loggedIn) return <LoginGate title="登录后查看成果" />;
+
+  return <main className="flex min-h-dvh flex-col bg-bg md:flex-row">
+    <WorkbenchRail tasks={[]} activeTaskId={null} onNew={() => { window.location.href = "/fw"; }} onOpen={() => undefined} />
+    <div className="flex min-w-0 flex-1 flex-col">
+    <div className="mx-auto flex w-[min(100%-2rem,74rem)] flex-1 flex-col py-8">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <small className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-3">可复用交付物</small>
@@ -204,6 +207,7 @@ export default function ArtifactsPage() {
           )) : <EmptyState icon={<Icon name="archive" size={24} />} title="还没有成果" description="完成一个任务后，交付文件会出现在这里。" />}
         </section>
       </>}
+    </div>
     </div>
   </main>;
 }

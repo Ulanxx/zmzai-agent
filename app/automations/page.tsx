@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { Badge, Button, Card, EmptyState, Icon, IconButton, Input, Navbar, Select as ThemeSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@zmzai/theme";
+import { Badge, Button, Card, EmptyState, Icon, IconButton, Input, Select as ThemeSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@zmzai/theme";
+import { LoginGate, useLoggedIn, WorkbenchRail } from "@/framework/client/workbench-rail";
 
 type Workspace = { id: string; name: string };
 type Automation = { automationId: string; workspaceId: string; projectId?: string | null; sourceTaskId?: string | null; name: string; goal: string; schedule: string; timezone: string; status: "active" | "paused"; lastRunAt: string | null; nextRunAt: string | null; lastRunStatus: "idle" | "running" | "succeeded" | "failed"; lastError: string | null; webhookSecretPrefix?: string | null };
@@ -37,11 +38,13 @@ export default function AutomationsPage() {
   const duplicate = async (item: Automation) => { setBusy(item.automationId); try { await json("/api/automations", { method: "POST", headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() }, body: JSON.stringify({ workspaceId: item.workspaceId, ...(item.projectId ? { projectId: item.projectId } : {}), name: `${item.name} · 副本`, goal: item.goal, schedule: "手动运行", timezone: item.timezone }) }); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : "复制失败"); } finally { setBusy(null); } };
   const remove = async (item: Automation) => { if (!window.confirm(`删除自动化“${item.name}”？`)) return; setBusy(item.automationId); try { await json(`/api/automations/${item.automationId}`, { method: "DELETE" }); setItems((current) => current.filter((candidate) => candidate.automationId !== item.automationId)); } catch (cause) { setError(cause instanceof Error ? cause.message : "删除失败"); } finally { setBusy(null); } };
 
-  return <main className="min-h-dvh bg-bg">
-    <Navbar sublabel="agent" badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>}>
-      <Link href="/fw" className="text-xs text-ink-3 transition-colors hover:text-ink"><Icon name="arrow-left" size={12} className="mr-1 inline" />返回工作台</Link>
-    </Navbar>
-    <div className="mx-auto w-[min(100%-2rem,74rem)] py-8">
+  const { loggedIn, loading } = useLoggedIn();
+  if (!loading && !loggedIn) return <LoginGate title="登录后管理自动化" />;
+
+  return <main className="flex min-h-dvh flex-col bg-bg md:flex-row">
+    <WorkbenchRail tasks={[]} activeTaskId={null} onNew={() => { window.location.href = "/fw"; }} onOpen={() => undefined} />
+    <div className="flex min-w-0 flex-1 flex-col">
+    <div className="mx-auto flex w-[min(100%-2rem,74rem)] flex-1 flex-col py-8">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <small className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-3">重复工作</small>
@@ -117,6 +120,7 @@ export default function AutomationsPage() {
           </Card>
         )) : <EmptyState icon={<Icon name="clock" size={24} />} title="还没有自动化" description="先完成一次任务，再把它保存为模板。" />}
       </section>
+    </div>
     </div>
   </main>;
 }
