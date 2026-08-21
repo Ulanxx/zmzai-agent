@@ -6,12 +6,13 @@ import {
   ArtifactCard,
   EditCard as ThemeEditCard,
   formatBytes,
+  Icon,
   Markdown,
   MessageItem,
   Reasoning,
   shortContentType,
   SubtaskPart,
-  ToolGroup,
+  ToolCard,
 } from "@zmzai/theme";
 
 import type { ArtifactCard as ArtifactCardData, FileEdit, MessageWithParts, Part } from "@/framework/client/use-framework-session";
@@ -54,6 +55,34 @@ export function PptxPreview({ previewUrl }: { previewUrl: string }) {
 }
 
 type ToolPart = Extract<Part, { type: "tool" }>;
+
+/** 本地 ToolGroup：覆盖 @zmzai/theme ≤0.5.5 的行为——历史组（含单工具/失败组）
+ *  一律折叠为一条可点击摘要行，仅运行中自动展开，消除长会话里
+ *  「运行了 1 个工具」分组头 + 展开卡的双倍瀑布。
+ *  theme 0.5.6 发布后（同实现）可删掉换回 theme 导出。 */
+function ToolGroup({ calls, sessionIdle = false }: { calls: ToolPart[]; sessionIdle?: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const running = calls.filter((call) => call.state.status === "running" || call.state.status === "pending");
+  const failed = calls.filter((call) => call.state.status === "error" || (sessionIdle && (call.state.status === "running" || call.state.status === "pending")));
+  const done = calls.filter((call) => call.state.status === "completed");
+  const autoExpand = running.length > 0;
+  const open = expanded || autoExpand;
+  const glyph = failed.length > 0 ? "cross" : running.length > 0 ? "chevron-down" : "check";
+  const single = calls.length === 1 ? calls[0] : undefined;
+  const singleTitle = single ? (single.state.status === "completed" ? (single.state.title ?? single.tool) : single.state.status === "error" ? single.state.error : single.tool) : null;
+  const summary = [running.length > 0 && `${running.length} 个进行中`, failed.length > 0 && `${failed.length} 个失败`, done.length > 0 && `${done.length} 个完成`].filter(Boolean).join(" · ");
+  return (
+    <div className="zmz-tool-group">
+      <button type="button" className="zmz-tool-group-trigger" aria-expanded={open} onClick={() => setExpanded((value) => !value)} disabled={autoExpand}>
+        <span className="tool-card-glyph" aria-hidden><Icon name={glyph} size={12} /></span>
+        <span className="zmz-tool-group-label">{single ? singleTitle : `运行了 ${calls.length} 个工具`}</span>
+        <small>{single ? (single.state.status === "completed" ? "完成" : single.state.status === "error" ? "失败" : "进行中") : summary}</small>
+        <Icon name="chevron-down" size={12} className={open ? "tool-card-chevron open" : "tool-card-chevron"} />
+      </button>
+      {open && <div className="zmz-tool-group-body">{calls.map((call) => <ToolCard key={`${call.id}:${call.state.status}`} call={call} sessionIdle={sessionIdle} />)}</div>}
+    </div>
+  );
+}
 
 function TextPart({ part }: { part: Extract<Part, { type: "text" }> }) {
   return <div className="zmz-message-content"><Markdown text={part.text} /></div>;

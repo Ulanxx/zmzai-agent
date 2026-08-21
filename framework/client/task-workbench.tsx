@@ -222,6 +222,17 @@ function toolOutput(tool: ToolPart): string {
 function WorkspacePanel({ artifacts, edits, files, tools, preview, activeTab, onTabChange, onOpen, onClose }: { artifacts: ArtifactCard[]; edits: { path: string; revisionId: string; diff: string; at: string }[]; files: string[]; tools: ToolPart[]; preview: ArtifactCard | null; activeTab: WorkspaceTab; onTabChange: (tab: WorkspaceTab) => void; onOpen: (artifact: ArtifactCard) => void; onClose: () => void }) {
   const tabs: Array<{ value: WorkspaceTab; label: string; count: number }> = [{ value: "files", label: "文件", count: files.length }, { value: "diff", label: "改动", count: edits.length }, { value: "terminal", label: "终端", count: tools.length }, { value: "preview", label: "预览", count: preview ? 1 : 0 }, { value: "artifacts", label: "成果", count: artifacts.length }];
   const showPreview = activeTab === "preview" && preview;
+  // 同名产物只默认展示最新版本（数组靠后 = 更新），旧版本折叠进「历史版本」，
+  // 避免失败尝试的残留淹没最新成果。
+  const [showAllVersions, setShowAllVersions] = useState(false);
+  const latestIndexByPath = useMemo(() => {
+    const map = new Map<string, number>();
+    artifacts.forEach((artifact, index) => map.set(artifact.path, index));
+    return map;
+  }, [artifacts]);
+  const latestArtifacts = artifacts.filter((artifact, index) => index === latestIndexByPath.get(artifact.path));
+  const olderArtifacts = artifacts.filter((artifact, index) => index !== latestIndexByPath.get(artifact.path));
+  const visibleArtifacts = showAllVersions ? artifacts : latestArtifacts;
   return (
     <section className="flex h-full min-h-0 flex-col">
       <div className="flex items-center justify-between gap-2">
@@ -241,7 +252,14 @@ function WorkspacePanel({ artifacts, edits, files, tools, preview, activeTab, on
         {activeTab === "files" && (files.length ? <div className="flex flex-col gap-0.5">{files.map((file) => <div className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-ink-2 hover:bg-surface" key={file}><Icon name="file" size={13} /><span className="truncate">{file}</span></div>)}</div> : <EmptyState icon={<Icon name="file" size={24} />} title="还没有文件" description="上传或生成的文件会出现在这里。" />)}
         {activeTab === "diff" && (edits.length ? <div className="flex flex-col gap-2">{edits.map((edit) => <EditCard key={`${edit.revisionId}-${edit.path}`} edit={edit} />)}</div> : <EmptyState icon={<Icon name="edit" size={24} />} title="还没有改动" description="任务产生文件改动后，会在这里显示差异。" />)}
         {activeTab === "terminal" && (tools.length ? <div className="flex flex-col gap-0.5">{tools.slice(-30).map((tool) => <div className="flex items-start justify-between gap-2 rounded-md border border-line bg-surface px-3 py-2" key={tool.id}><div className="min-w-0"><strong className="block font-mono text-xs text-ink">{tool.tool}</strong><small className="block truncate text-xs text-ink-3">{toolOutput(tool)}</small></div><Badge variant={tool.state.status === "completed" ? "success" : tool.state.status === "error" ? "danger" : "warning"} size="sm">{tool.state.status === "completed" ? "完成" : tool.state.status === "error" ? "失败" : "运行中"}</Badge></div>)}</div> : <EmptyState icon={<Icon name="activity" size={24} />} title="还没有工具活动" description="Agent 调用终端或工具后，会在这里保留摘要。" />)}
-        {activeTab === "artifacts" && (artifacts.length ? <div className="flex flex-col gap-2">{artifacts.map((artifact) => <ArtifactPreviewCard key={artifact.artifactId} artifact={artifact} onOpen={onOpen} />)}</div> : <EmptyState icon={<Icon name="sparkles" size={24} />} title="还没有成果" description="任务完成后，网页、文件和数据成果会出现在这里。" />)}
+        {activeTab === "artifacts" && (artifacts.length ? <div className="flex flex-col gap-2">
+          {visibleArtifacts.map((artifact) => <ArtifactPreviewCard key={artifact.artifactId} artifact={artifact} onOpen={onOpen} />)}
+          {olderArtifacts.length > 0 && (
+            <button type="button" className="mt-1 text-left text-xs text-ink-3 hover:text-ink" onClick={() => setShowAllVersions((current) => !current)}>
+              {showAllVersions ? "收起历史版本" : `显示 ${olderArtifacts.length} 个历史版本`}
+            </button>
+          )}
+        </div> : <EmptyState icon={<Icon name="sparkles" size={24} />} title="还没有成果" description="任务完成后，网页、文件和数据成果会出现在这里。" />)}
         {activeTab === "preview" && <EmptyState icon={<Icon name="eye" size={24} />} title="选择一个成果" description="从成果页签选择一个文件开始预览。" />}
       </div>}
     </section>

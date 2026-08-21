@@ -101,6 +101,10 @@ export default function ArtifactsPage() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : "删除失败"); } finally { setBusy(null); }
   };
 
+  const latestByPath = new Map<string, number>();
+  for (const artifact of artifacts) latestByPath.set(artifact.path, Math.max(latestByPath.get(artifact.path) ?? 0, artifact.version));
+  const isLatest = (artifact: Artifact) => artifact.version >= (latestByPath.get(artifact.path) ?? 0);
+
   return <main className="min-h-dvh bg-bg">
     <Navbar sublabel="agent" badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">a.zmzai.cloud</span>}>
       <Link href="/fw" className="text-xs text-ink-3 transition-colors hover:text-ink"><Icon name="arrow-left" size={12} className="mr-1 inline" />返回工作台</Link>
@@ -189,6 +193,7 @@ export default function ArtifactsPage() {
                   <p className="truncate text-sm text-ink-3">{artifact.taskTitle || "独立成果"} · {formatBytes(artifact.bytes)} · {new Date(artifact.createdAt).toLocaleDateString("zh-CN")}{artifact.tags.length ? ` · ${artifact.tags.join(" · ")}` : ""}</p>
                 </button>
                 {artifact.qualityStatus !== "not_applicable" && <Badge variant={qualityVariant(artifact.qualityStatus)} size="sm">{qualityLabel(artifact.qualityStatus)}</Badge>}
+                {!isLatest(artifact) && <Badge variant="outline" size="sm">旧版</Badge>}
                 <div className="flex flex-shrink-0 items-center gap-1">
                   {artifact.previewUrl && <IconButton size="sm" label="预览" onClick={() => open(artifact)}><Icon name="eye" size={14} /></IconButton>}
                   {artifact.downloadUrl && <a className="grid size-7 place-items-center rounded-sm border border-line text-ink-3 hover:text-ink" href={artifact.downloadUrl} title="下载"><Icon name="download" size={14} /></a>}

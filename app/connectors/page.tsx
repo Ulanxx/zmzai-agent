@@ -65,7 +65,7 @@ export default function ConnectorsPage() {
         </div>
       </Card>
 
-      {workspaceId && github && (
+      {workspaceId && github && github.configured && (
         <Card padding="md" className="mb-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
